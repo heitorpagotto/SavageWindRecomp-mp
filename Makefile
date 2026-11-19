@@ -925,5 +925,43 @@ multiplayer-swmm-package: $(MP_SWMM_PACKAGE)
 
 test-multiplayer-swmm: $(MP_SWMM_PACKAGE)
 	python3 tools/package_multiplayer.py --check $<
+	python3 tools/test_package_multiplayer.py
 
 .PHONY: test-multiplayer multiplayer-demo multiplayer-swmm-package test-multiplayer-swmm
+
+# Explicit developer probes. The normal app and marker package do not use these.
+ifneq ($(filter windows linux,$(PLATFORM)),)
+ifeq ($(PLATFORM),windows)
+MP_NATIVE_FIXTURE := $(B)/multiplayer_native_fixture.dll
+MP_NATIVE_TEST := $(B)/test_multiplayer_native.exe
+MP_RTC_TEST := $(B)/test_multiplayer_webrtc.exe
+else
+MP_NATIVE_FIXTURE := $(B)/multiplayer_native_fixture.so
+MP_NATIVE_TEST := $(B)/test_multiplayer_native
+MP_RTC_TEST := $(B)/test_multiplayer_webrtc
+MP_NATIVE_LIBS := -ldl
+endif
+
+$(MP_NATIVE_FIXTURE): tests/multiplayer_native_fixture.c mods/multiplayer/native_abi_draft.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -Wall -Wextra -Werror -Imods/multiplayer -fPIC -fvisibility=hidden -shared -o $@ $<
+
+$(MP_NATIVE_TEST): tests/test_multiplayer_native.c mods/multiplayer/native_abi_draft.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -Wall -Wextra -Werror -Imods/multiplayer -o $@ $< $(MP_NATIVE_LIBS)
+
+test-multiplayer-native: $(MP_NATIVE_TEST) $(MP_NATIVE_FIXTURE)
+	$(MP_NATIVE_TEST)
+	$(MP_NATIVE_TEST) "$(abspath $(MP_NATIVE_FIXTURE))"
+
+MP_RTC_CFLAGS ?=
+MP_RTC_LIBS ?= -ldatachannel
+$(MP_RTC_TEST): tests/test_multiplayer_webrtc.c $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer $(MP_RTC_CFLAGS) -o $@ $(filter %.c,$^) $(MP_RTC_LIBS)
+
+test-multiplayer-webrtc: $(MP_RTC_TEST)
+	$(MP_RTC_TEST)
+
+.PHONY: test-multiplayer-native test-multiplayer-webrtc
+endif

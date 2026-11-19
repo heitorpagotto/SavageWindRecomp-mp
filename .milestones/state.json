@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-19T09:02:44-03:00",
+  "updated_at": "2026-11-19T10:54:06-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "package_id": "org.savagewind.multiplayer",
@@ -22,7 +22,8 @@
     "upstream_base_commit": "f488af7",
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
-    "workspace_committed": true,
+    "workspace_base_commit": "5b41d90",
+    "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
   "architecture": {
@@ -30,7 +31,8 @@
     "host_peer_id": 0,
     "host_migration_v1": false,
     "transport_backend_selected": false,
-    "native_plugin_abi_exists": false,
+    "transport_candidate": "libdatachannel v0.24.6",
+    "native_runtime_abi": "draft standalone fixture only",
     "game_thread_owns_guest_state": true,
     "stable_ids_required": true,
     "invite_flow": "rendezvous signaling, ICE/STUN direct path, TURN fallback"
@@ -45,13 +47,15 @@
     {
       "id": "M0.5",
       "name": "SWMM development packaging",
-      "status": "partial"
+      "status": "partial",
+      "scope": "validated marker archive and draft native package contract"
     },
     {
       "id": "M1",
       "name": "Native bridge and internet lobby",
       "status": "partial",
-      "scope": "synthetic lobby"
+      "scope": "synthetic lobby, Windows encrypted loopback, and standalone native ABI fixture",
+      "pending_test_build": "SWMM-installed in-game lobby with one visible placeholder actor per admitted remote peer"
     },
     {
       "id": "M2",
@@ -90,7 +94,9 @@
     "deterministic mock transport with bounded queues and state faults",
     "synthetic multiplayer tests",
     "in-process eight-Link demo",
-    "deterministic SWMM development package"
+    "deterministic SWMM development package with duplicate and size checks",
+    "opt-in Windows WebRTC loopback probe for the lobby and three data channels",
+    "draft native ABI and standalone lifecycle fixture"
   ],
   "not_implemented": [
     "production encrypted network transport backend",
@@ -107,12 +113,15 @@
   ],
   "last_verified": {
     "platform": "Windows",
-    "compiler": "Zig 0.15.2 Clang driver, direct standalone build",
+    "compiler": "Zig 0.15.2 Clang driver",
     "core_test": "pass: multiplayer core: ok",
     "undefined_behavior_check": "pass: Clang trap mode",
     "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
-    "package_check": "pass: direct Python builder and validator",
-    "package_sha256": "ec79a0835bb42da566f160b8239d7be07ad8d49230a9252143f8649aa5cc7730",
+    "package_check": "pass: validator, deterministic rebuild, CRLF parity, invalid archive tests",
+    "package_sha256": "efbed5e1322bb4b8de344cd76d30cb073ff87dabfc134878b2100f6c968c2eff",
+    "webrtc_loopback": "pass: Windows DTLS/SCTP, two peers, START, build rejection, state/event delivery, host disconnect",
+    "native_lifecycle": "pass: Windows standalone DLL and host",
+    "linux_native_fixture": "cross-compiled x86-64 host and shared library, execution pending",
     "gameplay": "not tested",
     "internet_transport": "not tested",
     "linux_lobby": "not tested",
@@ -132,5 +141,5 @@
     "swmm_gui_lifecycle": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Evaluate encrypted transport candidates with the mock lobby as the baseline. Design the versioned native module ABI and approval handoff with maintainers."
+  "next_recommended_work": "Run the probes on Linux, then prototype authenticated rendezvous and verify direct and forced TURN paths. Review the native ABI and approval proposal with Savage Wind and SWMM maintainers."
 }

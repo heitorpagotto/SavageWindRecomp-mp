@@ -41,6 +41,8 @@ Delivered:
 - Deterministic ZIP builder and package validation target.
 - Raw RomFS marker at `System/SavageWind/Multiplayer/package.swmp`.
 - Source-level investigation of current SWMM and its UKMM dependency.
+- Canonical ZIP metadata and line endings, strict archive validation, and validated atomic replacement.
+- Draft native manifest and approval handoff for maintainer review.
 
 Accepted so far by deterministic archive generation, structure/metadata validation, and an identical SHA-256 after a
 rebuild.
@@ -56,7 +58,7 @@ The current archive is intentionally a development marker; it cannot execute the
 
 ## M1 — Native bridge and internet lobby
 
-Status: **partial (synthetic lobby)**.
+Status: **partial (synthetic lobby, encrypted loopback probe, draft native ABI)**.
 
 Delivered:
 
@@ -65,6 +67,9 @@ Delivered:
 - Deterministic in-process transport with state faults and bounded queues. The eight-peer demo joins through the transport.
 - Synthetic coverage for eight players, capacity rejection, build and feature mismatch, spoofing, repeated HELLO,
   queue exhaustion, cancellation, disconnect, and late join. Late join receives lobby state. Gameplay resync is pending.
+- Windows two-peer WebRTC probe with real encrypted loopback sockets, using trusted local signaling and synthetic
+  build IDs. Checks admission, build rejection, all three channel modes, START, and host disconnect.
+- Standalone draft native ABI fixture. Windows lifecycle passed and Linux x86-64 binaries cross-compiled.
 
 Goal: host and join a real encrypted internet session using an invite code, with the multiplayer module loaded and
 unloaded independently from core gameplay.
@@ -77,6 +82,9 @@ Planned deliverables:
 - Rendezvous signaling, opaque invite codes, ICE/STUN NAT traversal, and TURN relay fallback.
 - Host/Join/Leave UI using existing Savage Wind UI primitives and translation tables.
 - Wire compatibility and lobby lifecycle validation over the production transport, including localized errors and runtime shutdown.
+- A compiled SWMM test build for visual lobby verification in a supported BOTW 1.9.0 gameplay area. On successful
+  lobby admission, each game instance spawns one visible placeholder actor per remote peer. An existing idle NPC
+  or static actor is sufficient. Movement, animation, and equipment synchronization remain M2 deliverables.
 
 Acceptance criteria:
 
@@ -86,6 +94,11 @@ Acceptance criteria:
 - Disable/uninstall leaves single-player behavior and user data unchanged.
 - Rebooting or leaving releases threads, queues, sockets, and guest references.
 - Authenticated, encrypted lobby traffic is verified on Windows and Linux, including a session with a host on one OS and a client on the other.
+- Import, approve, enable, and launch the test build through SWMM. Host and join from inside the game. In the
+  supported test area, the host sees one placeholder for each admitted client, and each client sees one for each
+  other admitted peer, including the host and any peers who joined earlier. Rejected joins create no actors.
+  Leaving, disconnecting, or rebooting removes the corresponding placeholders without affecting the local player
+  or saves.
 
 ## M2 — Remote Link presence
 

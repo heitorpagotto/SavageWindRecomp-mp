@@ -2,8 +2,8 @@
 
 ## Status
 
-The standalone core implements the lobby over an in-process transport. Runtime integration and network I/O are
-pending.
+The standalone core implements the lobby over an in-process transport. An opt-in test exercises it over encrypted
+loopback sockets. Production transport, rendezvous, and runtime integration are pending.
 
 ## Protocol constants
 
@@ -136,7 +136,18 @@ Current deterministic result:
 - 560 accepted snapshot deliveries (`8 * 7 * 10`); and
 - 1 intentionally duplicated state packet rejected as stale.
 
-It does not exercise sockets, encryption, NAT traversal, signaling, loss, jitter, or the game runtime.
+The separate `tests/test_multiplayer_webrtc.c` probe drives one host and one client over three negotiated WebRTC
+data channels through the same `SwmpTransport` interface. Its trusted in-process offer/answer exchange binds
+the SDP certificate fingerprints to the endpoints. The fixed invite and link binding are test inputs. The probe
+verifies the channel configurations, compatible and incompatible lobby admission, START, binary delivery, and
+disconnect. It depends on an externally built libdatachannel and is built only on demand.
+
+## Draft native boundary
+
+`native_abi_draft.h` provides a versioned C query and lifecycle tables. `test-multiplayer-native` builds
+a project-owned test library and an independent host executable. The fixture covers negotiated capabilities,
+initialization, poll, reset, shutdown, and unload. See [NATIVE_ABI.md](NATIVE_ABI.md) for ownership and the SWMM
+approval proposal.
 
 ## SWMM package source
 
@@ -149,14 +160,15 @@ info.json
 romfs/System/SavageWind/Multiplayer/package.swmp
 ```
 
-The marker contains package format v1, ID `org.savagewind.multiplayer`, protocol 1, and `runtime = native`. It is data,
-not executable code. Zip timestamps and permissions are fixed, so rebuilding is byte-for-byte reproducible.
+The marker contains package format v1, ID `org.savagewind.multiplayer`, protocol 1, and `runtime = native`. The
+archive contains only the marker and its metadata. The builder normalizes source line endings and uses stored
+entries, fixed timestamps and permissions. The checker also rejects duplicate and oversized entries.
 
 Current generated artifact:
 
 ```text
 build/mods/SavageWind-Multiplayer-0.1.0-dev-SWMM.zip
-SHA-256 731f2548d8e9c691defe0437a310d621a02e09a1eab2a83a73b3e991475db867
+SHA-256 efbed5e1322bb4b8de344cd76d30cb073ff87dabfc134878b2100f6c968c2eff
 ```
 
 Build artifacts are not source and should not be committed unless release policy explicitly requires them.

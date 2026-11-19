@@ -60,8 +60,10 @@ artifacts and the manager handles module selection or validates the target of a 
   Include a wrong-platform or incompatible-ABI case and check that an unapproved module never loads.
 - Package redistributable mod files only. Preserve player saves and settings across update and removal.
 
-The native archive format and approval handoff remain open and require agreement with Savage Wind and SWMM.
-The marker package described above is the baseline for archive validation.
+The [native ABI and manifest proposal](NATIVE_ABI.md) is ready for review by both maintainers. A standalone
+fixture exercises the draft ABI. The marker package remains the baseline for archive validation. It has
+canonical line endings and platform-independent ZIP metadata, rejects duplicate or oversized entries, and
+is replaced only after the new archive validates.
 
 ## Required safe integration
 

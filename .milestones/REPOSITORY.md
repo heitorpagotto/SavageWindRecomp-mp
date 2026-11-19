@@ -62,9 +62,12 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - `mods/multiplayer/VERSION`: `0.1.0-dev`.
 - `mods/multiplayer/swmm/`: raw SWMM development archive source.
 - `tests/test_multiplayer.c`: synthetic protocol/session tests.
+- `tests/test_multiplayer_webrtc.c`: opt-in encrypted loopback probe using externally built libdatachannel.
+- `mods/multiplayer/native_abi_draft.h`, `tests/multiplayer_native_fixture.c`, and
+  `tests/test_multiplayer_native.c`: draft ABI and standalone fixture.
 - `tools/package_multiplayer.py`: deterministic package builder/checker.
 - `Makefile`: `test-multiplayer`, `multiplayer-demo`, `multiplayer-swmm-package`, and
-  `test-multiplayer-swmm` targets.
+  `test-multiplayer-swmm`, plus standalone `test-multiplayer-native` and `test-multiplayer-webrtc` targets.
 
 ## Bootstrap build environment (historical)
 

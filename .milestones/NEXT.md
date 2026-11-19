@@ -1,6 +1,7 @@
 # Resume guide and next work
 
-This is the recommended executable order for a context-free developer or agent. M1 now has a synthetic lobby, with the native bridge and internet transport still pending.
+M1 has a synthetic lobby, an encrypted WebRTC loopback probe, and a draft native lifecycle fixture.
+Production signing/approval, integration, and internet transport remain pending.
 
 ## Start here
 
@@ -12,6 +13,7 @@ rtk git diff -- Makefile mods/multiplayer tests/test_multiplayer.c tools/package
 make CC=gcc test-multiplayer
 make CC=gcc multiplayer-demo
 make test-multiplayer-swmm
+make test-multiplayer-native
 ```
 
 Then read `CONTRIBUTING.md`, this directory in `README.md` order, and the nearest source around any intended hook.
@@ -19,8 +21,8 @@ Preserve unrelated work and do not edit generated sources.
 
 ## Continue M1 after synthetic verification
 
-The control codecs, lobby, and deterministic mock tests are implemented. Use them as the baseline for the
-transport selection spike, which can run independently of the native module ABI discussion. The production adapter
+Use the control codecs, lobby, deterministic mock tests, and WebRTC probe as the baseline. Build and run the
+probe on Linux using [TESTING.md](TESTING.md). The production adapter
 needs to supply authenticated per-connection bindings, reliable ordered control and event channels, and unreliable
 state delivery through `transport.h`. Keep the mock for repeatable failure tests.
 
@@ -30,15 +32,14 @@ Bump the protocol version for incompatible changes once artifacts may be used ou
 
 ## Native module ABI design spike
 
-This needs maintainer agreement because it changes Savage Wind's executable-code boundary.
+The [draft ABI](NATIVE_ABI.md) and standalone fixture cover the basic lifecycle. Production integration needs
+maintainer agreement because it changes Savage Wind's executable-code boundary.
 
-- Define a small C ABI with ABI version, init/shutdown, per-boot reset, update/poll, UI contribution, logging, and
-  capability negotiation.
+- Review the small C ABI and agree on the UI action/status extension, host build identity and capabilities.
 - The host owns guest/runtime API tables; modules must not retain guest pointers across reset.
 - Load only explicit approved absolute paths. Never scan the RomFS overlay for libraries.
 - Validate manifest ID, ABI, platform, architecture, hash/signature policy, and duplicates before loading.
-- Make a no-op synthetic plugin fixture owned by this project; do not use Nintendo data.
-- Prove load, reset, unload, disabled-mod startup, incompatible-ABI rejection, and failure cleanup.
+- Reuse the project-owned fixture and prove the lifecycle in the actual game host once agreement is in place.
 - Keep Windows/Linux loaders behind one platform-neutral interface.
 
 The SWMM handoff likely needs implementation in the separate SWMM repository. Do not copy its GPL source into
@@ -47,7 +48,8 @@ platform targeting, and what the player imports.
 
 ## Transport selection spike
 
-No transport library is selected. Evaluate maintained libraries for:
+libdatachannel is the leading candidate based on the [Windows loopback spike](DECISIONS.md#d012--transport-backend-not-yet-chosen).
+Before selection, verify:
 
 - C-compatible API, buildable on all supported Savage Wind platforms (currently Windows and Linux), with cross-platform interoperability;
 - ICE/STUN/TURN and encrypted data channels;
@@ -56,14 +58,20 @@ No transport library is selected. Evaluate maintained libraries for:
 - cancellation/background-thread behavior and deterministic mocking; and
 - practical rendezvous deployment, authentication, and abuse/rate limits.
 
-Record the choice in `DECISIONS.md`. An invite code identifies an opaque rendezvous record; it must not expose an IP
-or contain a reusable secret. Direct peer paths still need authenticated signaling and relay fallback.
+Record the final choice in `DECISIONS.md`. Prototype expiring invite records separately from the local probe.
+Scope signaling authorization and the link binding to a specific offer/answer exchange. Verify direct and forced
+relay paths with the network matrix before making a production claim.
 
 ## UI integration after lifecycle exists
 
 Use existing patterns around `runtime/ui/game_options.mm` and the translation tables. Minimum states are Host, Join,
 Leave, creating/connecting, invite-code display/entry, roster, compatibility rejection, timeout, and cancellation.
 Do not add art assets. Check player-facing text with `python3 tools/i18n_check.py`.
+
+For the [M1 SWMM test build](TESTING.md#m1-swmm-in-game-presence-test), find a safe spawn/despawn path for an
+existing idle or static actor in one supported 1.9.0 area. Reconcile placeholders from the admitted roster on
+the game thread and clear their handles on leave and `RT_ON_RESET`. Keep the actor independent of local player
+state. Use version-aware optional sites and the player's installed assets.
 
 ## Runtime integration rules
 

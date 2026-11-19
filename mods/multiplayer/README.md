@@ -23,10 +23,12 @@ delivery and rejects a stale duplicate.
 `make multiplayer-swmm-package` creates the current Savage Wind Mod Manager development archive. See
 [`SWMM.md`](SWMM.md) for what can be tested now and the native-plugin bridge still required.
 
-Nothing under this directory is linked into the Savage Wind runtime yet. Offline Savage Wind therefore behaves and
-builds exactly as before. The first runtime integration will be a small plugin host boundary; removing the multiplayer
-library will remove the feature. Until that boundary exists, this is developer scaffolding rather than an installable
-release.
+The standalone `make test-multiplayer-webrtc` target exercises the lobby over encrypted loopback sockets using
+libdatachannel. `make test-multiplayer-native` verifies a draft C ABI using a fixture DLL or shared object.
+See the [test record](../../.milestones/TESTING.md) for build inputs and verified results.
+
+The runtime integration and native SWMM release are pending. The [draft native ABI and approval proposal](../../.milestones/NATIVE_ABI.md)
+describes the boundary for maintainer review.
 
 ## Session model
 

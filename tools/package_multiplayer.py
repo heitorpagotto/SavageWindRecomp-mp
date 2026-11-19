@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+import tempfile
 import zipfile
 
 
@@ -14,6 +16,8 @@ VERSION_FILE = ROOT / "mods" / "multiplayer" / "VERSION"
 INFO = "info.json"
 MARKER = "romfs/System/SavageWind/Multiplayer/package.swmp"
 EXPECTED = {INFO, MARKER}
+MAX_ENTRY_SIZE = 16 * 1024
+MARKER_TEXT = "SWMP_PACKAGE_V1\nid = org.savagewind.multiplayer\nprotocol = 1\nruntime = native\n"
 
 
 def project_version() -> str:
@@ -24,37 +28,44 @@ def project_version() -> str:
 
 
 def validate(info: bytes, marker: bytes) -> None:
+    if max(len(info), len(marker)) > MAX_ENTRY_SIZE:
+        raise ValueError("SWMM package entry is too large")
     meta = json.loads(info.decode("utf-8"))
     version = project_version()
-    if meta.get("name") != "Savage Wind Multiplayer":
+    if not isinstance(meta, dict) or meta.get("name") != "Savage Wind Multiplayer":
         raise ValueError("SWMM info.json has the wrong name")
     if meta.get("version") != version or meta.get("platform") != "switch":
         raise ValueError("SWMM info.json version/platform does not match the project")
-    text = marker.decode("utf-8")
-    if not text.startswith("SWMP_PACKAGE_V1\n") or "protocol = 1\n" not in text:
+    if marker != MARKER_TEXT.encode("ascii"):
         raise ValueError("SWMM package marker is invalid")
 
 
 def build(output: Path) -> None:
-    info = (SOURCE / INFO).read_bytes()
-    marker = (SOURCE / MARKER).read_bytes()
+    info = (SOURCE / INFO).read_text(encoding="utf-8").encode("utf-8")
+    marker = (SOURCE / MARKER).read_text(encoding="utf-8").encode("utf-8")
     validate(info, marker)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for name, data in ((INFO, info), (MARKER, marker)):
-            entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-            entry.compress_type = zipfile.ZIP_DEFLATED
-            entry.external_attr = 0o100644 << 16
-            archive.writestr(entry, data)
-    check(output)
+    with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
+        staged = Path(scratch) / output.name
+        with zipfile.ZipFile(staged, "w") as archive:
+            for name, data in ((INFO, info), (MARKER, marker)):
+                # Stored entries avoid variations in compression between Python builds.
+                entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                entry.create_system = 3
+                entry.external_attr = 0o100644 << 16
+                archive.writestr(entry, data)
+        check(staged)
+        os.replace(staged, output)
     print(output)
 
 
 def check(package: Path) -> None:
     with zipfile.ZipFile(package) as archive:
-        names = set(archive.namelist())
-        if names != EXPECTED:
+        names = archive.namelist()
+        if len(names) != len(EXPECTED) or set(names) != EXPECTED:
             raise ValueError(f"unexpected SWMM package entries: {sorted(names)}")
+        if any(entry.file_size > MAX_ENTRY_SIZE for entry in archive.infolist()):
+            raise ValueError("SWMM package entry is too large")
         validate(archive.read(INFO), archive.read(MARKER))
 
 

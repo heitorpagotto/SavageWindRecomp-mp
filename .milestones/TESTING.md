@@ -2,23 +2,44 @@
 
 Last updated: 2026-11-19. This distinguishes checks actually run from future or manual verification.
 
-## M1 synthetic checks on Windows
+## Current checkpoint on Windows
 
-Compiled the standalone test and demo sources directly with Zig 0.15.2's Clang driver using
-`-std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer`. The executables and compiler cache went into scratch
-space. GNU Make was unavailable in this workspace.
+Ran the test targets with GNU Make 4.4.1 and Zig 0.15.2's Clang driver. The toolchain, binaries, and caches
+were kept in the repository build directory.
 
-- The test executable reported `multiplayer core: ok`. It covers framing and snapshots, control payload sizes and
-  UTF-8, lobby compatibility and capacity, sender-to-link binding, replay and timeout handling, cancellation,
-  disconnect and late join, and mock queue limits and faults.
-- The same test passed with Clang undefined-behavior checks enabled in trap mode.
-- The demo admitted eight Links over the mock transport. The snapshot check reported 560 deliveries and one
-  rejected duplicate.
-- Ran `python tools/package_multiplayer.py <scratch ZIP>` and then `python tools/package_multiplayer.py --check <scratch ZIP>`.
-  Both passed. The Windows archive SHA-256 was `ec79a0835bb42da566f160b8239d7be07ad8d49230a9252143f8649aa5cc7730`.
+- `test-multiplayer` reported `multiplayer core: ok`. A direct build also passed with
+  `-fsanitize=undefined -fsanitize-trap=undefined`.
+- `multiplayer-demo` admitted eight Links over the mock, verified 560 snapshot deliveries, and rejected a stale
+  duplicate.
+- `test-multiplayer-swmm` validated the ZIP and passed three package tests covering line-ending parity, extra or
+  duplicate entries, entry size, and marker identity. Two archive builds produced SHA-256
+  `efbed5e1322bb4b8de344cd76d30cb073ff87dabfc134878b2100f6c968c2eff`.
+- `test-multiplayer-native` passed absent-module startup and DLL load, ABI and capability checks, poll, reset,
+  shutdown, and unload. The fixture and its host also cross-compiled for Linux x86-64 with
+  `zig cc -target x86_64-linux-gnu.2.28`. Linux execution remains pending.
+- `test-multiplayer-webrtc` passed with libdatachannel v0.24.6, bundled libjuice/usrsctp, and OpenSSL 3.6.5.
+  The two endpoints selected loopback ICE candidates, completed DTLS/SCTP, joined and started the lobby, exchanged
+  binary messages over state and event streams, rejected an incompatible build in a second session, and observed
+  the client leaving when the host closed its control stream. Five repeated Windows runs also passed. The Linux
+  x86-64 probe source compiled to an object without linking or executing.
 
-These checks used synthetic build IDs for the BOTW 1.9.0 target. No game runtime, Linux lobby run, network path,
-or SWMM GUI lifecycle was exercised in M1.
+All lobby checks used synthetic build IDs for the BOTW 1.9.0 target. The WebRTC test supplied SDP and the probe
+binding in process. External-network signaling, STUN/TURN, Linux and mixed-platform lobby execution, the SWMM
+GUI lifecycle, the game host, and gameplay remain unverified.
+
+## Build the optional WebRTC probe
+
+Use libdatachannel v0.24.6 with libjuice and OpenSSL. The build requires a C++ toolchain and the dependency's
+checked-out submodules. A shared build can be produced with
+`-DUSE_NICE=OFF -DNO_MEDIA=ON -DNO_WEBSOCKET=ON -DNO_TESTS=ON -DNO_EXAMPLES=ON`. Follow the upstream
+[build instructions](https://github.com/paullouisageneau/libdatachannel/blob/v0.24.6/BUILDING.md). For an installed
+shared build on the compiler and runtime search paths, run `make test-multiplayer-webrtc`. Use `MP_RTC_CFLAGS`
+for a custom header prefix and `MP_RTC_LIBS` for a custom import/library path.
+
+The Windows check used a static libdatachannel build with OpenSSL DLL imports. It passed
+`-DRTC_STATIC -DRTC_ENABLE_MEDIA=0 -DRTC_ENABLE_WEBSOCKET=0` and the libdatachannel include path through
+`MP_RTC_CFLAGS`. `MP_RTC_LIBS` supplied the Zig C++ runtime, libdatachannel, libjuice, usrsctp, OpenSSL
+import libraries, and `-lws2_32 -liphlpapi -lbcrypt -lcrypt32`. The OpenSSL DLL directory was on PATH.
 
 ## Bootstrap checks (historical)
 
@@ -49,6 +70,7 @@ use a socket or game runtime.
 ```sh
 make multiplayer-swmm-package
 make test-multiplayer-swmm
+make test-multiplayer-native
 ```
 
 Package creation and archive validation passed. Artifact at the time of testing:
@@ -130,6 +152,16 @@ for each supported platform. Windows and Linux/Vulkan are the current targets.
 | Cross-platform lobby | Verify that the Windows and Linux packages interoperate on compatible builds. Test each OS as host. |
 
 These are pending release checks. Historical package validation used the development marker archive.
+
+## M1 SWMM in-game presence test
+
+Import, approve, enable, deploy, and launch the compiled M1 test build through SWMM. Use BOTW 1.9.0 and scratch
+saves in the documented test area. In the game's lobby UI, host a session, join from a second instance, and
+admit a third instance after the first join. Verify that each instance displays exactly one visible placeholder
+per admitted remote peer, including peers already connected when it joined. Verify that an incompatible client
+creates no placeholder. Disconnect one client and check that its placeholder disappears from the remaining
+instances. Leave or reboot and check that the local session's placeholders are cleared and the local player
+and scratch saves remain usable. Record the build, platform, area, actor used, and observed counts.
 
 ## Gameplay test matrix for later milestones
 

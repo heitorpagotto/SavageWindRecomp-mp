@@ -89,12 +89,35 @@ distributed.
 
 ## D012 — Transport backend not yet chosen
 
-Status: open.
+Status: libdatachannel is the leading candidate. Production selection remains open.
 
 The required properties are encrypted data channels, Windows/Linux support, ICE/STUN, optional TURN, reliable ordered
-and unreliable unordered delivery, and an acceptable redistributable license. WebRTC/libdatachannel is a candidate,
-not a committed dependency. Perform a dependency/build/licensing spike before choosing.
+and unreliable unordered delivery, and an acceptable redistributable license.
 
+- **libdatachannel** offers a C API over WebRTC data channels on Windows and Linux. Two reliable ordered streams
+  and an unordered stream with zero retransmissions map to the existing channels. The Windows probe built v0.24.6
+  with libjuice ICE and OpenSSL and exercised a two-peer lobby over DTLS/SCTP loopback. The test code uses the
+  public API and the application links no transport dependency by default. [C API](https://libdatachannel.org/pages/reference.html),
+  [release](https://github.com/paullouisageneau/libdatachannel/releases/tag/v0.24.6)
+- **GameNetworkingSockets** has encrypted UDP, reliable and unreliable delivery, and Windows/Linux build guidance.
+  Its open-source P2P option uses an ICE dependency and custom signaling. The upstream material reviewed does
+  not establish the self-hosted TURN fallback needed here. This comparison is based on source documentation.
+  [Project and BSD-3-Clause license](https://github.com/ValveSoftware/GameNetworkingSockets),
+  [P2P notes](https://github.com/ValveSoftware/GameNetworkingSockets/blob/master/README_P2P.md)
+- **libjuice alone** provides ICE/STUN/TURN over UDP. It would require adding DTLS and a reliable message layer;
+  using it through libdatachannel avoids maintaining that combination here.
+  [libjuice documentation](https://github.com/paullouisageneau/libjuice)
+
+libdatachannel and libjuice use MPL-2.0. The tested configuration also includes usrsctp (BSD-style), plog (MIT),
+and OpenSSL 3 (Apache-2.0). Review license notices and MPL covered-source obligations for the exact release
+configuration before distribution. The probe binaries and dependencies are local build output; they do not go in
+the marker ZIP. A production decision still needs Linux runtime and cross-platform tests, forced TURN verification,
+an advisory review of the pinned dependency set, and size measurements for the chosen release build.
+
+Production work should prototype authenticated rendezvous with expiring invite records and per-connection
+authorization. Authenticate the SDP fingerprints, issue a one-use link binding scoped to that exchange,
+and bound both pending negotiations and payload queues. Separate ICE timeouts from the admitted-link HELLO
+deadline if WAN/TURN negotiation exceeds the current five-second join window.
 
 ## D013 — Connection-bound lobby admission
 
@@ -107,3 +130,9 @@ continue with a divergent roster.
 
 The mock binding is deterministic. The production transport must derive a binding from authenticated signaling or
 its encrypted channel. Production transport selection remains open.
+
+## D014 — Native lifecycle proposal
+
+Status: draft. The test-only [ABI and manifest proposal](NATIVE_ABI.md) defines a C lifecycle fixture and
+describes an approval handoff for review with Savage Wind and SWMM. The runtime loader and SWMM archive
+contract remain pending that agreement.

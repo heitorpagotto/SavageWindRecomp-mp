@@ -9,14 +9,16 @@ branch, source, and tests before changing code, then update these files when a d
 ## Current truth
 
 - M1 working branch: `multiplayer/windows-test`. Bootstrap branch: `multiplayer/bootstrap`.
-- Resume checkpoint: `11ed467` on `multiplayer/windows-test`. Historical upstream `test` baseline: `f488af7`.
+- Resume checkpoint: working tree based on `5b41d90` on `multiplayer/windows-test`. Historical upstream
+  `test` baseline: `f488af7`.
 - Target: BOTW Switch 1.9.0 on every supported Savage Wind platform. The current release matrix is Windows and
   Linux/Vulkan.
 - Distribution: compile the module for each supported target and provide SWMM-compatible drag-and-drop archives.
 - Product target: host plus seven clients, internet P2P transport, host-authoritative cooperative campaign.
 - Implemented: protocol framing, player snapshot codec, eight-peer sessions, a transport-driven lobby with
-  compatibility checks, a deterministic mock transport, an eight-Link demo, and SWMM development packaging.
-- Production work remaining: encrypted P2P connections, rendezvous and invite exchange, the native bridge, Host/Join
+  compatibility checks, a deterministic mock transport, an eight-Link demo, SWMM development packaging, a
+  two-peer encrypted loopback probe and a draft native ABI fixture.
+- Production work remaining: internet P2P connections, rendezvous and invite exchange, the native bridge, Host/Join
   UI, remote Link actors, and gameplay synchronization.
 - The current SWMM archive is a discovery marker only. It does not run multiplayer inside Savage Wind.
 - No Nintendo files, extracted data, generated game code, saves, assets, or decompilation output were added.
@@ -36,6 +38,7 @@ Start with [HANDOFF.md](HANDOFF.md) for the current checkpoint and the first ind
 8. [TESTING.md](TESTING.md) — commands actually run, results, gaps, and future test matrix.
 9. [NEXT.md](NEXT.md) — recommended next work in executable order.
 10. [state.json](state.json) — compact machine-readable snapshot.
+11. [NATIVE_ABI.md](NATIVE_ABI.md) — draft C ABI, native manifest, and approval handoff for maintainer review.
 
 ## Quick verification
 
@@ -46,6 +49,7 @@ make CC=gcc test-multiplayer
 make CC=gcc multiplayer-demo
 make multiplayer-swmm-package
 make test-multiplayer-swmm
+make test-multiplayer-native
 rtk git diff --check
 ```
 
@@ -57,7 +61,7 @@ PASS: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected
 ```
 
 Clang is the normal project compiler. Use `CC=gcc` for GCC or see [TESTING.md](TESTING.md) for the Windows
-standalone verification.
+standalone verification and the opt-in WebRTC test.
 
 ## Maintenance rule
 

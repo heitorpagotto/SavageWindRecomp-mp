@@ -20,7 +20,6 @@ The first is the preferred user experience because SWMM can show a clear warning
 can remove it cleanly with the profile. We must not silently load arbitrary DLLs or shared objects found in a content
 overlay: that would turn any downloaded data mod into native code execution.
 
-The package path and marker are stable development contracts. Once the native bridge exists, the archive will gain
-Windows and Linux binaries without changing how users install it: drag the archive into SWMM, enable it, and press
-Play.
+The [draft manifest and approval handoff](../../.milestones/NATIVE_ABI.md) proposes how SWMM could select and approve
+the compiled module for each platform. The test fixture is built separately from the marker archive.
 
