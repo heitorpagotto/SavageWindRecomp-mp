@@ -2,6 +2,13 @@ Savage Wind Recomp
 
 Read CONTRIBUTING.md before making changes.
 
+## Shell commands with RTK
+
+Always invoke supported shell commands through `rtk` in this project, even
+when the automatic hook is unavailable. For example, use `rtk git status`
+and `rtk git diff`. Run unsupported commands normally. Use
+`rtk bypass <command>` when you need the complete, unfiltered output.
+
 ━━ Project map
 
 Savage Wind statically recompiles Switch BOTW into a locally generated swgame

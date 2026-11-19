@@ -4,9 +4,11 @@ This is the recommended executable order for a context-free developer or agent. 
 
 ## Start here
 
+Read [HANDOFF.md](HANDOFF.md) for the resume checkpoint and work order. Check the worktree from the repository root:
+
 ```sh
-git status --short --branch
-git diff -- Makefile mods/multiplayer tests/test_multiplayer.c tools/package_multiplayer.py .milestones
+rtk git status --short --branch
+rtk git diff -- Makefile mods/multiplayer tests/test_multiplayer.c tools/package_multiplayer.py .milestones
 make CC=gcc test-multiplayer
 make CC=gcc multiplayer-demo
 make test-multiplayer-swmm
@@ -39,14 +41,15 @@ This needs maintainer agreement because it changes Savage Wind's executable-code
 - Prove load, reset, unload, disabled-mod startup, incompatible-ABI rejection, and failure cleanup.
 - Keep Windows/Linux loaders behind one platform-neutral interface.
 
-The final SWMM handoff likely belongs in the separate SWMM repository. Do not copy its GPL source into this MIT
-repository.
+The SWMM handoff likely needs implementation in the separate SWMM repository. Do not copy its GPL source into
+this MIT repository. Use the [packaging contract](SWMM.md#release-packaging-contract) to agree on manifest,
+platform targeting, and what the player imports.
 
 ## Transport selection spike
 
 No transport library is selected. Evaluate maintained libraries for:
 
-- C-compatible API and Windows/Linux support;
+- C-compatible API, buildable on all supported Savage Wind platforms (currently Windows and Linux), with cross-platform interoperability;
 - ICE/STUN/TURN and encrypted data channels;
 - reliable ordered and unreliable/unordered delivery modes;
 - binary size, linking, license, update cadence, and security history;

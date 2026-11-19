@@ -46,6 +46,23 @@ The package proves deterministic packaging and gives the future bridge a stable 
 manually installed through the SWMM GUI in this environment. Do not record the GUI lifecycle as verified until a
 person actually drags it into SWMM, enables it, deploys, launches, disables, and uninstalls it.
 
+## Release packaging contract
+
+The release build must compile a native module for each supported Savage Wind platform and produce an archive
+SWMM can install by drag and drop. Windows and Linux/Vulkan are the current targets. Players use precompiled
+artifacts and the manager handles module selection or validates the target of a platform-specific archive.
+
+- Keep a common mod identity and version across platform builds. The package identifies the target OS/architecture,
+  module ABI version, supported Savage Wind build compatibility, and integrity metadata.
+- Provide a reproducible build and packaging recipe for each supported target. The choice of one multi-platform ZIP
+  or platform-specific ZIPs depends on the agreed SWMM manifest and import contract.
+- Verify import, approval, enable, deploy, launch, update, disable, and uninstall on each supported platform.
+  Include a wrong-platform or incompatible-ABI case and check that an unapproved module never loads.
+- Package redistributable mod files only. Preserve player saves and settings across update and removal.
+
+The native archive format and approval handoff remain open and require agreement with Savage Wind and SWMM.
+The marker package described above is the baseline for archive validation.
+
 ## Required safe integration
 
 Preferred flow:

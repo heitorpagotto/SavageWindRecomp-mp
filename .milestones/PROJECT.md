@@ -17,7 +17,10 @@ Required final behavior:
 - Enemy health and death are shared so players can fight the same enemy cooperatively.
 - Main-story progression and story quests are shared.
 - Chests grant loot to every eligible player rather than only the opener.
-- The mod can be installed, enabled, disabled, and uninstalled cleanly through Savage Wind Mod Manager (SWMM).
+- The mod builds and runs on every supported Savage Wind platform. The current targets are Windows and Linux/Vulkan.
+- Windows and Linux players can join the same lobby using compatible Savage Wind and mod builds.
+- A build produces an SWMM-compatible archive for each supported platform. Players can drag and drop the archive
+  into Savage Wind Mod Manager (SWMM), then enable, launch, update, disable, and uninstall through the manager.
 - With the mod absent or disabled, ordinary Savage Wind behavior is unchanged.
 
 ## Experience constraints

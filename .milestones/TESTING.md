@@ -116,6 +116,21 @@ Record the exact build, game version, OS, transport version, and signaling/relay
 | Late join | Full authoritative snapshot before normal play |
 | Runtime reboot | Threads, queues, sockets, and guest references reset |
 
+## SWMM release verification
+
+Record OS/architecture, Savage Wind and SWMM versions, native ABI version, archive hash, and the observed result
+for each supported platform. Windows and Linux/Vulkan are the current targets.
+
+| Check | Evidence required |
+|---|---|
+| Build and package | Produce the native module and archive from the documented recipe, then validate the target, metadata, and contents. |
+| Fresh install | Drag the archive into SWMM, approve, enable, deploy, and launch. Confirm the multiplayer module loads. |
+| Update and removal | Update from a prior build, then disable and uninstall. Confirm the module is unavailable while disabled or removed and user data is preserved. |
+| Invalid or denied module | Decline native-code approval and try the wrong platform or ABI. Confirm the module stays unloaded and Savage Wind can start. |
+| Cross-platform lobby | Verify that the Windows and Linux packages interoperate on compatible builds. Test each OS as host. |
+
+These are pending release checks. Historical package validation used the development marker archive.
+
 ## Gameplay test matrix for later milestones
 
 - 1, 2, 4, and 8 peers.

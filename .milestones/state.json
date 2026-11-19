@@ -8,6 +8,9 @@
     "protocol_version": 1,
     "target_game_version": "1.9.0",
     "max_players": 8,
+    "platform_policy": "every supported Savage Wind platform",
+    "distribution": "compiled native module in SWMM drag-and-drop archive for each supported target",
+    "cross_platform_lobby_required": true,
     "maintained_platforms": [
       "Windows",
       "Linux/Vulkan"
@@ -18,7 +21,8 @@
     "upstream_base_branch": "test",
     "upstream_base_commit": "f488af7",
     "lobby_work_base_commit": "11c1af1",
-    "workspace_committed": false,
+    "synthetic_lobby_commit": "11ed467",
+    "workspace_committed": true,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
   "architecture": {
@@ -105,6 +109,7 @@
     "platform": "Windows",
     "compiler": "Zig 0.15.2 Clang driver, direct standalone build",
     "core_test": "pass: multiplayer core: ok",
+    "undefined_behavior_check": "pass: Clang trap mode",
     "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
     "package_check": "pass: direct Python builder and validator",
     "package_sha256": "ec79a0835bb42da566f160b8239d7be07ad8d49230a9252143f8649aa5cc7730",

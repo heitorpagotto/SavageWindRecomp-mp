@@ -9,8 +9,10 @@ branch, source, and tests before changing code, then update these files when a d
 ## Current truth
 
 - M1 working branch: `multiplayer/windows-test`. Bootstrap branch: `multiplayer/bootstrap`.
-- Base: upstream Savage Wind `test` commit `f488af7`.
-- Target: BOTW Switch 1.9.0 through Savage Wind; Windows and Linux are maintained.
+- Resume checkpoint: `11ed467` on `multiplayer/windows-test`. Historical upstream `test` baseline: `f488af7`.
+- Target: BOTW Switch 1.9.0 on every supported Savage Wind platform. The current release matrix is Windows and
+  Linux/Vulkan.
+- Distribution: compile the module for each supported target and provide SWMM-compatible drag-and-drop archives.
 - Product target: host plus seven clients, internet P2P transport, host-authoritative cooperative campaign.
 - Implemented: protocol framing, player snapshot codec, eight-peer sessions, a transport-driven lobby with
   compatibility checks, a deterministic mock transport, an eight-Link demo, and SWMM development packaging.
@@ -18,9 +20,11 @@ branch, source, and tests before changing code, then update these files when a d
   UI, remote Link actors, and gameplay synchronization.
 - The current SWMM archive is a discovery marker only. It does not run multiplayer inside Savage Wind.
 - No Nintendo files, extracted data, generated game code, saves, assets, or decompilation output were added.
-- Bootstrap is committed at `2b9a27c`. The M1 lobby changes are in the working tree. Check `git status --short --branch` before editing.
+- Bootstrap is committed at `2b9a27c` and the synthetic M1 lobby at `11ed467`. Verify the branch and local edits before resuming.
 
 ## Read in this order
+
+Start with [HANDOFF.md](HANDOFF.md) for the current checkpoint and the first independent task. Then read:
 
 1. [PROJECT.md](PROJECT.md) — product goal, scope, legal and gameplay constraints.
 2. [REPOSITORY.md](REPOSITORY.md) — branch, upstream rules, relevant Savage Wind integration points.
@@ -42,7 +46,7 @@ make CC=gcc test-multiplayer
 make CC=gcc multiplayer-demo
 make multiplayer-swmm-package
 make test-multiplayer-swmm
-git diff --check
+rtk git diff --check
 ```
 
 Expected demo summary:
@@ -57,7 +61,9 @@ standalone verification.
 
 ## Maintenance rule
 
-When work changes the project, update at least:
+At every milestone or partial milestone checkpoint, update [HANDOFF.md](HANDOFF.md) with the resume commit or
+working-tree status, what shipped, the verification results and gaps, any decisions waiting on maintainers, and the
+first task the next agent can execute. Update the relevant records in the same change:
 
 - `state.json` for status, version, test, or branch changes;
 - `MILESTONES.md` for completed acceptance criteria;

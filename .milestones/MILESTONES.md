@@ -50,7 +50,7 @@ Still required:
 - Manual SWMM GUI import, enable, deploy, launch, disable, and uninstall test.
 - A versioned Savage Wind native-plugin ABI/loader.
 - Explicit native-code approval and approved-plugin-path handoff from SWMM.
-- Platform binaries and package integrity/signing policy.
+- Built native modules for every supported Savage Wind target, packaged for drag-and-drop SWMM installation, and an agreed integrity policy.
 
 The current archive is intentionally a development marker; it cannot execute the C core.
 
@@ -85,7 +85,7 @@ Acceptance criteria:
 - Incompatible builds are rejected with a useful localized error.
 - Disable/uninstall leaves single-player behavior and user data unchanged.
 - Rebooting or leaving releases threads, queues, sockets, and guest references.
-- Linux and Windows are tested; network traffic is authenticated and encrypted.
+- Authenticated, encrypted lobby traffic is verified on Windows and Linux, including a session with a host on one OS and a client on the other.
 
 ## M2 — Remote Link presence
 
@@ -173,19 +173,19 @@ Acceptance criteria:
 
 Status: **not started**.
 
-Goal: ship a maintainable, removable, safe multiplayer mod for Windows and Linux.
+Goal: ship a maintainable, removable, safe multiplayer mod for every supported Savage Wind platform, currently Windows and Linux/Vulkan.
 
 Planned deliverables:
 
 - Stable protocol/plugin/package versioning and compatibility policy.
-- Reproducible Windows/Linux builds and release artifacts.
+- Reproducible native builds and SWMM-ready release archives for each supported platform.
 - Security review, fuzzing, malformed-packet tests, dependency audit, and resource limits.
 - Localization, diagnostics, privacy notice, and troubleshooting documentation.
-- SWMM one-click install/update/disable/uninstall path with native-code consent.
+- SWMM drag-and-drop installation, update, disable, and uninstall with native-code consent.
 
 Acceptance criteria:
 
-- Fresh-machine install and uninstall tests pass on maintained platforms.
+- On a fresh setup for each supported platform, drag and drop the compiled archive into SWMM and verify the full lifecycle from approval and launch through update, disable, and uninstall.
 - Release packages contain only redistributable project-owned code and metadata.
 - Long-running eight-player soak tests pass with bounded memory and queues.
 - Single-player behavior is unchanged when the mod is absent or disabled.

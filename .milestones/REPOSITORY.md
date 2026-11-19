@@ -7,7 +7,7 @@
 - Base commit: `f488af7` (`No usable GPU: the error names each graphics card and what its driver lacks`)
 - Fork remote: `origin` -> `https://github.com/heitorpagotto/SavageWindRecomp-mp.git`
 - The bootstrap commit is `2b9a27c`. The lobby work started from `11c1af1` on `origin/multiplayer/bootstrap`.
-- The M1 synthetic lobby changes are in the working tree.
+- The M1 synthetic lobby is committed at `11ed467`. Inspect the current branch and preserve any local edits.
 
 To refresh the upstream development branch without adding a remote:
 
