@@ -895,3 +895,34 @@ $(B)/test_ui_layout: tests/test_ui_layout.c runtime/ui_layout.c runtime/ui_layou
 test-ui-layout: $(B)/test_ui_layout
 	$(B)/test_ui_layout
 .PHONY: test-ui-layout
+
+# Standalone multiplayer protocol/session core. Synthetic only: no generated code, game files, network, or runtime.
+MP_CORE := mods/multiplayer/protocol.c mods/multiplayer/session.c
+$(B)/test_multiplayer: tests/test_multiplayer.c $(MP_CORE) mods/multiplayer/protocol.h mods/multiplayer/session.h \
+                       mods/multiplayer/transport.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ tests/test_multiplayer.c $(MP_CORE)
+
+test-multiplayer: $(B)/test_multiplayer
+	$(B)/test_multiplayer
+
+$(B)/multiplayer_demo: mods/multiplayer/demo.c $(MP_CORE) mods/multiplayer/protocol.h mods/multiplayer/session.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ mods/multiplayer/demo.c $(MP_CORE)
+
+multiplayer-demo: $(B)/multiplayer_demo
+	$(B)/multiplayer_demo
+
+MP_VERSION := $(strip $(shell cat mods/multiplayer/VERSION))
+MP_SWMM_PACKAGE := $(B)/mods/SavageWind-Multiplayer-$(MP_VERSION)-SWMM.zip
+$(MP_SWMM_PACKAGE): tools/package_multiplayer.py mods/multiplayer/VERSION mods/multiplayer/swmm/info.json \
+                    mods/multiplayer/swmm/romfs/System/SavageWind/Multiplayer/package.swmp
+	python3 tools/package_multiplayer.py $@
+
+multiplayer-swmm-package: $(MP_SWMM_PACKAGE)
+	@echo $(MP_SWMM_PACKAGE)
+
+test-multiplayer-swmm: $(MP_SWMM_PACKAGE)
+	python3 tools/package_multiplayer.py --check $<
+
+.PHONY: test-multiplayer multiplayer-demo multiplayer-swmm-package test-multiplayer-swmm

@@ -1,0 +1,10 @@
+{
+  "name": "Savage Wind Multiplayer",
+  "desc": "Peer-to-peer cooperative multiplayer for Savage Wind. Development discovery package.",
+  "version": "0.1.0-dev",
+  "platform": "switch",
+  "options": {
+    "multi": [],
+    "single": []
+  }
+}

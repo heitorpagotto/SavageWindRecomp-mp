@@ -1,0 +1,4 @@
+SWMP_PACKAGE_V1
+id = org.savagewind.multiplayer
+protocol = 1
+runtime = native

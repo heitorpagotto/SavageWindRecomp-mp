@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-11-18T22:22:34-03:00",
+  "project": {
+    "name": "Savage Wind Multiplayer",
+    "package_id": "org.savagewind.multiplayer",
+    "mod_version": "0.1.0-dev",
+    "protocol_version": 1,
+    "target_game_version": "1.9.0",
+    "max_players": 8,
+    "maintained_platforms": [
+      "Windows",
+      "Linux/Vulkan"
+    ]
+  },
+  "repository": {
+    "branch": "multiplayer/bootstrap",
+    "upstream_base_branch": "test",
+    "upstream_base_commit": "f488af7",
+    "workspace_committed": false
+  },
+  "architecture": {
+    "topology": "host-authoritative star over peer-to-peer connections",
+    "host_peer_id": 0,
+    "host_migration_v1": false,
+    "transport_backend_selected": false,
+    "native_plugin_abi_exists": false,
+    "game_thread_owns_guest_state": true,
+    "stable_ids_required": true,
+    "invite_flow": "rendezvous signaling, ICE/STUN direct path, TURN fallback"
+  },
+  "milestones": [
+    {
+      "id": "M0",
+      "name": "Protocol and session foundation",
+      "status": "complete",
+      "scope": "synthetic"
+    },
+    {
+      "id": "M0.5",
+      "name": "SWMM development packaging",
+      "status": "partial"
+    },
+    {
+      "id": "M1",
+      "name": "Native bridge and internet lobby",
+      "status": "not_started"
+    },
+    {
+      "id": "M2",
+      "name": "Remote Link presence",
+      "status": "not_started"
+    },
+    {
+      "id": "M3",
+      "name": "Combat, enemies, and PvP",
+      "status": "not_started"
+    },
+    {
+      "id": "M4",
+      "name": "Shared world, story, and chests",
+      "status": "not_started"
+    },
+    {
+      "id": "M5",
+      "name": "Full main-campaign playthrough",
+      "status": "not_started"
+    },
+    {
+      "id": "M6",
+      "name": "Release hardening",
+      "status": "not_started"
+    }
+  ],
+  "implemented": [
+    "explicit packet header codec and validation",
+    "player snapshot codec",
+    "eight-peer session state",
+    "per-peer per-channel sequence filtering",
+    "transport interface",
+    "synthetic multiplayer tests",
+    "in-process eight-Link demo",
+    "deterministic SWMM development package"
+  ],
+  "not_implemented": [
+    "network transport backend",
+    "rendezvous service and invite codes",
+    "native module loader",
+    "Host/Join game UI",
+    "remote Link actors",
+    "equipment replication payload",
+    "combat and shared enemy health",
+    "PvP",
+    "shared quests and story",
+    "per-player chest rewards",
+    "gameplay resync and persistence"
+  ],
+  "last_verified": {
+    "compiler": "GCC 16.2.1",
+    "core_test": "pass: multiplayer core: ok",
+    "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
+    "package_check": "pass",
+    "package_sha256": "731f2548d8e9c691defe0437a310d621a02e09a1eab2a83a73b3e991475db867",
+    "deterministic_package_rebuild": true,
+    "gcc_analyzer": "pass: no diagnostics",
+    "clang": "unavailable",
+    "sanitizers": "not run: runtime libraries unavailable",
+    "gameplay": "not tested",
+    "swmm_gui_lifecycle": "not tested",
+    "windows": "not tested"
+  },
+  "next_recommended_work": "Implement lobby payload codecs and a deterministic mock transport, then design the versioned native module ABI with maintainers."
+}
