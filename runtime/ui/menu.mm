@@ -33,6 +33,7 @@ extern "C" {
 #include "../amiibo.h"
 #include "../hle.h"
 #include "../items.h"
+#include "../multiplayer.h"
 #include "../settings.h"
 #include "../gamelib.h"
 #include "../quick_inventory_sort.h"
@@ -1641,6 +1642,10 @@ static void tab_about(void) {
 // Reboot (runtime/main.c): the game is gone - menu and name dialog close; the ImGui context stays.
 RT_ON_RESET(menu_reset) {
     set_open(false);
+#ifdef SWMP_M1_TEST
+    extern void multiplayer_tab_reset();
+    multiplayer_tab_reset();
+#endif
     g_kbd = 0;
     osk_cancel();
     pthread_mutex_lock(&q_lock);
@@ -1952,6 +1957,10 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
         if (i == 10 && !in_game) continue;  // (Cheats: in game only)
         tabs[ntabs++] = {names[i], i, true};
     }
+#ifdef SWMP_M1_TEST
+    if (in_game && !prelaunch && swmp_m1_view().enabled)
+        tabs[ntabs++] = {"Multiplayer", 11, true};
+#endif
     int cur = 0;  // g_tab / g_tab_request hold ids
     for (int i = 0; i < ntabs; i++) if (tabs[i].id == g_tab) cur = i;
     if (!tabs[cur].on) cur = 0;
@@ -2029,7 +2038,7 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
                 ImGui::PopStyleVar();
                 // Down from the tab bar, pages that aren't option rows (Prelaunch, Controls): their first control
                 // (option-row pages: opt_focus_first)
-                if (down_from_tab && (t.id == -1 || t.id == 8)) {
+                if (down_from_tab && (t.id == -1 || t.id == 8 || t.id == 11)) {
                     opt_focus_first(false);
                     ImGui::SetKeyboardFocusHere();
                     ImGui::SetNavCursorVisible(true);
@@ -2044,6 +2053,9 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
                 case 8: tab_about(); break;
                 case 9: tab_quit(scale, in_game); break;
                 case 10: tab_cheats(); break;
+#ifdef SWMP_M1_TEST
+                case 11: { extern void multiplayer_tab_draw(); multiplayer_tab_draw(); break; }
+#endif
                 }
                 static const char *scroll_test = getenv("SAVAGEWIND_MENU_SCROLL");  // test hook: page scroll, 0..1
                 if (scroll_test) ImGui::SetScrollY(ImGui::GetScrollMaxY() * (float)atof(scroll_test));

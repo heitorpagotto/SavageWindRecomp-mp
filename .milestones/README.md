@@ -9,18 +9,21 @@ branch, source, and tests before changing code, then update these files when a d
 ## Current truth
 
 - M1 working branch: `multiplayer/windows-test`. Bootstrap branch: `multiplayer/bootstrap`.
-- Resume checkpoint: working tree based on `5b41d90` on `multiplayer/windows-test`. Historical upstream
+- Resume checkpoint: working tree based on `1bde6b5` on `multiplayer/windows-test`. Historical upstream
   `test` baseline: `f488af7`.
 - Target: BOTW Switch 1.9.0 on every supported Savage Wind platform. The current release matrix is Windows and
   Linux/Vulkan.
 - Distribution: compile the module for each supported target and provide SWMM-compatible drag-and-drop archives.
 - Product target: host plus seven clients, internet P2P transport, host-authoritative cooperative campaign.
-- Implemented: protocol framing, player snapshot codec, eight-peer sessions, a transport-driven lobby with
-  compatibility checks, a deterministic mock transport, an eight-Link demo, SWMM development packaging, a
-  two-peer encrypted loopback probe and a draft native ABI fixture.
-- Production work remaining: internet P2P connections, rendezvous and invite exchange, the native bridge, Host/Join
-  UI, remote Link actors, and gameplay synchronization.
-- The current SWMM archive is a discovery marker only. It does not run multiplayer inside Savage Wind.
+- Implemented: protocol and sessions, a mock transport and demo, the development marker and native ABI fixtures,
+  the marker-gated Windows/Linux lobby UI, an eight-peer WebRTC adapter, HTTPS rendezvous, and the Great Plateau
+  placeholder lifecycle.
+- Windows presence checks showed two placeholders each in three simultaneously rendered worlds.
+  See the [test record](TESTING.md#m1-windows-presence-check) for the observations and local replay commands.
+- M1 work remaining: native Linux and mixed-platform execution, and the two-network direct/relay acceptance test.
+- The SWMM marker passed install, deploy, and uninstall through stock SWMM 0.1.3's Windows CLI with synthetic
+  data and through its GUI with a scratch 1.9.0 test build. A separate draft ABI fixture archive contains compiled
+  Windows and Linux binaries for maintainer review.
 - No Nintendo files, extracted data, generated game code, saves, assets, or decompilation output were added.
 - Bootstrap is committed at `2b9a27c` and the synthetic M1 lobby at `11ed467`. Verify the branch and local edits before resuming.
 

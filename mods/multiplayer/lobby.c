@@ -119,6 +119,8 @@ static void connected(SwmpLobby *l, const SwmpTransportEvent *event, uint64_t no
         *link = (SwmpLobbyLink){.connection = event->connection, .connected_at = now, .peer = SWMP_UNASSIGNED_PEER};
         memcpy(link->binding, event->binding, sizeof link->binding);
         if (l->joining) {
+            l->waiting_welcome = true;
+            l->join_started_at = now;
             SwmpControl msg = {.hello.compatibility = l->compatibility};
             memcpy(msg.hello.binding, link->binding, sizeof msg.hello.binding);
             strcpy(msg.hello.name, l->name);
@@ -272,8 +274,11 @@ static void packet(SwmpLobby *l, const SwmpTransportEvent *event, SwmpLobbyLink 
 }
 
 void swmp_lobby_poll(SwmpLobby *l, uint64_t now) {
-    if (l->joining && now - l->join_started_at >= SWMP_LOBBY_TIMEOUT_MS) {
-        fail(l, SWMP_REJECT_NONE, "Lobby handshake timed out");
+    uint64_t connect_timeout = l->transport.connect_timeout_ms;
+    uint64_t join_timeout = l->waiting_welcome || !connect_timeout ? SWMP_LOBBY_TIMEOUT_MS : connect_timeout;
+    if (l->joining && now - l->join_started_at >= join_timeout) {
+        fail(l, SWMP_REJECT_NONE, l->waiting_welcome || !connect_timeout ?
+             "Lobby handshake timed out" : "Lobby connection timed out");
         return;
     }
     if (!l->joining && l->session.state == SWMP_SESSION_OFFLINE) return;

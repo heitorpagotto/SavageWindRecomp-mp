@@ -23,6 +23,7 @@
 #include "kernel.h"
 #include "control.h"
 #include "launch_flags_boot.h"
+#include "multiplayer.h"
 
 const char *g_romfs_dir;
 uint64_t g_program_id;
@@ -169,6 +170,9 @@ static void boot(const char *root) {
 
     char why[512];
     if (!gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
+#ifdef SWMP_M1_TEST
+    swmp_m1_boot(gamelib_tables());
+#endif
     loader_load(exefs);
     { extern void fs_title_version_patch(void); fs_title_version_patch(); }  // (runtime/services/fs.c)
     { extern void settings_load(void); settings_load(); }

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Callable
 import tempfile
 import zipfile
 
@@ -14,7 +15,9 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "mods" / "multiplayer" / "swmm"
 VERSION_FILE = ROOT / "mods" / "multiplayer" / "VERSION"
 INFO = "info.json"
-MARKER = "romfs/System/SavageWind/Multiplayer/package.swmp"
+SOURCE_MARKER = "romfs/System/SavageWind/Multiplayer/package.swmp"
+# Use the Switch content root recognized by both SWMM's CLI packer and GUI importer.
+MARKER = f"01007EF00011E000/{SOURCE_MARKER}"
 EXPECTED = {INFO, MARKER}
 MAX_ENTRY_SIZE = 16 * 1024
 MARKER_TEXT = "SWMP_PACKAGE_V1\nid = org.savagewind.multiplayer\nprotocol = 1\nruntime = native\n"
@@ -40,23 +43,27 @@ def validate(info: bytes, marker: bytes) -> None:
         raise ValueError("SWMM package marker is invalid")
 
 
-def build(output: Path) -> None:
-    info = (SOURCE / INFO).read_text(encoding="utf-8").encode("utf-8")
-    marker = (SOURCE / MARKER).read_text(encoding="utf-8").encode("utf-8")
-    validate(info, marker)
+def write_archive(output: Path, entries: dict[str, bytes], validate_archive: Callable[[Path], None]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
         staged = Path(scratch) / output.name
         with zipfile.ZipFile(staged, "w") as archive:
-            for name, data in ((INFO, info), (MARKER, marker)):
+            for name, data in entries.items():
                 # Stored entries avoid variations in compression between Python builds.
                 entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
                 entry.create_system = 3
                 entry.external_attr = 0o100644 << 16
                 archive.writestr(entry, data)
-        check(staged)
+        validate_archive(staged)
         os.replace(staged, output)
     print(output)
+
+
+def build(output: Path) -> None:
+    info = (SOURCE / INFO).read_text(encoding="utf-8").encode("utf-8")
+    marker = (SOURCE / SOURCE_MARKER).read_text(encoding="utf-8").encode("utf-8")
+    validate(info, marker)
+    write_archive(output, {INFO: info, MARKER: marker}, check)
 
 
 def check(package: Path) -> None:

@@ -178,6 +178,34 @@ SW_SOURCE := $(or $(shell git log -1 --format='commit %h, tree %t' 2>/dev/null),
 $(shell mkdir -p $(B) && [ "$$(cat $(B)/source_id 2>/dev/null)" = '$(SW_SOURCE)' ] || echo '$(SW_SOURCE)' > $(B)/source_id)
 
 RT_OBJ   := $(patsubst runtime/%.c,$(B)/rt/%.o,$(RT_SRC))
+
+# The stock SWMM marker gates the built-in M1 developer build. Keep its output in a separate B.
+MP_M1_TEST ?=
+MP_RTC_CFLAGS ?=
+MP_RTC_LIBS ?= -ldatachannel
+MP_CURL_CFLAGS ?=
+MP_CURL_LIBS ?= -lcurl
+MP_RNG_LIBS := $(if $(filter windows,$(PLATFORM)),-lbcrypt)
+ifeq ($(MP_M1_TEST),1)
+ifeq ($(filter windows linux,$(PLATFORM)),)
+$(error MP_M1_TEST requires a Windows or Linux build)
+endif
+MP_RUNTIME_SRC := $(addprefix mods/multiplayer/,package_marker.c protocol.c session.c lobby.c webrtc.c rendezvous.c)
+MP_RUNTIME_OBJ := $(patsubst mods/multiplayer/%.c,$(B)/rt/multiplayer/%.o,$(MP_RUNTIME_SRC))
+MP_RUNTIME_DEPS := $(MP_RUNTIME_SRC) $(wildcard mods/multiplayer/*.h) runtime/multiplayer.c runtime/multiplayer_presence.c tools/game_sites.py tools/patches.py
+MP_RUNTIME_ID := $(shell (git rev-parse 'HEAD^{tree}' 2>/dev/null; cat $(MP_RUNTIME_DEPS)) | (shasum -a 256 2>/dev/null || sha256sum) | cut -c1-40)
+RT_OBJ += $(MP_RUNTIME_OBJ)
+LDFLAGS += $(MP_RTC_LIBS) $(MP_CURL_LIBS) $(MP_RNG_LIBS)
+MP_BUILD_FLAGS := -DSWMP_M1_TEST -iquote mods/multiplayer
+$(B)/rt/main.o $(B)/rt/multiplayer_presence.o $(B)/rt/nvn/vulkan/device.o: RTFLAGS += $(MP_BUILD_FLAGS)
+$(B)/rt/ui/menu.o $(B)/rt/ui/multiplayer.o: CXXFLAGS += $(MP_BUILD_FLAGS)
+$(B)/rt/multiplayer.o: RTFLAGS += $(MP_BUILD_FLAGS) $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS) -DSWMP_RUNTIME_ID='"$(MP_RUNTIME_ID)"'
+$(B)/rt/multiplayer.o: $(MP_RUNTIME_DEPS) $(B)/source_id
+$(MP_RUNTIME_OBJ): RTFLAGS += -Imods/multiplayer $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS)
+$(B)/rt/multiplayer/%.o: mods/multiplayer/%.c $(wildcard mods/multiplayer/*.h) runtime/services/archive.h
+	@mkdir -p $(dir $@)
+	$(CC) $(RTFLAGS) $(RUNTIME_OPTFLAGS) -c $< -o $@
+endif
 RTFLAGS  := -O2 -g -fno-strict-aliasing -Wall -Wno-unused-function -Iruntime -Iruntime/nvn -isystem third_party -isystem third_party/stb $(DEPINC) $(OSFLAGS)
 CXXFLAGS := -O2 -g -std=c++17 -I$(IMGUI) -I$(IMGUI)/backends -Iruntime -Iruntime/nvn -isystem third_party -Ithird_party/stb $(DEPINC)
 
@@ -212,7 +240,7 @@ endif
 RUNTIME_OPTFLAGS += -fprofile-instr-use=$(PGO_PROFILE)
 endif
 LDFLAGS += $(RUNTIME_LINKFLAGS)
-RUNTIME_CONFIG := $(strip $(RUNTIME_OPTFLAGS))
+RUNTIME_CONFIG := $(strip $(RUNTIME_OPTFLAGS) $(if $(filter 1,$(MP_M1_TEST)),MP_M1_TEST=1))
 $(shell mkdir -p $(B) && [ -f $(B)/runtime_config ] && [ "$$(cat $(B)/runtime_config 2>/dev/null)" = '$(RUNTIME_CONFIG)' ] || echo '$(RUNTIME_CONFIG)' > $(B)/runtime_config)
 $(RT_OBJ) $(filter $(B)/rt/%,$(BACKEND_OBJ)) $(UI_OBJ): $(B)/runtime_config $(if $(filter use,$(PGO)),$(PGO_PROFILE))
 
@@ -927,7 +955,51 @@ test-multiplayer-swmm: $(MP_SWMM_PACKAGE)
 	python3 tools/package_multiplayer.py --check $<
 	python3 tools/test_package_multiplayer.py
 
-.PHONY: test-multiplayer multiplayer-demo multiplayer-swmm-package test-multiplayer-swmm
+test-multiplayer-swmm-cli:
+	python3 tools/test_multiplayer_swmm_cli.py "$(SWMM_EXE)"
+
+$(B)/test_multiplayer_marker: tests/test_multiplayer_marker.c mods/multiplayer/package_marker.c \
+                              $(MP_HEADERS) runtime/services/archive.c runtime/services/archive.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -Wall -Wextra -Werror -Imods/multiplayer -Iruntime -o $@ $(filter %.c,$^)
+
+test-multiplayer-marker: $(B)/test_multiplayer_marker
+	python3 tools/test_multiplayer_marker.py $<
+
+.PHONY: test-multiplayer-marker
+
+# Draft manifest fixture for review. This ZIP is separate from SWMM's content archive.
+MP_FIXTURE_ZIG ?= zig
+MP_FIXTURE_DIR := $(B)/mods/native-fixture
+MP_FIXTURE_SRC := tests/multiplayer_native_fixture.c
+MP_FIXTURE_HDR := mods/multiplayer/native_abi_draft.h
+MP_FIXTURE_FLAGS := -std=c11 -O2 -g0 -Wall -Wextra -Werror -Imods/multiplayer -fPIC -fvisibility=hidden -shared
+MP_FIXTURE_WINDOWS := $(MP_FIXTURE_DIR)/windows-x86_64.dll
+MP_FIXTURE_LINUX := $(MP_FIXTURE_DIR)/linux-x86_64.so
+MP_FIXTURE_ARM64 := $(MP_FIXTURE_DIR)/linux-aarch64.so
+MP_FIXTURE_ARCHIVE := $(B)/mods/SavageWind-Multiplayer-$(MP_VERSION)-native-abi-fixture.zip
+
+$(MP_FIXTURE_WINDOWS): $(MP_FIXTURE_SRC) $(MP_FIXTURE_HDR)
+	@mkdir -p $(dir $@)
+	$(MP_FIXTURE_ZIG) cc -target x86_64-windows-gnu $(MP_FIXTURE_FLAGS) -o $@ $<
+
+$(MP_FIXTURE_LINUX): $(MP_FIXTURE_SRC) $(MP_FIXTURE_HDR)
+	@mkdir -p $(dir $@)
+	$(MP_FIXTURE_ZIG) cc -target x86_64-linux-gnu.2.28 $(MP_FIXTURE_FLAGS) -o $@ $<
+
+$(MP_FIXTURE_ARM64): $(MP_FIXTURE_SRC) $(MP_FIXTURE_HDR)
+	@mkdir -p $(dir $@)
+	$(MP_FIXTURE_ZIG) cc -target aarch64-linux-gnu.2.28 $(MP_FIXTURE_FLAGS) -o $@ $<
+
+$(MP_FIXTURE_ARCHIVE): $(MP_FIXTURE_WINDOWS) $(MP_FIXTURE_LINUX) $(MP_FIXTURE_ARM64) tools/package_multiplayer.py \
+                      tools/package_multiplayer_native_fixture.py mods/multiplayer/VERSION LICENSE
+	python3 tools/package_multiplayer_native_fixture.py $@ --build $(MP_FIXTURE_WINDOWS) $(MP_FIXTURE_LINUX) $(MP_FIXTURE_ARM64)
+
+multiplayer-native-fixture-package: $(MP_FIXTURE_ARCHIVE)
+	python3 tools/package_multiplayer_native_fixture.py --check $<
+
+.PHONY: test-multiplayer multiplayer-demo multiplayer-swmm-package test-multiplayer-swmm \
+        test-multiplayer-swmm-cli multiplayer-native-fixture-package
 
 # Explicit developer probes. The normal app and marker package do not use these.
 ifneq ($(filter windows linux,$(PLATFORM)),)
@@ -954,14 +1026,22 @@ test-multiplayer-native: $(MP_NATIVE_TEST) $(MP_NATIVE_FIXTURE)
 	$(MP_NATIVE_TEST)
 	$(MP_NATIVE_TEST) "$(abspath $(MP_NATIVE_FIXTURE))"
 
-MP_RTC_CFLAGS ?=
-MP_RTC_LIBS ?= -ldatachannel
-$(MP_RTC_TEST): tests/test_multiplayer_webrtc.c $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
+$(MP_RTC_TEST): tests/test_multiplayer_webrtc.c mods/multiplayer/webrtc.c $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer $(MP_RTC_CFLAGS) -o $@ $(filter %.c,$^) $(MP_RTC_LIBS)
 
 test-multiplayer-webrtc: $(MP_RTC_TEST)
 	$(MP_RTC_TEST)
 
-.PHONY: test-multiplayer-native test-multiplayer-webrtc
+MP_RENDEZVOUS_TEST := $(B)/test_multiplayer_rendezvous$(if $(filter windows,$(PLATFORM)),.exe)
+$(MP_RENDEZVOUS_TEST): tests/test_multiplayer_rendezvous.c mods/multiplayer/rendezvous.c mods/multiplayer/webrtc.c \
+                       $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS) \
+	      -o $@ $(filter %.c,$^) $(MP_RTC_LIBS) $(MP_CURL_LIBS) $(MP_RNG_LIBS)
+
+test-multiplayer-rendezvous: $(MP_RENDEZVOUS_TEST)
+	python3 tools/test_multiplayer_rendezvous.py $<
+
+.PHONY: test-multiplayer-native test-multiplayer-webrtc test-multiplayer-rendezvous
 endif

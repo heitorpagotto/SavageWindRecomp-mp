@@ -20,15 +20,16 @@ For a visible end-to-end simulation, run `make CC=gcc multiplayer-demo` (or omit
 It joins seven clients to a host through the mock transport, starts the lobby, then checks in-process Link snapshot
 delivery and rejects a stale duplicate.
 
-`make multiplayer-swmm-package` creates the current Savage Wind Mod Manager development archive. See
-[`SWMM.md`](SWMM.md) for what can be tested now and the native-plugin bridge still required.
+See [Build and install the ZIP](SWMM.md#build-and-install-the-zip) for the PowerShell command and SWMM
+drag-and-drop steps.
 
 The standalone `make test-multiplayer-webrtc` target exercises the lobby over encrypted loopback sockets using
 libdatachannel. `make test-multiplayer-native` verifies a draft C ABI using a fixture DLL or shared object.
 See the [test record](../../.milestones/TESTING.md) for build inputs and verified results.
 
-The runtime integration and native SWMM release are pending. The [draft native ABI and approval proposal](../../.milestones/NATIVE_ABI.md)
-describes the boundary for maintainer review.
+The opt-in Windows/Linux test executable includes a stock-SWMM-marker-gated multiplayer tab and HTTPS rendezvous.
+See the [developer build recipe](../../.milestones/TESTING.md#m1-developer-build). The
+[draft native ABI and approval proposal](../../.milestones/NATIVE_ABI.md) covers the separately loadable release module.
 
 ## Session model
 
@@ -63,8 +64,8 @@ progress is applied only at explicit safe points; disconnecting during a transac
   pointers across a reboot.
 - Discover every 1.9.0 hook through `tools/game_sites.py`, patch it through `tools/patches.py`, assert the replaced
   instructions, and access runtime addresses through `g_site`.
-- Keep multiplayer hooks in strict optional groups. If one required signature is absent, multiplayer stays disabled
-  and ordinary play continues.
+- Keep multiplayer hooks in strict optional groups. If one required signature is absent, the affected feature stays
+  disabled and ordinary play continues.
 - Queue transport events from its worker thread. Read or mutate guest state only on the game thread.
 - Use a fixed multiplayer tick independent of presented or generated frames. Test at 30, 60, 90, and 120 FPS.
 - Treat names, invite responses, packet sizes, enum values, actor identifiers, and flag transactions as untrusted.

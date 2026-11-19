@@ -31,8 +31,14 @@ typedef struct {
     uint8_t id;
     uint8_t sequence_seen;  // one bit per SwmpChannel
     uint32_t last_sequence[SWMP_CHANNEL_COUNT];
+    uint64_t remote_generation;  // local to this session, retained when the slot is vacated
     char name[SWMP_PLAYER_NAME_SIZE];
 } SwmpPeer;
+
+typedef struct {
+    // Zero means absent or local. Compare generations only within the same local lobby lifetime.
+    uint64_t generation[SWMP_MAX_PEERS];
+} SwmpRemoteRoster;
 
 typedef struct {
     SwmpSessionRole role;
@@ -65,6 +71,7 @@ int swmp_session_add_peer(SwmpSession *session, const char *name);
 bool swmp_session_remove_peer(SwmpSession *session, uint8_t peer_id);
 const SwmpPeer *swmp_session_peer(const SwmpSession *session, uint8_t peer_id);
 size_t swmp_session_peer_count(const SwmpSession *session);
+SwmpRemoteRoster swmp_session_remote_roster(const SwmpSession *session);
 
 bool swmp_session_start(SwmpSession *session);         // host starts gameplay
 bool swmp_session_remote_start(SwmpSession *session);  // client receives START

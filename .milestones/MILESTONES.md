@@ -42,23 +42,27 @@ Delivered:
 - Raw RomFS marker at `System/SavageWind/Multiplayer/package.swmp`.
 - Source-level investigation of current SWMM and its UKMM dependency.
 - Canonical ZIP metadata and line endings, strict archive validation, and validated atomic replacement.
-- Draft native manifest and approval handoff for maintainer review.
+- Windows SWMM 0.1.3 portable CLI install, merge, deploy, and uninstall of the marker in a synthetic profile.
+- Windows SWMM 0.1.3 GUI drag-and-drop, enable, deploy, Play, disable, and uninstall for the marker test build.
+  [Windows GUI evidence](TESTING.md#m1-windows-swmm-gui)
+- A separate compiled ABI fixture bundle for Windows x86-64, Linux x86-64, and Linux aarch64. Its draft manifest
+  records target, ABI, size, and SHA-256.
 
-Accepted so far by deterministic archive generation, structure/metadata validation, and an identical SHA-256 after a
-rebuild.
+The marker archive passes deterministic rebuild and validation. The portable CLI deployed the expected marker,
+removed it on uninstall, and preserved the synthetic base data.
 
 Still required:
 
-- Manual SWMM GUI import, enable, deploy, launch, disable, and uninstall test.
 - A versioned Savage Wind native-plugin ABI/loader.
 - Explicit native-code approval and approved-plugin-path handoff from SWMM.
 - Built native modules for every supported Savage Wind target, packaged for drag-and-drop SWMM installation, and an agreed integrity policy.
 
-The current archive is intentionally a development marker; it cannot execute the C core.
+Stock SWMM 0.1.3 deploys the marker as content. The separate native ABI fixture bundle is for validating a
+proposed archive format. Production integration depends on the native approval and loader contract.
 
 ## M1 — Native bridge and internet lobby
 
-Status: **partial (synthetic lobby, encrypted loopback probe, draft native ABI)**.
+Status: **partial (opt-in test build with Great Plateau placeholders and Windows SWMM GUI verification)**.
 
 Delivered:
 
@@ -67,8 +71,20 @@ Delivered:
 - Deterministic in-process transport with state faults and bounded queues. The eight-peer demo joins through the transport.
 - Synthetic coverage for eight players, capacity rejection, build and feature mismatch, spoofing, repeated HELLO,
   queue exhaustion, cancellation, disconnect, and late join. Late join receives lobby state. Gameplay resync is pending.
-- Windows two-peer WebRTC probe with real encrypted loopback sockets, using trusted local signaling and synthetic
-  build IDs. Checks admission, build rejection, all three channel modes, START, and host disconnect.
+- Reusable WebRTC adapter with reliable ordered control/event and unreliable unordered state. Windows loopback
+  verified an eight-peer roster, build and capacity rejection, START, rejoin, and disconnect.
+- HTTPS rendezvous with 120-bit opaque invites, bounded authenticated SDP exchange, and an eight-peer Windows test.
+- Stock SWMM marker validation for raw and Yaz0 data, localized Host/Join/Leave UI in the opt-in Windows/Linux
+  build, and runtime reset/exit cleanup.
+- Copied admitted roster with local peer generations, and a strict 1.9.0 guest hook for static placeholders
+  outside the Shrine of Resurrection. Native creation, activation, and deletion were verified in a scratch probe.
+- Windows presence verification covered late join, rejection, disconnect, same-slot replacement, Leave lobby,
+  live reboot, and marker-free startup. The host, first client, and late client each showed two placeholders
+  while all three were in the Great Plateau world.
+  [Windows evidence](TESTING.md#m1-windows-presence-check)
+- Windows SWMM GUI Play started the test build with the Multiplayer tab enabled. Disabling and uninstalling the
+  marker preserved scratch settings and saves. The game booted in single-player mode after removal.
+  [Windows GUI evidence](TESTING.md#m1-windows-swmm-gui)
 - Standalone draft native ABI fixture. Windows lifecycle passed and Linux x86-64 binaries cross-compiled.
 
 Goal: host and join a real encrypted internet session using an invite code, with the multiplayer module loaded and

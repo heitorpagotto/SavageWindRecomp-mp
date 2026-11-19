@@ -2,8 +2,8 @@
 
 ## Status
 
-The standalone core implements the lobby over an in-process transport. An opt-in test exercises it over encrypted
-loopback sockets. Production transport, rendezvous, and runtime integration are pending.
+The core runs over the mock or the WebRTC adapter. The M1 test build includes HTTPS rendezvous, a marker-gated
+localized menu, reset/exit cleanup, and a Great Plateau placeholder path.
 
 ## Protocol constants
 
@@ -89,9 +89,36 @@ Implemented behavior:
 - Packets from the wrong session, unknown peer, or the local peer are dropped.
 - Removing the host resets a client to offline. Host migration is absent.
 - Late peer addition is allowed while the host is already playing; full resync is not implemented.
+- Each admitted remote slot has a local generation. Reusing the same slot advances its generation even if both
+  roster events arrive in a single poll and the display name is unchanged.
 
 Public API is in `mods/multiplayer/session.h`. Core calls are expected to remain on one multiplayer/game thread; the
 struct is not internally synchronized.
+
+## M1 guest presence
+
+The window thread publishes the admitted remote roster after each lobby poll. `swmp_m1_roster()` copies it under the
+same mutex as the render view. The snapshot combines the local lobby generation with each remote slot's generation.
+The lobby generation changes across local leave and rejoin, even when the host's session ID remains the same.
+Membership versions are local, with no wire schema change.
+
+The native menu update hook runs on the guest thread. `MP_PRESENCE_SITES` in
+[`tools/game_sites.py`](../tools/game_sites.py) requires every signature. The generated hook preserves the native
+frame stores. The `MP_M1_TEST=1` runtime reconciles the roster when the spawn context and the local player's
+position in the Plateau test area are available. It uses fixed placements for up to seven rocks and excludes the
+local peer. The [presence code](../runtime/multiplayer_presence.c) owns each slot's lifecycle.
+
+1. Submit an asynchronous native request using the local actor name and transform. The game owns the request
+   until completion, so its storage stays at a fixed guest address for the boot.
+2. Take the completed result to clear creation suspension. Retain the actor's native index and resolve it into
+   a temporary ordinary link when checking whether the actor is active or requesting deletion.
+3. Cancel pending requests or queue native deletion for retained actors when a peer leaves, a slot is reused,
+   the lobby generation changes, or the spawn context or test position becomes unavailable. Release the
+   temporary link, index, and request as applicable. At reboot, discard the per-boot state after guest threads stop.
+
+The slot gives creation and activation up to ten seconds. Retirement puts the slot on a one-second cooldown before
+another request can reuse that placement. The `placeholder removed` log marks retirement on the runtime side.
+Native deletion finishes asynchronously, so use a rendered frame to confirm the actor disappeared.
 
 ## Control payloads
 
@@ -110,8 +137,8 @@ controls, malformed UTF-8, duplicate roster IDs, and trailing bytes.
 
 `lobby.c` owns control dispatch. HELLO uses an unassigned sender and zero session ID and sequence. The host matches
 the binding, compares build/version fields and required features, then assigns a slot. The client adopts the host's
-session ID and roster on WELCOME. The playing flag lets a late joiner enter the same lobby state. A 5-second
-deadline bounds the joining client and each pending host-side handshake. An incompatible envelope version is
+session ID and roster on WELCOME. The playing flag lets a late joiner enter the same lobby state. A five-second deadline bounds HELLO/WELCOME.
+WebRTC allows 45 seconds before that for SDP signaling and ICE. An incompatible envelope version is
 dropped by the packet decoder and reaches the ordinary handshake timeout.
 
 ## Transport and demo
@@ -136,11 +163,20 @@ Current deterministic result:
 - 560 accepted snapshot deliveries (`8 * 7 * 10`); and
 - 1 intentionally duplicated state packet rejected as stale.
 
-The separate `tests/test_multiplayer_webrtc.c` probe drives one host and one client over three negotiated WebRTC
-data channels through the same `SwmpTransport` interface. Its trusted in-process offer/answer exchange binds
-the SDP certificate fingerprints to the endpoints. The fixed invite and link binding are test inputs. The probe
-verifies the channel configurations, compatible and incompatible lobby admission, START, binary delivery, and
-disconnect. It depends on an externally built libdatachannel and is built only on demand.
+`webrtc.c` implements the three negotiated streams for `SwmpTransport`. It allocates a fresh connection handle
+per link, bounds sends and pending connections, and closes the whole link on a channel failure.
+`tests/test_multiplayer_webrtc.c` tests seven clients using trusted in-process SDP exchange.
+
+`rendezvous.c` uses one nonblocking libcurl multi request at a time. The loopback Python service exposes
+`/v1/room`, `/v1/join`, `/v1/offer`, and `/v1/answer`. A room uses a 90-second lease and a join a 55-second lease.
+The host and each prospective client get separate random bearer credentials. The offer includes a 16-byte
+per-exchange binding. The HTTPS service authenticates the exchange before WebRTC validates the DTLS fingerprints.
+`test-multiplayer-rendezvous` exercises both components with a short-lived TLS certificate.
+
+`MP_M1_TEST=1` gates compilation. In that build, `runtime/multiplayer.c` enables the menu only if the loaded
+1.9.0 game and deployed marker validate. The wire check combines main module identity with a platform-neutral
+source fingerprint. The render thread sends one copied action to the window thread and receives a copied lobby
+view. The window thread owns the transport. Leave, window exit and `RT_ON_RESET` release per-session resources.
 
 ## Draft native boundary
 
@@ -157,7 +193,7 @@ The package builder creates exactly:
 
 ```text
 info.json
-romfs/System/SavageWind/Multiplayer/package.swmp
+01007EF00011E000/romfs/System/SavageWind/Multiplayer/package.swmp
 ```
 
 The marker contains package format v1, ID `org.savagewind.multiplayer`, protocol 1, and `runtime = native`. The
@@ -168,7 +204,7 @@ Current generated artifact:
 
 ```text
 build/mods/SavageWind-Multiplayer-0.1.0-dev-SWMM.zip
-SHA-256 efbed5e1322bb4b8de344cd76d30cb073ff87dabfc134878b2100f6c968c2eff
+SHA-256 47b9dada32a2d2b22fc0fe943a3b4dc6ad86df5ed10a37a0eb3fa49811b003a1
 ```
 
 Build artifacts are not source and should not be committed unless release policy explicitly requires them.

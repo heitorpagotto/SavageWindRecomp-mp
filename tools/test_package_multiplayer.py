@@ -29,7 +29,7 @@ class MarkerPackageTest(unittest.TestCase):
         output = self.scratch / "original.zip"
         package.build(output)
         source = self.scratch / "source"
-        for name, data in ((package.INFO, self.info), (package.MARKER, self.marker)):
+        for name, data in ((package.INFO, self.info), (package.SOURCE_MARKER, self.marker)):
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))

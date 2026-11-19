@@ -69,8 +69,8 @@ does not corrupt saves. Host migration can be designed after campaign synchroniz
 
 Status: accepted.
 
-The core lives under `mods/multiplayer/` and is not linked into the runtime today. Future hooks must be strict optional
-groups. Disabled/absent multiplayer must leave ordinary Savage Wind unchanged.
+The core lives under `mods/multiplayer/`. The opt-in `MP_M1_TEST=1` executable links the core and checks the
+deployed SWMM marker before enabling the lobby. Guest hooks must use strict optional site groups.
 
 ## D010 — Native mods require explicit consent
 
@@ -87,9 +87,9 @@ Status: accepted.
 Remote Links use the player's own existing Link and equipment assets at runtime. No new or extracted assets are
 distributed.
 
-## D012 — Transport backend not yet chosen
+## D012 — Transport backend for M1
 
-Status: libdatachannel is the leading candidate. Production selection remains open.
+Status: libdatachannel is selected for the opt-in M1 developer build. Release selection remains open.
 
 The required properties are encrypted data channels, Windows/Linux support, ICE/STUN, optional TURN, reliable ordered
 and unreliable unordered delivery, and an acceptable redistributable license.
@@ -114,10 +114,11 @@ configuration before distribution. The probe binaries and dependencies are local
 the marker ZIP. A production decision still needs Linux runtime and cross-platform tests, forced TURN verification,
 an advisory review of the pinned dependency set, and size measurements for the chosen release build.
 
-Production work should prototype authenticated rendezvous with expiring invite records and per-connection
-authorization. Authenticate the SDP fingerprints, issue a one-use link binding scoped to that exchange,
-and bound both pending negotiations and payload queues. Separate ICE timeouts from the admitted-link HELLO
-deadline if WAN/TURN negotiation exceeds the current five-second join window.
+The developer build uses libcurl HTTPS for the SDP exchange and libdatachannel for ICE/DTLS/SCTP. The pinned
+libdatachannel WebSocket implementation disables TLS certificate verification on Windows. The service issues
+a 120-bit invite and scopes each offer/answer to separate bearer credentials. The client's per-exchange nonce
+provides the lobby binding. ICE gets an initial 45-second deadline before the separate five-second HELLO
+deadline. Public service deployment, Linux execution, WAN, and TURN validation remain release gates.
 
 ## D013 — Connection-bound lobby admission
 
@@ -136,3 +137,17 @@ its encrypted channel. Production transport selection remains open.
 Status: draft. The test-only [ABI and manifest proposal](NATIVE_ABI.md) defines a C lifecycle fixture and
 describes an approval handoff for review with Savage Wind and SWMM. The runtime loader and SWMM archive
 contract remain pending that agreement.
+
+## D015 — M1 presence uses native creation and local generations
+
+Status: implemented in the opt-in 1.9.0 test build.
+
+Use a static rock outside the Shrine of Resurrection to verify the presence lifecycle before adding remote
+Link actors. The native scratch probe established three distinct steps. The request completes, taking the
+result clears creation suspension, and an explicit native deletion call removes the active actor. Retain a
+native actor index after taking the result so cleanup can resolve the owned actor.
+
+Compare the local lobby generation and the remote slot generation when reconciling. The same display name
+and peer ID can return between two guest polls. A generation change still retires the previous placeholder.
+These generations stay local to the runtime. Gameplay replication will need its own wire identity and resync
+contract. [Implementation](IMPLEMENTATION.md#m1-guest-presence)

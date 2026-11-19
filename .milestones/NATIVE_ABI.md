@@ -56,3 +56,10 @@ both repositories using the [SWMM test matrix](TESTING.md#swmm-release-verificat
 version and capability rejection, initialization, polling, reset, shutdown and unload. The test loads only the
 explicit fixture path passed by the recipe. The fixture has no game, network, or SWMM dependency and is kept
 outside the development marker ZIP.
+
+`make multiplayer-native-fixture-package` uses Zig to compile the fixture for Windows x86-64, Linux x86-64,
+and Linux aarch64. Set `MP_FIXTURE_ZIG` to the Zig executable when it is outside PATH. The output is
+`build/mods/SavageWind-Multiplayer-0.1.0-dev-native-abi-fixture.zip`. Its `native-fixture.json` lists the
+module ID, version, draft ABI, entry symbol, and each binary's path, size, and SHA-256. The archive validator
+checks PE/ELF target headers and recomputes the manifest. This tests the proposed structure with real binaries.
+The fixture format carries no execution approval and is kept outside SWMM's import path.

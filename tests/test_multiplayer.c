@@ -262,6 +262,7 @@ static void lobby_test(void) {
     swmp_lobby_poll(extra, 0);
     CHECK(!extra->joining && extra->rejection == SWMP_REJECT_BUILD);
     CHECK(swmp_session_peer_count(&host->session) == 1);
+    CHECK(!swmp_session_remote_roster(&host->session).generation[1]);
     other = local_build;
     other.required_features = other.features = 8;
     CHECK(swmp_lobby_join(extra, &other, "Extra", NULL, host->invite, 0));
@@ -289,25 +290,40 @@ static void lobby_test(void) {
     CHECK(extra->rejection == SWMP_REJECT_FULL);
     CHECK(swmp_lobby_start(host));
 
+    SwmpRemoteRoster host_before = swmp_session_remote_roster(&host->session);
+    SwmpRemoteRoster client_before = swmp_session_remote_roster(&lobbies[2].session);
+    CHECK(!host_before.generation[0] && host_before.generation[3]);
+    CHECK(client_before.generation[0] && !client_before.generation[2] && client_before.generation[3]);
     swmp_lobby_leave(&lobbies[3]);
     swmp_lobby_poll(host, 2);
-    swmp_lobby_poll(&lobbies[2], 2);
-    CHECK(lobbies[2].session.state == SWMP_SESSION_PLAYING);
-    CHECK(!swmp_session_peer(&lobbies[2].session, 3));
+    CHECK(!swmp_session_remote_roster(&host->session).generation[3]);
 
-    CHECK(swmp_lobby_join(extra, &local_build, "Late Link", NULL, host->invite, 2));
+    // Reuse the same slot and display name before the observer polls either roster event.
+    CHECK(swmp_lobby_join(extra, &local_build, "Link 3", NULL, host->invite, 2));
+    CHECK(!swmp_session_remote_roster(&extra->session).generation[0]);
     swmp_lobby_poll(extra, 2);
     swmp_lobby_poll(host, 2);
     swmp_lobby_poll(extra, 2);
     CHECK(extra->session.state == SWMP_SESSION_PLAYING && extra->session.local_peer == 3);
     CHECK(swmp_session_peer_count(&extra->session) == SWMP_MAX_PEERS);
+    SwmpRemoteRoster late = swmp_session_remote_roster(&extra->session);
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) CHECK((late.generation[i] != 0) == (i != 3));
     swmp_lobby_poll(&lobbies[2], 2);
-    CHECK(!strcmp(lobbies[2].session.peers[3].name, "Late Link"));
+    CHECK(lobbies[2].session.state == SWMP_SESSION_PLAYING);
+    CHECK(!strcmp(lobbies[2].session.peers[3].name, "Link 3"));
+    SwmpRemoteRoster host_after = swmp_session_remote_roster(&host->session);
+    SwmpRemoteRoster client_after = swmp_session_remote_roster(&lobbies[2].session);
+    CHECK(host_after.generation[3] > host_before.generation[3]);
+    CHECK(client_after.generation[3] > client_before.generation[3]);
+    CHECK(host_after.generation[1] == host_before.generation[1]);
+    CHECK(client_after.generation[0] == client_before.generation[0]);
 
     swmp_lobby_leave(host);
     for (unsigned i = 1; i <= SWMP_MAX_PEERS; i++) {
         swmp_lobby_poll(&lobbies[i], 3);
         CHECK(!lobbies[i].joining && lobbies[i].session.state == SWMP_SESSION_OFFLINE);
+        SwmpRemoteRoster offline = swmp_session_remote_roster(&lobbies[i].session);
+        for (uint8_t j = 0; j < SWMP_MAX_PEERS; j++) CHECK(!offline.generation[j]);
     }
     swmp_mock_destroy(mock);
 }

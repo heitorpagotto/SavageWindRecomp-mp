@@ -66,6 +66,14 @@
     X(quick_drop_trash_prohibited) \
     X(quick_drop_actor_method) \
     X(actor_info) \
+    X(mp_presence_tick) \
+    X(mp_presence_context) \
+    X(mp_presence_create) \
+    X(mp_presence_ready) \
+    X(mp_presence_failed) \
+    X(mp_presence_release) \
+    X(mp_presence_take) \
+    X(mp_presence_delete) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {

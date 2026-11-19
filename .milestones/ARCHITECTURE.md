@@ -34,8 +34,8 @@ Planned full lifecycle:
 8. Host sends `START`; peers enter playing state.
 9. On disconnect, host sends `PEER_LEFT`; if the host leaves, clients stop the session safely.
 
-The mock lobby implements HELLO through START and PEER_LEFT. Production signaling, encrypted transport and gameplay
-resync remain ahead.
+The mock and WebRTC lobbies implement HELLO through START and PEER_LEFT. The developer build offers HTTPS
+signaling and verified encrypted loopback. Gameplay resync remains ahead.
 
 ## Compatibility handshake
 
@@ -111,7 +111,8 @@ or rejoin at a known checkpoint instead of forcing arbitrary guest memory.
 
 - Transport worker thread owns network polling and encryption callbacks.
 - It pushes bounded, validated events into a queue.
-- The game thread drains events and is the only thread that reads/writes guest state.
+- The M1 window thread owns lobby polling and publishes a copied admitted roster. The guest menu update hook is
+  the only multiplayer path that reads/writes guest state. Local slot generations survive merged roster changes.
 - The game thread produces outgoing snapshots into another bounded queue.
 - Queue overflow drops replaceable state snapshots first, never reliable persistent events.
 - Shutdown and in-place reboot stop transport workers and discard every guest pointer/handle.

@@ -23,6 +23,7 @@ typedef struct {
     uint64_t join_started_at;
     uint32_t features;  // client: negotiated features; host: supported features
     bool joining;       // session ID is unknown until WELCOME
+    bool waiting_welcome;
     char name[SWMP_PLAYER_NAME_SIZE];
     char invite[SWMP_INVITE_CODE_SIZE];
     SwmpRejectCode rejection;

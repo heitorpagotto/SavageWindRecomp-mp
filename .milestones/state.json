@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-19T10:54:06-03:00",
+  "updated_at": "2026-11-19T15:26:59-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "package_id": "org.savagewind.multiplayer",
@@ -22,7 +22,7 @@
     "upstream_base_commit": "f488af7",
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
-    "workspace_base_commit": "5b41d90",
+    "workspace_base_commit": "1bde6b5",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -30,9 +30,9 @@
     "topology": "host-authoritative star over peer-to-peer connections",
     "host_peer_id": 0,
     "host_migration_v1": false,
-    "transport_backend_selected": false,
-    "transport_candidate": "libdatachannel v0.24.6",
-    "native_runtime_abi": "draft standalone fixture only",
+    "transport_backend_selected": true,
+    "transport_candidate": "libdatachannel v0.24.6 for the M1 test executable; release selection pending",
+    "native_runtime_abi": "draft standalone ABI fixture; M1 test code compiled into Savage Wind",
     "game_thread_owns_guest_state": true,
     "stable_ids_required": true,
     "invite_flow": "rendezvous signaling, ICE/STUN direct path, TURN fallback"
@@ -48,14 +48,15 @@
       "id": "M0.5",
       "name": "SWMM development packaging",
       "status": "partial",
-      "scope": "validated marker archive and draft native package contract"
+      "scope": "marker install/deploy/uninstall verified in stock SWMM CLI; compiled native ABI fixture bundle",
+      "remaining": "maintainer-approved SWMM native handoff and Savage Wind loader, release modules"
     },
     {
       "id": "M1",
       "name": "Native bridge and internet lobby",
       "status": "partial",
-      "scope": "synthetic lobby, Windows encrypted loopback, and standalone native ABI fixture",
-      "pending_test_build": "SWMM-installed in-game lobby with one visible placeholder actor per admitted remote peer"
+      "scope": "Windows/Linux opt-in lobby with Great Plateau placeholders, HTTPS rendezvous, eight Windows encrypted loopback peers and controlled TURN fixture",
+      "pending_test_build": "native Linux, mixed-platform lobby in both host directions, and direct ICE/TURN across two external networks"
     },
     {
       "id": "M2",
@@ -95,14 +96,17 @@
     "synthetic multiplayer tests",
     "in-process eight-Link demo",
     "deterministic SWMM development package with duplicate and size checks",
-    "opt-in Windows WebRTC loopback probe for the lobby and three data channels",
-    "draft native ABI and standalone lifecycle fixture"
+    "isolated SWMM 0.1.3 CLI marker lifecycle smoke test",
+    "compiled draft native ABI fixture bundle for Windows x86-64 and Linux x86-64/aarch64",
+    "draft native ABI and standalone lifecycle fixture",
+    "bounded libdatachannel transport with separate ICE and lobby deadlines",
+    "verified HTTPS rendezvous client and expiring invite service",
+    "marker-gated localized Host/Join/Start/Leave UI and per-boot runtime cleanup",
+    "copied admitted roster with local lobby and remote slot generations",
+    "strict 1.9.0 guest hook for asynchronous Great Plateau placeholder creation and indexed deletion"
   ],
   "not_implemented": [
-    "production encrypted network transport backend",
-    "rendezvous service and invite codes",
     "native module loader",
-    "Host/Join game UI",
     "remote Link actors",
     "equipment replication payload",
     "combat and shared enemy health",
@@ -118,14 +122,24 @@
     "undefined_behavior_check": "pass: Clang trap mode",
     "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
     "package_check": "pass: validator, deterministic rebuild, CRLF parity, invalid archive tests",
-    "package_sha256": "efbed5e1322bb4b8de344cd76d30cb073ff87dabfc134878b2100f6c968c2eff",
-    "webrtc_loopback": "pass: Windows DTLS/SCTP, two peers, START, build rejection, state/event delivery, host disconnect",
+    "package_sha256": "47b9dada32a2d2b22fc0fe943a3b4dc6ad86df5ed10a37a0eb3fa49811b003a1",
+    "swmm_cli_marker_lifecycle": "pass: Windows SWMM 0.1.3 portable install, merge, deploy, uninstall with synthetic data",
+    "native_fixture_package": "pass: Windows x86-64 lifecycle; Linux x86-64/aarch64 cross-build, header and hash checks",
+    "webrtc_loopback": "pass: eight Windows peers, rejoin, build and capacity rejection, state/event, host leave",
     "native_lifecycle": "pass: Windows standalone DLL and host",
     "linux_native_fixture": "cross-compiled x86-64 host and shared library, execution pending",
-    "gameplay": "not tested",
-    "internet_transport": "not tested",
-    "linux_lobby": "not tested",
-    "swmm_gui_lifecycle": "not tested"
+    "gameplay": "Windows BOTW 1.9.0: three simultaneous rendered peers; rejection, disconnect, same-slot replacement, Leave lobby, live reboot and marker-free startup passed",
+    "internet_transport": "local direct and controlled TURN passed; two external networks pending",
+    "linux_lobby": "x86-64 and aarch64 runtime, UI and test objects cross-compiled; native and mixed-platform execution pending",
+    "swmm_gui_lifecycle": "pass: Windows SWMM 0.1.3 drag-and-drop import, deploy, Play, disable, and uninstall, with a successful post-uninstall single-player boot on AMD; scratch settings and saves matched before/after disable and removal",
+    "https_rendezvous": "pass: eight Windows peers and certificate rejection on loopback",
+    "turn_fixture": "pass: eight Windows peers through local libjuice TURN with a separate test-only direct UDP filter",
+    "windows_runtime": "pass: matching local 1.9.0 library, marker enable/absence, two live in-game lobby instances, and host reboot cleanup",
+    "windows_presence_gamelib": "6bb7f77965924e25, x86-64-v3",
+    "windows_three_renderers": "pass: host, first client and late client each visibly rendered two remote placeholders at 960x540, 50% render scale and a 30 FPS target on split NVIDIA and AMD adapters; disconnect cleanup passed",
+    "windows_build_rejection_ui": "pass: live game host rejected the deliberately mismatched runtime identity; Brazilian Portuguese error visible",
+    "actor_research": "native scratch probe confirmed async request, visible activation and indexed deletion",
+    "presence_site_checks": "pass: 50 site checks and 59 layout checks; strict signature group disables the full hook on mismatch"
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -141,5 +155,5 @@
     "swmm_gui_lifecycle": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Run the probes on Linux, then prototype authenticated rendezvous and verify direct and forced TURN paths. Review the native ABI and approval proposal with Savage Wind and SWMM maintainers."
+  "next_recommended_work": "Run native Linux and mixed-platform lobby acceptance, then verify direct and TURN paths across two external networks."
 }

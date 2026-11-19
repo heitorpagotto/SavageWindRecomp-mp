@@ -2,15 +2,15 @@
 
 ## Sources inspected
 
-Research snapshot date: 2026-11-18.
+Research snapshot date: 2026-11-19.
 
 - SWMM repository: `https://github.com/ustruct/SWMM`
-- Inspected SWMM commit: `b81a3afe413060667c649433ec32ead54ef471d9`
-- SWMM release observed: 0.1.2.
+- Inspected SWMM release: [0.1.3](https://github.com/ustruct/SWMM/releases/tag/v0.1.3) at
+  `b852ccae86bcfb0bb95ebcb909d9c3daf08ea630`.
 - SWMM uses a fork of UKMM.
 - Inspected UKMM `swmm` branch commit: `d264dbbaf62e8ad474bc26fe14a90b538111ff10`
 
-Temporary inspection clones were placed under `/tmp` and are not project dependencies.
+Inspection clones and the official portable binary were kept in ignored scratch space. They are not build dependencies.
 
 ## What current SWMM does
 
@@ -36,15 +36,16 @@ Therefore a normal SWMM content package cannot safely make the current C multipl
 
 ## Development package
 
-`make multiplayer-swmm-package` builds a raw archive SWMM can recognize from source inspection:
+`make multiplayer-swmm-package` builds the marker archive with the Switch content root that SWMM 0.1.3's CLI
+recognizes:
 
 - `info.json` provides name, description, version, Switch platform, and empty options.
-- `romfs/System/SavageWind/Multiplayer/package.swmp` is an added binary/text resource under a recognized `System`
-  RomFS root.
+- `01007EF00011E000/romfs/System/SavageWind/Multiplayer/package.swmp` contains the marker. SWMM deploys it under
+  `System/SavageWind/Multiplayer/package.swmp` and may compress it with Yaz0 because of the extension.
 
-The package proves deterministic packaging and gives the future bridge a stable discovery marker. It has not been
-manually installed through the SWMM GUI in this environment. Do not record the GUI lifecycle as verified until a
-person actually drags it into SWMM, enables it, deploys, launches, disables, and uninstalls it.
+The portable Windows CLI passed install, merge, deploy, and uninstall with a synthetic data root.
+The Windows GUI also passed drag-and-drop, enable, deploy, Play, disable, and uninstall with an isolated
+BOTW 1.9.0 test build. See [TESTING.md](TESTING.md#m1-windows-swmm-gui).
 
 ## Release packaging contract
 
@@ -60,10 +61,9 @@ artifacts and the manager handles module selection or validates the target of a 
   Include a wrong-platform or incompatible-ABI case and check that an unapproved module never loads.
 - Package redistributable mod files only. Preserve player saves and settings across update and removal.
 
-The [native ABI and manifest proposal](NATIVE_ABI.md) is ready for review by both maintainers. A standalone
-fixture exercises the draft ABI. The marker package remains the baseline for archive validation. It has
-canonical line endings and platform-independent ZIP metadata, rejects duplicate or oversized entries, and
-is replaced only after the new archive validates.
+The [native ABI and manifest proposal](NATIVE_ABI.md) includes a separate compiled fixture archive for review
+by both maintainers. The fixture verifies the draft manifest and binary targeting outside SWMM. The marker
+package remains the SWMM content artifact and contains no executable payload.
 
 ## Required safe integration
 

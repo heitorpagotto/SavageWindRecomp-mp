@@ -62,6 +62,11 @@ def _quick_drop_tick(gen, a):
     assert _word(gen, a) == _sub_sp(0x60), hex(_word(gen, a))
     return ('{ extern void quick_drop_action_tick(Cpu *); quick_drop_action_tick(c); c->sp -= 0x60; }')
 
+def _mp_presence_tick(gen, a):
+    assert _word(gen, a) == 0xa9027bfd, hex(_word(gen, a))  # stp x29, x30, [sp, #0x20]
+    return ('{ extern void rt_mp_presence_tick(Cpu *); rt_mp_presence_tick(c); '
+            'ST64(c->sp + 0x20, c->x[29]); ST64(c->sp + 0x28, c->x[30]); }')
+
 
 def _quick_drop_actor_call(gen, a):
     assert _word(gen, a) == 0xd63f0100, hex(_word(gen, a))  # blr x8
@@ -1015,6 +1020,7 @@ PATCHES = {
     'ui_layout_draw': _ui_layout_draw,
     'ui_layout_pane': _ui_layout_pane,
     'quick_drop_tick': _quick_drop_tick,
+    'mp_presence_tick': _mp_presence_tick,
     'quick_drop_actor_call': _quick_drop_actor_call,
     'quick_sort_enter': _quick_sort_enter,
     'quick_sort_menu': _quick_sort_menu,

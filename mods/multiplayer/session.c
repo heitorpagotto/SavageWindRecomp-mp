@@ -10,6 +10,12 @@ static void copy_name(char out[SWMP_PLAYER_NAME_SIZE], const char *name) {
     out[n] = 0;
 }
 
+static void admit_remote(SwmpPeer *peer, const char *name) {
+    peer->state = SWMP_PEER_READY;
+    if (!++peer->remote_generation) ++peer->remote_generation;
+    copy_name(peer->name, name);
+}
+
 void swmp_session_init(SwmpSession *s) {
     if (!s) return;
     memset(s, 0, sizeof *s);
@@ -50,8 +56,7 @@ bool swmp_session_client_welcome(SwmpSession *s, uint8_t local_peer, const char 
         return false;
     s->local_peer = local_peer;
     s->state = SWMP_SESSION_LOBBY;
-    s->peers[SWMP_HOST_PEER].state = SWMP_PEER_READY;
-    copy_name(s->peers[SWMP_HOST_PEER].name, host_name);
+    admit_remote(&s->peers[SWMP_HOST_PEER], host_name);
     s->peers[local_peer].state = SWMP_PEER_READY;
     copy_name(s->peers[local_peer].name, s->local_name);
     return true;
@@ -63,8 +68,7 @@ bool swmp_session_add_remote_peer(SwmpSession *s, uint8_t peer_id, const char *n
         peer_id >= SWMP_MAX_PEERS || peer_id == s->host_peer || peer_id == s->local_peer ||
         s->peers[peer_id].state != SWMP_PEER_EMPTY)
         return false;
-    s->peers[peer_id].state = SWMP_PEER_READY;
-    copy_name(s->peers[peer_id].name, name);
+    admit_remote(&s->peers[peer_id], name);
     return true;
 }
 
@@ -74,10 +78,7 @@ int swmp_session_add_peer(SwmpSession *s, const char *name) {
         return -1;
     for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
         if (s->peers[i].state != SWMP_PEER_EMPTY) continue;
-        s->peers[i].state = SWMP_PEER_READY;
-        s->peers[i].sequence_seen = 0;
-        memset(s->peers[i].last_sequence, 0, sizeof s->peers[i].last_sequence);
-        copy_name(s->peers[i].name, name);
+        admit_remote(&s->peers[i], name);
         return i;
     }
     return -1;
@@ -91,7 +92,7 @@ bool swmp_session_remove_peer(SwmpSession *s, uint8_t peer_id) {
         swmp_session_init(s);  // host migration is deliberately outside protocol v1
         return true;
     }
-    SwmpPeer empty = {.id = peer_id};
+    SwmpPeer empty = {.id = peer_id, .remote_generation = s->peers[peer_id].remote_generation};
     s->peers[peer_id] = empty;
     return true;
 }
@@ -106,6 +107,15 @@ size_t swmp_session_peer_count(const SwmpSession *s) {
     size_t count = 0;
     for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) count += s->peers[i].state != SWMP_PEER_EMPTY;
     return count;
+}
+
+SwmpRemoteRoster swmp_session_remote_roster(const SwmpSession *s) {
+    SwmpRemoteRoster roster = {0};
+    if (!s || (s->state != SWMP_SESSION_LOBBY && s->state != SWMP_SESSION_PLAYING)) return roster;
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++)
+        if (i != s->local_peer && s->peers[i].state == SWMP_PEER_READY)
+            roster.generation[i] = s->peers[i].remote_generation;
+    return roster;
 }
 
 bool swmp_session_start(SwmpSession *s) {

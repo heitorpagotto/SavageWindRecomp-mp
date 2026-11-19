@@ -2,47 +2,43 @@
 
 ## Resume checkpoint
 
-- Branch `multiplayer/windows-test`, working-tree checkpoint based on `5b41d90` (`adjusted milestones`).
-  The synthetic lobby baseline is `11ed467`.
-- M0 is complete for synthetic scope. M0.5 is partial with a validated deterministic SWMM marker archive and
-  a native package proposal. M1 is partial with the synthetic lobby, a Windows encrypted loopback probe,
-  and a standalone draft ABI lifecycle fixture.
-- Product requirements include every supported Savage Wind platform (currently Windows and Linux/Vulkan),
-  interoperability between platform builds, and compiled archives for SWMM drag-and-drop installation.
+- Branch `multiplayer/windows-test`, uncommitted working tree based on `1bde6b5`. Preserve the earlier M0.5
+  changes and new M1 files. M0 is complete for synthetic scope. M0.5 still needs the SWMM maintainer-approved
+  native loader and archive contract. Work in this checkpoint is M1 only.
 - Read [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and the [milestone index](README.md).
-  Check the branch and working tree before editing. Preserve local changes and player files.
+- M1 has a Windows/Linux opt-in test build, a localized lobby UI, HTTPS invite signaling, encrypted
+  WebRTC channels, and a 1.9.0 Great Plateau placeholder path. The Windows SWMM GUI lifecycle passed for the
+  development marker, including single-player boot after removal. [Test record](TESTING.md#m1-windows-swmm-gui)
+- The user provided a supported BOTW 1.9.0 installation for local Windows work. The location and machine-local
+  commands belong in the ignored `build/mp-work` folder. No separate Linux/Vulkan machine or second external
+  network is available. Use fresh scratch settings and saves, and leave installation files read-only.
 
 ## What is in the checkpoint
 
-- `mods/multiplayer/lobby_protocol.h` and `protocol.c` define and encode the reliable control payloads.
-- `lobby.c` handles admission, roster, handshake deadlines, start, and disconnect. The transport supplies the link
-  identity through `transport.h`.
-- `mock_transport.c`, `tests/test_multiplayer.c`, and `demo.c` provide the in-process harness. The demo drives the
-  lobby over the mock, then checks snapshot deliveries using the resulting sessions.
-- `tools/package_multiplayer.py` builds and validates the marker archive. See [SWMM.md](SWMM.md) for the native
-  build and packaging contract still to be agreed with the maintainers.
-- `tests/test_multiplayer_webrtc.c` proves that libdatachannel's three stream modes can carry the lobby and
-  test messages over encrypted loopback sockets. See [D012](DECISIONS.md#d012--transport-backend-not-yet-chosen).
-- `mods/multiplayer/native_abi_draft.h` and `tests/test_multiplayer_native.c` exercise the proposed native
-  boundary outside the game. [NATIVE_ABI.md](NATIVE_ABI.md) describes the draft manifest and approval handoff.
-
-## Verification
-
-Windows passed the synthetic checks, eight-Link demo, native fixture lifecycle, WebRTC loopback, and marker ZIP
-validation. The Linux x86-64 native fixture and its test host cross-compiled. See [TESTING.md](TESTING.md) for
-toolchain details and the scope of each result.
-
-Linux runtime tests, mixed-platform internet sessions, forced TURN, the in-game module lifecycle, SWMM GUI
-installation, and gameplay are pending.
+- `mods/multiplayer/webrtc.c` is the reusable libdatachannel adapter. It negotiates three channels, derives each
+  admitted link's binding from the authenticated offer exchange, cleans up provisional connections and keeps
+  transport connection IDs unique across stop/start. The connection and HELLO have separate deadlines.
+- `mods/multiplayer/rendezvous.c` uses libcurl multi with HTTPS certificate verification and asynchronous DNS.
+  `tools/multiplayer_rendezvous.py` runs a bounded in-memory service on loopback for a TLS deployment. The
+  service brokers SDP and expires invites and offers. SDP carries ICE and DTLS fingerprints, never guest data.
+- `runtime/multiplayer.c` owns the lobby on the main window thread, publishes copies to the render and guest
+  threads, and resets at `RT_ON_RESET`. `runtime/ui/multiplayer.mm` provides the localized tab. The test
+  build validates the deployed raw/Yaz0 marker and the game version before exposing the tab.
+- `runtime/multiplayer_presence.c` reconciles the guest roster from the native menu update thread. The request
+  helper builds its own descriptor. The take helper clears creation suspension, and a retained actor index
+  identifies the spawned rock for native deletion. A Windows scratch probe verified visible spawn and removal.
+  The audited sites are in the strict `MP_PRESENCE_SITES` group.
+- The stock SWMM marker enables code compiled into the test executable. See [NATIVE_ABI.md](NATIVE_ABI.md)
+  for the separately loadable release module and its approval proposal.
 
 ## Pick up here
 
-1. Run the standalone, native fixture and WebRTC targets on Linux. Record host architecture and toolchain.
-2. Prototype authenticated rendezvous and bounded transport lifecycle, then exercise direct and forced TURN paths
-   across separate networks and between Windows and Linux. Decide whether to adopt libdatachannel after these checks.
-3. Review the [native ABI and SWMM proposal](NATIVE_ABI.md) with both maintainers. Agree on platform selection,
-   runtime loading and native-code consent before implementing either production side.
-4. Before calling packaging complete, compile the native module for each platform, produce the SWMM archive, and
-   verify drag-and-drop import through uninstall using the matrix in [TESTING.md](TESTING.md#swmm-release-verification).
-5. Update this handoff and the linked records at the next full or partial milestone. Record the checkpoint, evidence,
-   outstanding decisions, and the next independent task. See the [maintenance rule](README.md#maintenance-rule).
+The [Windows presence record](TESTING.md#m1-windows-presence-check) contains passing screenshots from the host,
+first client, and late client on the Great Plateau and records the earlier device-loss and loading-screen attempts.
+[Replay commands and evidence paths](TESTING.md#replay-on-the-windows-development-machine)
+
+1. Run the HTTPS and WebRTC suites natively on Linux, then verify Windows-to-Linux and Linux-to-Windows hosting.
+2. Verify direct ICE and restrictive NAT with TURN from two external networks. A same-machine TURN server alone
+   does not preclude peer-reflexive direct routes, so verify selected candidate pairs.
+
+After each result, update [TESTING.md](TESTING.md), [MILESTONES.md](MILESTONES.md), and [state.json](state.json).

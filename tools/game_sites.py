@@ -60,6 +60,10 @@ PAD_QUERY = ('a9be7bfd a9014ff4 910003fd 7100a43f 90000008/9f00001f 91000108/ffc
              '7100229f 7a421a84 54000001/ff00001f 2a1f03e0 94000000/fc000000 71000a9f 52800048 52800109 1a880128 '
              '7200001f 1a941114')
 OPT_TWO_SITES = ('opt_two_redraw', 'opt_two_select', 'opt_two_state', 'opt_two_decide', 'opt_two_after', 'opt_two_row_state', 'opt_two_update_control', 'opt_two_initial_control', 'opt_two_left', 'opt_two_right', 'opt_two_text', 'opt_two_help', 'opt_two_pane_calc')
+MP_PRESENCE_SITES = ('mp_presence_tick', 'mp_presence_context', 'mp_presence_create',
+                     'mp_presence_ready', 'mp_presence_failed', 'mp_presence_release',
+                     'mp_presence_take', 'mp_presence_delete')
+STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES)
 
 SITES = [
     # Experimental dual binding cells. Every pattern must match; no KNOWN fallback.
@@ -368,6 +372,21 @@ SITES = [
          'b4000008/ff00001f', 0),
     Site('actor_info', 'ref', '90000008/9f00001f 91000108/ffc003ff f9400117 b4000017/ff00001f f94006a8 3940011b '
          '3400001b/ff00001f f94002a8', 1),
+    # The equipment-stand spawn path owns a native asynchronous request and releases it on teardown.
+    Site('mp_presence_tick', 'code', 'a9027bfd a9035ff8 a90457f6 a9054ff4 910083fd 91419008 aa0003f3 9127c115', 0),
+    Site('mp_presence_context', 'got', '90000008/9f00001f 1e2e1000 910023e6 f9400108/ffc003ff f9400fa0 aa1503e1 '
+         'aa1403e3 2a1803e4', 3),
+    Site('mp_presence_create', 'code', 'd10543ff fd007be8 f90087fc a90ffbfd a91167fa a9125ff8 a91357f6 a9144ff4 '
+         '9103e3fd f90007ff 90000008/9f00001f aa0003f6', 0),
+    Site('mp_presence_ready', 'code', 'f9400008 b4000008/ff00001f b9400108 7100091f 1a9f17e0 d65f03c0 2a1f03e0 d65f03c0', 0),
+    Site('mp_presence_failed', 'code', '39402008 34000008/ff00001f 52800020 d65f03c0 f9400008 b4000008/ff00001f '
+         'b9400109 71000d3f', 0),
+    Site('mp_presence_release', 'call', '94000000/fc000000 aa1403e0 94000000/fc000000 f9400668 aa1403e0 '
+         '910e6101 f9404668 b9400102', 0),
+    Site('mp_presence_take', 'call', '94000000/fc000000 aa0003f4 94000000/fc000000 b4000014/ff00001f f9400288 '
+         'aa0003e1 aa1403e0 f9400908 d63f0100 37000000/fff8001f f9404668', 0),
+    Site('mp_presence_delete', 'call', '94000000/fc000000 d10043a0 94000000/fc000000 a9554ff4 a95457fc a9537bfd '
+         '910583ff d65f03c0', 0),
     # Add items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # Adding items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # play: the game thread's place for the item get), the pause menu data's item get, and where the pause menu data's
@@ -390,6 +409,7 @@ SITES = [
 # Without them the mouse turns the camera through the right stick, as before (runtime/hle/input.c); without the
 # second group it turns it without the game's camera inversion options.
 OPTIONAL_GROUPS = [
+    MP_PRESENCE_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
     ('quick_drop_tick', 'quick_drop_actor_call', 'player_drop_forbidden', 'actor_info_lookup',
      'actor_info_has_tag', 'pouch_discard', 'player_equipment', 'pouch_default_name',
@@ -462,6 +482,14 @@ KNOWN = {
         'quick_drop_trash_prohibited': 0x7000d388b0,
         'quick_drop_actor_method': 0x70007acaa0,
         'actor_info': 0x7001e39450,
+        'mp_presence_tick': 0x7000e6816c,
+        'mp_presence_context': 0x7001e14cd8,
+        'mp_presence_create': 0x700121cae4,
+        'mp_presence_ready': 0x7001516820,
+        'mp_presence_failed': 0x7001516840,
+        'mp_presence_release': 0x7001516908,
+        'mp_presence_take': 0x7001516b74,
+        'mp_presence_delete': 0x7001514bac,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,
@@ -847,10 +875,8 @@ def resolve(main, known=None, log=None):
         except SiteError as e:
             problems.append(f'{s.name}: {e}')
             continue
-        # This experiment changes native object routing. A stale KNOWN address
-        # must never turn it on after a failed signature check.
-        if s.name in OPT_TWO_SITES and (found is None or
-                                      (known and s.name in known and found != known[s.name])):
+        # These hooks require a matching native object contract. A KNOWN address cannot replace a signature.
+        if s.name in STRICT_SITES and (found is None or (known and s.name in known and found != known[s.name])):
             if log:
                 log(f'game_sites: {s.name}: spike signature did not match')
             continue

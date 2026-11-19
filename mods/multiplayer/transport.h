@@ -43,4 +43,6 @@ typedef struct {
     // Disconnect an individual link, with a disconnected event at both ends if still running.
     void (*disconnect)(void *context, SwmpConnection connection);
     void (*stop)(void *context);
+    // Optional initial signaling/connection deadline. The lobby starts its own HELLO deadline on connect.
+    uint64_t connect_timeout_ms;
 } SwmpTransport;

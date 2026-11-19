@@ -16,6 +16,7 @@
 
 #include "../../framepace.h"
 #include "../../imageload.h"
+#include "../../multiplayer.h"
 #include "../../paths.h"
 #include "../../platform.h"
 #include "../../perfmon.h"
@@ -3571,6 +3572,9 @@ int ui_run(void) {
     atomic_store(&ui_ready, true);
     for (;;) {
         if (rt_reboot_requested()) return rt_reboot_requested();  // (runtime/main.c tears the game down)
+#ifdef SWMP_M1_TEST
+        swmp_m1_update();
+#endif
         SDL_Event e;
         // at most a frame's time of events, then the window requests: a controller's motion sensors (gyro) send about
         // a thousand updates a second, so the queue may never run empty, and Fullscreen, Window size and Monitor
@@ -3579,6 +3583,9 @@ int ui_run(void) {
         while (SDL_GetTicks() - t0 < 16 && SDL_WaitEventTimeout(&e, 16)) {
             if (e.type == SDL_EVENT_QUIT) {
                 LOG("window closed\n");
+#ifdef SWMP_M1_TEST
+                swmp_m1_shutdown();
+#endif
                 exit(0);
             }
             window_event_log(&e);

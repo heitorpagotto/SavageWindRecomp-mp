@@ -168,6 +168,15 @@ def main():
             check(gs.resolve(b) == {'fn': BASE + 0x800, 'gone': BASE + 0x804}, 'an optional group found: kept')
         finally:
             gs.OPTIONAL_GROUPS, gs.OPTIONAL = saved_groups, saved_optional
+
+        # The presence hook must disappear if even one native helper fails its signature.
+        gs.SITES = [gs.Site(n, 'code', pat, i) for i, n in enumerate(gs.MP_PRESENCE_SITES)]
+        known = {s.name: BASE + 0x800 + s.at * 4 for s in gs.SITES}
+        check(gs.resolve(b, known) == known, 'the complete presence group is accepted')
+        known[gs.MP_PRESENCE_SITES[-1]] += 4
+        check(not gs.resolve(b, known), 'a mismatched native helper disables the entire presence group')
+        gs.SITES[-1] = gs.Site(gs.MP_PRESENCE_SITES[-1], 'code', 'd503201f 12345678', 0)
+        check(not gs.resolve(b, known), 'a missing signature has no presence address fallback')
     finally:
         gs.SITES = saved
 
@@ -182,6 +191,10 @@ def main():
         check('not a version Savage Wind knows' in str(e), str(e))
     # Entry hooks must retain the original guest stack/register effects on the
     # unhandled path, and refuse a mismatched instruction rather than corrupt it.
+    g = SimpleNamespace(base=BASE, nso=SimpleNamespace(image=struct.pack('<I', 0xa9027bfd)))
+    code = patches.PATCHES['mp_presence_tick'](g, BASE)
+    check('ST64(c->sp + 0x20, c->x[29])' in code and 'ST64(c->sp + 0x28, c->x[30])' in code,
+          'presence tick preserves the native frame record')
     for name, word, stack in [('pc_map_focus', 0xa9be7bfd, 0x20),
                               ('pc_map_focus_target', 0xd100c3ff, 0x30),
                               ('pc_map_focus_now', 0xd100c3ff, 0x30)]:
