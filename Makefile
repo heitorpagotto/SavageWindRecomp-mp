@@ -897,18 +897,19 @@ test-ui-layout: $(B)/test_ui_layout
 .PHONY: test-ui-layout
 
 # Standalone multiplayer protocol/session core. Synthetic only: no generated code, game files, network, or runtime.
-MP_CORE := mods/multiplayer/protocol.c mods/multiplayer/session.c
-$(B)/test_multiplayer: tests/test_multiplayer.c $(MP_CORE) mods/multiplayer/protocol.h mods/multiplayer/session.h \
-                       mods/multiplayer/transport.h
+MP_CORE := mods/multiplayer/protocol.c mods/multiplayer/session.c mods/multiplayer/lobby.c \
+           mods/multiplayer/mock_transport.c
+MP_HEADERS := $(wildcard mods/multiplayer/*.h)
+$(B)/test_multiplayer: tests/test_multiplayer.c $(MP_CORE) $(MP_HEADERS)
 	@mkdir -p $(dir $@)
-	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ tests/test_multiplayer.c $(MP_CORE)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ $< $(MP_CORE)
 
 test-multiplayer: $(B)/test_multiplayer
 	$(B)/test_multiplayer
 
-$(B)/multiplayer_demo: mods/multiplayer/demo.c $(MP_CORE) mods/multiplayer/protocol.h mods/multiplayer/session.h
+$(B)/multiplayer_demo: mods/multiplayer/demo.c $(MP_CORE) $(MP_HEADERS)
 	@mkdir -p $(dir $@)
-	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ mods/multiplayer/demo.c $(MP_CORE)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer -o $@ $< $(MP_CORE)
 
 multiplayer-demo: $(B)/multiplayer_demo
 	$(B)/multiplayer_demo

@@ -95,3 +95,15 @@ The required properties are encrypted data channels, Windows/Linux support, ICE/
 and unreliable unordered delivery, and an acceptable redistributable license. WebRTC/libdatachannel is a candidate,
 not a committed dependency. Perform a dependency/build/licensing spike before choosing.
 
+
+## D013 — Connection-bound lobby admission
+
+Status: accepted for the synthetic M1 lobby.
+
+The transport supplies a unique opaque handle and a per-link binding. HELLO echoes the binding before the host
+assigns a peer ID. Subsequent control messages must claim the ID assigned to that handle. Control messages that
+change the roster or start play come from the host. A failed reliable lobby send disconnects that link so it cannot
+continue with a divergent roster.
+
+The mock binding is deterministic. The production transport must derive a binding from authenticated signaling or
+its encrypted channel. Production transport selection remains open.

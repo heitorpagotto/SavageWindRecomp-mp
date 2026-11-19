@@ -1,6 +1,6 @@
 # Savage Wind Multiplayer handoff
 
-Last updated: 2026-11-18 (America/Sao_Paulo)
+Last updated: 2026-11-19 (America/Sao_Paulo)
 
 This directory is the durable project memory for the Savage Wind peer-to-peer multiplayer mod. It is written so a
 new developer or agent can resume work without conversation history. Treat statements here as a snapshot: verify the
@@ -8,17 +8,17 @@ branch, source, and tests before changing code, then update these files when a d
 
 ## Current truth
 
-- Branch: `multiplayer/bootstrap`.
+- M1 working branch: `multiplayer/windows-test`. Bootstrap branch: `multiplayer/bootstrap`.
 - Base: upstream Savage Wind `test` commit `f488af7`.
 - Target: BOTW Switch 1.9.0 through Savage Wind; Windows and Linux are maintained.
 - Product target: host plus seven clients, internet P2P transport, host-authoritative cooperative campaign.
-- Implemented: protocol framing, player snapshot codec, eight-peer session state, transport interface, synthetic
-  tests, an eight-Link in-process demo, and a deterministic SWMM development package.
-- Not implemented: actual sockets/WebRTC, rendezvous service, invite-code exchange, native module loading, in-game
-  Host/Join UI, remote Link actors, combat synchronization, quest synchronization, or chest rewards.
+- Implemented: protocol framing, player snapshot codec, eight-peer sessions, a transport-driven lobby with
+  compatibility checks, a deterministic mock transport, an eight-Link demo, and SWMM development packaging.
+- Production work remaining: encrypted P2P connections, rendezvous and invite exchange, the native bridge, Host/Join
+  UI, remote Link actors, and gameplay synchronization.
 - The current SWMM archive is a discovery marker only. It does not run multiplayer inside Savage Wind.
 - No Nintendo files, extracted data, generated game code, saves, assets, or decompilation output were added.
-- Workspace changes are not committed. Run `git status --short --branch` before doing anything else.
+- Bootstrap is committed at `2b9a27c`. The M1 lobby changes are in the working tree. Check `git status --short --branch` before editing.
 
 ## Read in this order
 
@@ -52,8 +52,8 @@ Lobby ready: 8/8 Links; host authority at peer 0
 PASS: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected
 ```
 
-The local environment used for this snapshot had GCC 16.2.1 but no `clang`. The normal project compiler remains
-Clang; `CC=gcc` was only a local test override.
+Clang is the normal project compiler. Use `CC=gcc` for GCC or see [TESTING.md](TESTING.md) for the Windows
+standalone verification.
 
 ## Maintenance rule
 

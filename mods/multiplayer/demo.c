@@ -1,11 +1,11 @@
-// Visible protocol/session demonstration. The transport is an in-process packet bus, not internet networking.
+// In-process lobby handshake and snapshot codec demonstration.
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "protocol.h"
-#include "session.h"
+#include "lobby.h"
+#include "mock_transport.h"
 
 enum { DEMO_TICKS = 10 };
 
@@ -31,36 +31,46 @@ static SwmpPlayerSnapshot sample(uint8_t peer, uint32_t tick) {
     return s;
 }
 
+static bool create_lobby(SwmpSession sessions[SWMP_MAX_PEERS], uint64_t session_id) {
+    const SwmpCompatibility compatibility = {
+        .protocol = SWMP_PROTOCOL_VERSION, .mod_version = {0, 1, 0}, .game_version = {1, 9, 0},
+        .savage_build = {1}, .game_build = {2},  // synthetic fixture IDs
+    };
+    SwmpMock *mock = swmp_mock_create();
+    if (!mock) return false;
+    SwmpLobby lobbies[SWMP_MAX_PEERS];
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++)
+        swmp_lobby_init(&lobbies[i], swmp_mock_transport(mock, i));
+
+    SwmpLobby *host = &lobbies[0];
+    bool ok = swmp_lobby_host(host, &compatibility, "Host Link", NULL, session_id);
+    swmp_lobby_poll(host, 0);
+    for (uint8_t i = 1; i < SWMP_MAX_PEERS && ok; i++) {
+        char name[SWMP_PLAYER_NAME_SIZE];
+        snprintf(name, sizeof name, "Link %u", (unsigned)i + 1);
+        ok = swmp_lobby_join(&lobbies[i], &compatibility, name, NULL, host->invite, 0);
+        swmp_lobby_poll(&lobbies[i], 0);
+    }
+    swmp_lobby_poll(host, 1);
+    ok = ok && swmp_session_peer_count(&host->session) == SWMP_MAX_PEERS && swmp_lobby_start(host);
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+        swmp_lobby_poll(&lobbies[i], 2);
+        sessions[i] = lobbies[i].session;
+        ok = ok && sessions[i].state == SWMP_SESSION_PLAYING && sessions[i].local_peer == i &&
+             swmp_session_peer_count(&sessions[i]) == SWMP_MAX_PEERS;
+    }
+    swmp_mock_destroy(mock);
+    return ok;
+}
+
 int main(void) {
     const uint64_t session_id = UINT64_C(0x53574d5044454d4f);  // SWMPDEMO
     SwmpSession sessions[SWMP_MAX_PEERS];
-    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) swmp_session_init(&sessions[i]);
-    if (!swmp_session_host(&sessions[0], session_id, "Host Link")) return fail("could not host");
-
-    for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
-        char name[SWMP_PLAYER_NAME_SIZE];
-        snprintf(name, sizeof name, "Link %u", (unsigned)i + 1);
-        if (swmp_session_add_peer(&sessions[0], name) != i) return fail("host could not add a peer");
-        if (!swmp_session_join(&sessions[i], session_id, name) ||
-            !swmp_session_client_welcome(&sessions[i], i, "Host Link"))
-            return fail("client handshake failed");
-    }
-    for (uint8_t client = 1; client < SWMP_MAX_PEERS; client++) {
-        for (uint8_t peer = 1; peer < SWMP_MAX_PEERS; peer++) {
-            if (peer == client) continue;
-            char name[SWMP_PLAYER_NAME_SIZE];
-            snprintf(name, sizeof name, "Link %u", (unsigned)peer + 1);
-            if (!swmp_session_add_remote_peer(&sessions[client], peer, name))
-                return fail("client could not add a remote peer");
-        }
-    }
-    if (!swmp_session_start(&sessions[0])) return fail("host could not start");
-    for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++)
-        if (!swmp_session_remote_start(&sessions[i])) return fail("client could not start");
+    if (!create_lobby(sessions, session_id)) return fail("mock lobby handshake failed");
 
     printf("Savage Wind Multiplayer local demo (protocol %u)\n", SWMP_PROTOCOL_VERSION);
     printf("Lobby ready: %zu/8 Links; host authority at peer 0\n", swmp_session_peer_count(&sessions[0]));
-    puts("Transport: in-process packet bus (internet P2P is the next milestone)");
+    puts("Lobby transport: deterministic mock. Snapshot deliveries: in-process codec checks.");
 
     bool seen[SWMP_MAX_PEERS][SWMP_MAX_PEERS] = {{false}};
     SwmpPlayerSnapshot latest[SWMP_MAX_PEERS][SWMP_MAX_PEERS] = {};

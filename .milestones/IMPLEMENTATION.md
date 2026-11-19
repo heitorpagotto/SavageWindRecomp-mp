@@ -2,8 +2,8 @@
 
 ## Status
 
-This code is a developer foundation. It is not linked into Savage Wind and does not open a network socket. The
-in-process demo uses the production packet/session code but a simulated packet bus.
+The standalone core implements the lobby over an in-process transport. Runtime integration and network I/O are
+pending.
 
 ## Protocol constants
 
@@ -47,7 +47,8 @@ are rejected.
 | Event | 2 | EQUIPMENT 17, DAMAGE_REQUEST 32, DAMAGE_APPLIED 33, ACTOR_HEALTH 34, FLAG_TRANSACTION 48, CHEST_REWARD 49, WORLD_PHASE 50, RESYNC_REQUEST 64, RESYNC_SNAPSHOT 65 |
 
 The decoder rejects bad magic, unsupported version, unknown type/flags/channel/peer, nonzero reserved bits, oversized
-payload, wrong message channel, and packet-size mismatch. An unassigned sender is accepted only for HELLO.
+payload, wrong message channel, and packet-size mismatch. An unassigned sender is accepted only for HELLO. The
+lobby currently sends and accepts control packets with zero flags.
 
 ## Player snapshot layout
 
@@ -92,24 +93,41 @@ Implemented behavior:
 Public API is in `mods/multiplayer/session.h`. Core calls are expected to remain on one multiplayer/game thread; the
 struct is not internally synchronized.
 
-## Transport interface
+## Control payloads
 
-`mods/multiplayer/transport.h` defines an unimplemented backend contract:
+`lobby_protocol.h` declares the payload types. Integers use network byte order. Text is a one-byte length followed
+by UTF-8, with 1–31 bytes for a player name and 1–95 for a rejection. Decoding rejects embedded NUL, C0/C1
+controls, malformed UTF-8, duplicate roster IDs, and trailing bytes.
 
-- start host with a rendezvous URL;
-- start join with rendezvous URL and invite code;
-- poll invite/connection/disconnection/packet/error events;
-- send to a peer on a selected channel; and
-- stop.
+| Message | Payload |
+|---|---|
+| HELLO | u16 protocol, two sets of three u16 version components (mod then game), 20-byte Savage Wind build ID, 32-byte main module build ID, u32 supported features, u32 required features, 16-byte connection binding, name |
+| WELCOME | Assigned client ID, playing flag (0/1), u32 feature intersection, repeated ID/name entries including host and assignee |
+| REJECT | Reason code byte and diagnostic text |
+| PEER_JOINED / PEER_LEFT | Client ID and a name for PEER_JOINED |
+| START | Empty |
+| PING / PONG | u64 token, echoed in PONG |
 
-The event's packet buffer is owned by the backend until the next poll. This ownership rule may need revisiting once a
-real threaded backend and queue exist.
+`lobby.c` owns control dispatch. HELLO uses an unassigned sender and zero session ID and sequence. The host matches
+the binding, compares build/version fields and required features, then assigns a slot. The client adopts the host's
+session ID and roster on WELCOME. The playing flag lets a late joiner enter the same lobby state. A 5-second
+deadline bounds the joining client and each pending host-side handshake. An incompatible envelope version is
+dropped by the packet decoder and reaches the ordinary handshake timeout.
 
-## Demo
+## Transport and demo
 
-`mods/multiplayer/demo.c` creates one host and seven clients, completes their in-memory lobby membership, starts the
-session, encodes/decodes ten snapshots per Link, delivers every Link to every other Link, and verifies a duplicate is
-dropped.
+`transport.h` routes events and sends by opaque connection handle. The lobby binds each admitted connection to
+one sender ID. The mock uses a single in-process rendezvous and a predictable binding. Production backends must
+authenticate the link and supply their own binding. Event storage is owned by the backend until the next poll
+or stop, and sends copy their input.
+
+`mock_transport.c` supports 16 endpoints and 16 queued packets per endpoint plus separate lifecycle notifications.
+Fault injection can drop, duplicate, or reorder the next state send. Reliable traffic can evict queued state and
+returns failure if the queue is filled with reliable traffic. The lobby disconnects a peer when a required control
+message cannot be queued. Disconnect removes queued packets for that link.
+
+`demo.c` drives one host and seven clients through the mock transport and verifies each roster and START transition.
+It then uses those sessions to check snapshot encoding and sequencing in process, including a stale duplicate.
 
 Current deterministic result:
 

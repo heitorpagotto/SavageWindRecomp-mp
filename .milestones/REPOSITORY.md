@@ -2,14 +2,12 @@
 
 ## Snapshot
 
-- Workspace: `/var/home/jpagotto/Documents/Projects/SavageWindRecomp-mp`
-- Branch: `multiplayer/bootstrap`
+- M1 working branch: `multiplayer/windows-test`.
 - Base ref: `upstream/test`
 - Base commit: `f488af7` (`No usable GPU: the error names each graphics card and what its driver lacks`)
-- Fork remote: `origin` -> `git@github.com:heitorpagotto/SavageWindRecomp-mp.git`
-- No persistent `upstream` remote is configured. `upstream/test` was created with a direct fetch.
-- Current changes are unstaged/uncommitted: `Makefile`, `.milestones/`, `mods/multiplayer/`,
-  `tests/test_multiplayer.c`, and `tools/package_multiplayer.py`.
+- Fork remote: `origin` -> `https://github.com/heitorpagotto/SavageWindRecomp-mp.git`
+- The bootstrap commit is `2b9a27c`. The lobby work started from `11c1af1` on `origin/multiplayer/bootstrap`.
+- The M1 synthetic lobby changes are in the working tree.
 
 To refresh the upstream development branch without adding a remote:
 
@@ -55,8 +53,10 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 
 - `mods/multiplayer/protocol.[ch]`: packet and player-snapshot codecs.
 - `mods/multiplayer/session.[ch]`: host/client and peer bookkeeping.
-- `mods/multiplayer/transport.h`: backend interface only; there is no backend.
-- `mods/multiplayer/demo.c`: in-process eight-player demonstration.
+- `mods/multiplayer/transport.h`: connection-scoped event and send interface.
+- `mods/multiplayer/lobby_protocol.h`, `lobby.[ch]`: lobby payloads and control dispatch.
+- `mods/multiplayer/mock_transport.[ch]`: bounded in-process transport with state faults.
+- `mods/multiplayer/demo.c`: eight-player mock lobby and snapshot demonstration.
 - `mods/multiplayer/README.md`: architecture and status visible beside the code.
 - `mods/multiplayer/SWMM.md`: current manager integration notes.
 - `mods/multiplayer/VERSION`: `0.1.0-dev`.
@@ -66,7 +66,7 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - `Makefile`: `test-multiplayer`, `multiplayer-demo`, `multiplayer-swmm-package`, and
   `test-multiplayer-swmm` targets.
 
-## Build environment observed
+## Bootstrap build environment (historical)
 
 - GCC: 16.2.1.
 - Clang: absent in this environment, although Clang remains the project's normal compiler.

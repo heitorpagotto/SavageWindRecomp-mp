@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-18T22:22:34-03:00",
+  "updated_at": "2026-11-19T09:02:44-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "package_id": "org.savagewind.multiplayer",
@@ -14,10 +14,12 @@
     ]
   },
   "repository": {
-    "branch": "multiplayer/bootstrap",
+    "branch": "multiplayer/windows-test",
     "upstream_base_branch": "test",
     "upstream_base_commit": "f488af7",
-    "workspace_committed": false
+    "lobby_work_base_commit": "11c1af1",
+    "workspace_committed": false,
+    "bootstrap_branch": "multiplayer/bootstrap"
   },
   "architecture": {
     "topology": "host-authoritative star over peer-to-peer connections",
@@ -44,7 +46,8 @@
     {
       "id": "M1",
       "name": "Native bridge and internet lobby",
-      "status": "not_started"
+      "status": "partial",
+      "scope": "synthetic lobby"
     },
     {
       "id": "M2",
@@ -77,13 +80,16 @@
     "player snapshot codec",
     "eight-peer session state",
     "per-peer per-channel sequence filtering",
-    "transport interface",
+    "connection-scoped transport interface",
+    "control payload codecs with bounded UTF-8",
+    "compatibility handshake, host roster, and lobby lifecycle",
+    "deterministic mock transport with bounded queues and state faults",
     "synthetic multiplayer tests",
     "in-process eight-Link demo",
     "deterministic SWMM development package"
   ],
   "not_implemented": [
-    "network transport backend",
+    "production encrypted network transport backend",
     "rendezvous service and invite codes",
     "native module loader",
     "Host/Join game UI",
@@ -96,6 +102,18 @@
     "gameplay resync and persistence"
   ],
   "last_verified": {
+    "platform": "Windows",
+    "compiler": "Zig 0.15.2 Clang driver, direct standalone build",
+    "core_test": "pass: multiplayer core: ok",
+    "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
+    "package_check": "pass: direct Python builder and validator",
+    "package_sha256": "ec79a0835bb42da566f160b8239d7be07ad8d49230a9252143f8649aa5cc7730",
+    "gameplay": "not tested",
+    "internet_transport": "not tested",
+    "linux_lobby": "not tested",
+    "swmm_gui_lifecycle": "not tested"
+  },
+  "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
     "core_test": "pass: multiplayer core: ok",
     "demo": "pass: 8 Links, 560 snapshot deliveries, 1 stale duplicate rejected",
@@ -109,5 +127,5 @@
     "swmm_gui_lifecycle": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Implement lobby payload codecs and a deterministic mock transport, then design the versioned native module ABI with maintainers."
+  "next_recommended_work": "Evaluate encrypted transport candidates with the mock lobby as the baseline. Design the versioned native module ABI and approval handoff with maintainers."
 }

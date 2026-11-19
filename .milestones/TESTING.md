@@ -1,8 +1,26 @@
 # Test record and verification plan
 
-Last updated: 2026-11-18. This distinguishes checks actually run from future or manual verification.
+Last updated: 2026-11-19. This distinguishes checks actually run from future or manual verification.
 
-## Checks actually run
+## M1 synthetic checks on Windows
+
+Compiled the standalone test and demo sources directly with Zig 0.15.2's Clang driver using
+`-std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer`. The executables and compiler cache went into scratch
+space. GNU Make was unavailable in this workspace.
+
+- The test executable reported `multiplayer core: ok`. It covers framing and snapshots, control payload sizes and
+  UTF-8, lobby compatibility and capacity, sender-to-link binding, replay and timeout handling, cancellation,
+  disconnect and late join, and mock queue limits and faults.
+- The same test passed with Clang undefined-behavior checks enabled in trap mode.
+- The demo admitted eight Links over the mock transport. The snapshot check reported 560 deliveries and one
+  rejected duplicate.
+- Ran `python tools/package_multiplayer.py <scratch ZIP>` and then `python tools/package_multiplayer.py --check <scratch ZIP>`.
+  Both passed. The Windows archive SHA-256 was `ec79a0835bb42da566f160b8239d7be07ad8d49230a9252143f8649aa5cc7730`.
+
+These checks used synthetic build IDs for the BOTW 1.9.0 target. No game runtime, Linux lobby run, network path,
+or SWMM GUI lifecycle was exercised in M1.
+
+## Bootstrap checks (historical)
 
 The following ran from the repository root with GCC 16.2.1 because `clang` was unavailable:
 
@@ -44,14 +62,14 @@ Rebuilding produced the same digest. GCC's `-fanalyzer` was also run against `pr
 with no diagnostics. `git diff --check` and a trailing-whitespace scan passed for the implementation state preceding
 this handoff; run them again after every edit.
 
-## Checks unavailable or deliberately not claimed
+## Bootstrap verification gaps (historical)
 
 - `clang` was not installed. The project normally uses Clang.
 - ASan/UBSan executables could not link because `libasan.so.8.0.0` and `libubsan.so.1.0.0` were missing. This is an
   environment gap, not a passed sanitizer run.
 - No full Savage Wind build was claimed because the multiplayer files are not linked into the runtime.
 - No extracted-game regeneration (`make gen`) was needed or performed.
-- No gameplay, remote Link rendering, network/NAT traversal, or campaign behavior exists yet.
+- Gameplay, remote Link rendering, network/NAT traversal, and campaign behavior were outside the bootstrap checks.
 - The archive has not been exercised through SWMM's GUI lifecycle.
 - Windows has not been tested.
 

@@ -7,8 +7,6 @@
 
 #include "protocol.h"
 
-#define SWMP_PLAYER_NAME_SIZE 32u
-
 typedef enum {
     SWMP_ROLE_NONE = 0,
     SWMP_ROLE_HOST,

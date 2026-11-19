@@ -1,7 +1,6 @@
 # Resume guide and next work
 
-This is the recommended executable order for a context-free developer or agent. The next product milestone is M1:
-native bridge and internet lobby. Keep the first patch narrower than all of M1.
+This is the recommended executable order for a context-free developer or agent. M1 now has a synthetic lobby, with the native bridge and internet transport still pending.
 
 ## Start here
 
@@ -16,22 +15,16 @@ make test-multiplayer-swmm
 Then read `CONTRIBUTING.md`, this directory in `README.md` order, and the nearest source around any intended hook.
 Preserve unrelated work and do not edit generated sources.
 
-## Recommended next patch: lobby protocol plus mock transport
+## Continue M1 after synthetic verification
 
-Do this before adding a large networking dependency or touching guest game state.
+The control codecs, lobby, and deterministic mock tests are implemented. Use them as the baseline for the
+transport selection spike, which can run independently of the native module ABI discussion. The production adapter
+needs to supply authenticated per-connection bindings, reliable ordered control and event channels, and unreliable
+state delivery through `transport.h`. Keep the mock for repeatable failure tests.
 
-1. Define payload codecs for HELLO, WELCOME, REJECT, PEER_JOINED, PEER_LEFT, START, PING, and PONG.
-2. Put protocol/build/game/mod compatibility fields in HELLO and the authoritative session/roster in WELCOME.
-3. Define length limits and UTF-8/error handling for names and rejection text; never trust peer lengths.
-4. Implement a deterministic mock `transport.h` backend with loss, duplication, reordering, disconnect, queue limits,
-   and backend-owned packet lifetime.
-5. Drive lobby state through transport events instead of manually mutating sessions in the demo.
-6. Test capacity, duplicate joins, timeouts, incompatibility, spoofed peer IDs, exhaustion, cancellation, disconnect,
-   and late join.
-7. Put packet authentication/encryption below `transport.h` if practical, and document the trust boundary.
-
-Keep wire structs explicitly encoded. Bump the protocol version for incompatible changes once artifacts may be used
-outside the repository.
+Before dispatching gameplay state through the lobby, define resync and a membership generation or equivalent
+identity so an in-flight state packet from a departed peer cannot be applied after its peer slot is reused.
+Bump the protocol version for incompatible changes once artifacts may be used outside the repository.
 
 ## Native module ABI design spike
 

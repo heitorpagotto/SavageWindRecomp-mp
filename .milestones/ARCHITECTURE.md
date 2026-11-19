@@ -34,10 +34,10 @@ Planned full lifecycle:
 8. Host sends `START`; peers enter playing state.
 9. On disconnect, host sends `PEER_LEFT`; if the host leaves, clients stop the session safely.
 
-Only the basic in-memory session transitions exist today. HELLO/WELCOME payload codecs and compatibility checking are
-not implemented.
+The mock lobby implements HELLO through START and PEER_LEFT. Production signaling, encrypted transport and gameplay
+resync remain ahead.
 
-## Compatibility handshake fields still required
+## Compatibility handshake
 
 - Wire protocol version.
 - Multiplayer mod semantic version.
@@ -45,8 +45,9 @@ not implemented.
 - Game version and main-module build ID; primary target must be 1.9.0.
 - Feature-bit set and required/optional feature distinction.
 - Display name after UTF-8 validation and length limit.
-- Session nonce/transport identity binding to prevent replay across sessions.
-- Host rules: PvP, player limit, late join, persistence policy, DLC expectations.
+- Transport-provided connection binding echoed in HELLO. A separate host-issued session ID scopes admitted traffic.
+- Lobby state and its eight-player limit are defined in the synthetic protocol. PvP, persistence and DLC rules
+  remain open.
 
 Never accept a peer based only on the short invite code. The encrypted transport identity and session nonce must bind
 the handshake to the rendezvous exchange.

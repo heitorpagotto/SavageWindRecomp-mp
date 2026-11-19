@@ -1,4 +1,4 @@
-#include "protocol.h"
+#include "lobby_protocol.h"
 
 #include <string.h>
 
@@ -173,3 +173,190 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
     return true;
 }
 
+
+enum { HELLO_FIXED_SIZE = 90, WELCOME_FIXED_SIZE = 6 };
+
+// Reject malformed UTF-8, embedded NUL, and C0/C1 controls. Lengths count bytes, not glyphs.
+static bool text_valid(const uint8_t *text, size_t size) {
+    if (!size) return false;
+    for (size_t i = 0; i < size;) {
+        uint32_t cp = text[i++];
+        unsigned extra = 0;
+        if (cp >= 0xc2 && cp <= 0xdf) extra = 1;
+        else if (cp >= 0xe0 && cp <= 0xef) extra = 2;
+        else if (cp >= 0xf0 && cp <= 0xf4) extra = 3;
+        else if (cp >= 0x80) return false;
+        if (size - i < extra) return false;
+        if (extra) cp &= 0x7fu >> (extra + 1);
+        for (unsigned j = 0; j < extra; j++) {
+            uint8_t byte = text[i++];
+            if ((byte & 0xc0) != 0x80) return false;
+            cp = (cp << 6) | (byte & 0x3f);
+        }
+        if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0) ||
+            (extra == 2 && cp < 0x800) || (extra == 3 && cp < 0x10000) ||
+            (cp >= 0xd800 && cp <= 0xdfff) || cp > 0x10ffff)
+            return false;
+    }
+    return true;
+}
+
+static size_t text_length(const char *text, size_t capacity) {
+    size_t n = 0;
+    while (n < capacity && text[n]) n++;
+    return n < capacity && text_valid((const uint8_t *)text, n) ? n : 0;
+}
+
+bool swmp_player_name_valid(const char *name) {
+    return name && text_length(name, SWMP_PLAYER_NAME_SIZE) != 0;
+}
+
+static bool put_text(uint8_t *out, size_t capacity, size_t *pos, const char *text, size_t limit) {
+    size_t n = text_length(text, limit);
+    if (!n || capacity - *pos < n + 1) return false;
+    out[(*pos)++] = (uint8_t)n;
+    memcpy(out + *pos, text, n);
+    *pos += n;
+    return true;
+}
+
+static bool get_text(char *text, size_t limit, const uint8_t *data, size_t size, size_t *pos) {
+    if (*pos >= size) return false;
+    size_t n = data[(*pos)++];
+    if (n >= limit || size - *pos < n || !text_valid(data + *pos, n)) return false;
+    memcpy(text, data + *pos, n);
+    text[n] = 0;
+    *pos += n;
+    return true;
+}
+
+static bool client_id_valid(uint8_t id) {
+    return id > SWMP_HOST_PEER && id < SWMP_MAX_PEERS;
+}
+
+bool swmp_control_encode(uint8_t *out, size_t capacity, size_t *size, SwmpMessageType type, const SwmpControl *m) {
+    if (!size || (type != SWMP_MSG_START && (!out || !m))) return false;
+    size_t pos = 0;
+    switch (type) {
+    case SWMP_MSG_HELLO: {
+        const SwmpCompatibility *c = &m->hello.compatibility;
+        if (capacity < HELLO_FIXED_SIZE || !c->protocol || (c->required_features & ~c->features)) return false;
+        put16(out, c->protocol);
+        for (int i = 0; i < 3; i++) {
+            put16(out + 2 + i * 2, c->mod_version[i]);
+            put16(out + 8 + i * 2, c->game_version[i]);
+        }
+        memcpy(out + 14, c->savage_build, sizeof c->savage_build);
+        memcpy(out + 34, c->game_build, sizeof c->game_build);
+        put32(out + 66, c->features);
+        put32(out + 70, c->required_features);
+        memcpy(out + 74, m->hello.binding, SWMP_BINDING_SIZE);
+        pos = HELLO_FIXED_SIZE;
+        if (!put_text(out, capacity, &pos, m->hello.name, SWMP_PLAYER_NAME_SIZE)) return false;
+        break;
+    }
+    case SWMP_MSG_WELCOME:
+        if (capacity < WELCOME_FIXED_SIZE || !client_id_valid(m->welcome.local_peer) ||
+            !m->welcome.names[SWMP_HOST_PEER][0] || !m->welcome.names[m->welcome.local_peer][0])
+            return false;
+        out[0] = m->welcome.local_peer;
+        out[1] = m->welcome.playing;
+        put32(out + 2, m->welcome.features);
+        pos = WELCOME_FIXED_SIZE;
+        for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+            if (!m->welcome.names[i][0]) continue;
+            if (pos == capacity) return false;
+            out[pos++] = i;
+            if (!put_text(out, capacity, &pos, m->welcome.names[i], SWMP_PLAYER_NAME_SIZE)) return false;
+        }
+        break;
+    case SWMP_MSG_REJECT:
+        if (!capacity || m->reject.code <= SWMP_REJECT_NONE || m->reject.code > SWMP_REJECT_INVALID) return false;
+        out[pos++] = (uint8_t)m->reject.code;
+        if (!put_text(out, capacity, &pos, m->reject.text, SWMP_REJECT_TEXT_SIZE)) return false;
+        break;
+    case SWMP_MSG_PEER_JOINED:
+    case SWMP_MSG_PEER_LEFT:
+        if (!capacity || !client_id_valid(m->peer.id)) return false;
+        out[pos++] = m->peer.id;
+        if (type == SWMP_MSG_PEER_JOINED &&
+            !put_text(out, capacity, &pos, m->peer.name, SWMP_PLAYER_NAME_SIZE)) return false;
+        break;
+    case SWMP_MSG_START:
+        break;
+    case SWMP_MSG_PING:
+    case SWMP_MSG_PONG:
+        if (capacity < 8) return false;
+        put64(out, m->ping_token);
+        pos = 8;
+        break;
+    default:
+        return false;
+    }
+    *size = pos;
+    return true;
+}
+
+bool swmp_control_decode(SwmpControl *msg, SwmpMessageType type, const uint8_t *data, size_t size) {
+    if (!msg || (!data && size) || size > SWMP_CONTROL_MAX_SIZE) return false;
+    SwmpControl m = {0};
+    size_t pos = 0;
+    switch (type) {
+    case SWMP_MSG_HELLO: {
+        if (size < HELLO_FIXED_SIZE) return false;
+        SwmpCompatibility *c = &m.hello.compatibility;
+        c->protocol = get16(data);
+        for (int i = 0; i < 3; i++) {
+            c->mod_version[i] = get16(data + 2 + i * 2);
+            c->game_version[i] = get16(data + 8 + i * 2);
+        }
+        memcpy(c->savage_build, data + 14, sizeof c->savage_build);
+        memcpy(c->game_build, data + 34, sizeof c->game_build);
+        c->features = get32(data + 66);
+        c->required_features = get32(data + 70);
+        memcpy(m.hello.binding, data + 74, SWMP_BINDING_SIZE);
+        pos = HELLO_FIXED_SIZE;
+        if (!c->protocol || (c->required_features & ~c->features) ||
+            !get_text(m.hello.name, SWMP_PLAYER_NAME_SIZE, data, size, &pos)) return false;
+        break;
+    }
+    case SWMP_MSG_WELCOME:
+        if (size < WELCOME_FIXED_SIZE || !client_id_valid(data[0]) || data[1] > 1) return false;
+        m.welcome.local_peer = data[0];
+        m.welcome.playing = data[1] != 0;
+        m.welcome.features = get32(data + 2);
+        pos = WELCOME_FIXED_SIZE;
+        while (pos < size) {
+            uint8_t id = data[pos++];
+            if (id >= SWMP_MAX_PEERS || m.welcome.names[id][0] ||
+                !get_text(m.welcome.names[id], SWMP_PLAYER_NAME_SIZE, data, size, &pos)) return false;
+        }
+        if (!m.welcome.names[SWMP_HOST_PEER][0] || !m.welcome.names[m.welcome.local_peer][0]) return false;
+        break;
+    case SWMP_MSG_REJECT:
+        if (!size || !data[0] || data[0] > SWMP_REJECT_INVALID) return false;
+        m.reject.code = (SwmpRejectCode)data[pos++];
+        if (!get_text(m.reject.text, SWMP_REJECT_TEXT_SIZE, data, size, &pos)) return false;
+        break;
+    case SWMP_MSG_PEER_JOINED:
+    case SWMP_MSG_PEER_LEFT:
+        if (!size || !client_id_valid(data[0])) return false;
+        m.peer.id = data[pos++];
+        if (type == SWMP_MSG_PEER_JOINED &&
+            !get_text(m.peer.name, SWMP_PLAYER_NAME_SIZE, data, size, &pos)) return false;
+        break;
+    case SWMP_MSG_START:
+        break;
+    case SWMP_MSG_PING:
+    case SWMP_MSG_PONG:
+        if (size != 8) return false;
+        m.ping_token = get64(data);
+        pos = 8;
+        break;
+    default:
+        return false;
+    }
+    if (pos != size) return false;
+    *msg = m;
+    return true;
+}

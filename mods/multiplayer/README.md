@@ -5,20 +5,20 @@ keys, saves, or extracted files. The only supported game target is Savage Wind's
 
 ## Current status
 
-The first milestone is a tested foundation, not a playable multiplayer build. It provides:
+The standalone multiplayer core provides:
 
 - a versioned, endian-independent packet envelope;
 - an eight-peer session state machine;
 - separate control, transient-state, and reliable-gameplay channels;
-- a compact remote-player snapshot format; and
-- a transport boundary that does not tie gameplay code to one networking library.
+- a compact remote-player snapshot format;
+- a lobby handshake with build and feature checks, host-assigned player IDs, and roster updates; and
+- a deterministic mock transport with bounded queues and injectable state loss, duplication, and reordering.
 
 Run the synthetic checks with `make test-multiplayer`. They need no game files.
 
 For a visible end-to-end simulation, run `make CC=gcc multiplayer-demo` (or omit `CC=gcc` when Clang is installed).
-It creates one host and seven clients, round-trips their Link snapshots through the real packet codec, rejects a stale
-duplicate, and prints the lobby and final delivery count. Its packet bus is in-process; it does not claim to test the
-internet transport.
+It joins seven clients to a host through the mock transport, starts the lobby, then checks in-process Link snapshot
+delivery and rejects a stale duplicate.
 
 `make multiplayer-swmm-package` creates the current Savage Wind Mod Manager development archive. See
 [`SWMM.md`](SWMM.md) for what can be tested now and the native-plugin bridge still required.

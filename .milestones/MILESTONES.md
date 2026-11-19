@@ -1,6 +1,6 @@
 # Milestone ledger
 
-Last reviewed: 2026-11-18. Status values are `complete`, `partial`, `not started`, and `blocked`.
+Last reviewed: 2026-11-19. Status values are `complete`, `partial`, `not started`, and `blocked`.
 
 Completion here means the listed acceptance criteria were demonstrated. A synthetic milestone is not gameplay
 verification, and a package that imports is not proof that native multiplayer runs.
@@ -56,7 +56,15 @@ The current archive is intentionally a development marker; it cannot execute the
 
 ## M1 — Native bridge and internet lobby
 
-Status: **not started**.
+Status: **partial (synthetic lobby)**.
+
+Delivered:
+
+- Reliable control payloads for the compatibility handshake, roster changes, start, and ping/pong.
+- Host-authoritative admission over opaque connection handles, including bounded UTF-8 fields and handshake deadlines.
+- Deterministic in-process transport with state faults and bounded queues. The eight-peer demo joins through the transport.
+- Synthetic coverage for eight players, capacity rejection, build and feature mismatch, spoofing, repeated HELLO,
+  queue exhaustion, cancellation, disconnect, and late join. Late join receives lobby state. Gameplay resync is pending.
 
 Goal: host and join a real encrypted internet session using an invite code, with the multiplayer module loaded and
 unloaded independently from core gameplay.
@@ -67,9 +75,8 @@ Planned deliverables:
 - Reset/unload-safe runtime lifecycle using `RT_ON_RESET` where applicable.
 - A production transport backend supporting reliable control/event traffic and replaceable unreliable state traffic.
 - Rendezvous signaling, opaque invite codes, ICE/STUN NAT traversal, and TURN relay fallback.
-- Compatibility handshake covering protocol, game version, executable/build identity, mod version, and feature flags.
 - Host/Join/Leave UI using existing Savage Wind UI primitives and translation tables.
-- Lobby roster, errors, cancellation, timeouts, clean shutdown, and a deterministic mock transport.
+- Wire compatibility and lobby lifecycle validation over the production transport, including localized errors and runtime shutdown.
 
 Acceptance criteria:
 
