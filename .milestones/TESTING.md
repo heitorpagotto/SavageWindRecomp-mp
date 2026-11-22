@@ -4,29 +4,35 @@ Reviewed 2026-11-22. The prototype and native build results below have separate 
 
 ## M1 developer build
 
-Use MSYS2 UCRT64 on Windows or the project Linux/Vulkan environment. Install Git, CMake, Ninja, OpenSSL development
-files, and libcurl 7.85 or newer with TLS and asynchronous DNS. The dependency script builds libdatachannel v0.24.6
-with libjuice. A system libdatachannel can also be used. Custom flags use `MP_RTC_CFLAGS`, `MP_RTC_LIBS`,
-`MP_CURL_CFLAGS`, and `MP_CURL_LIBS`.
+Use MSYS2 UCRT64 on Windows or the project Linux/Vulkan environment. Install Git, CMake, Ninja, and OpenSSL
+development files. The dependency script builds libdatachannel v0.24.6 with libjuice. Custom flags use
+MP_RTC_CFLAGS and MP_RTC_LIBS.
 
-```sh
+~~~sh
 CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh
 export MP_RTC_PREFIX="$PWD/build/multiplayer-deps"
-export PATH="$MP_RTC_PREFIX/bin:$PATH"   # Windows DLL lookup
-export LD_LIBRARY_PATH="$MP_RTC_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"   # Linux shared library lookup
+export PATH="$MP_RTC_PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$MP_RTC_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 make B=build/m1 -j8
-make B=build/m1 test-multiplayer test-multiplayer-webrtc test-multiplayer-rendezvous
+make B=build/m1 test-multiplayer test-multiplayer-webrtc test-multiplayer-direct
 python3 tools/i18n_check.py
-```
+~~~
 
-For local tests, run `tools/multiplayer_rendezvous.py` with a trusted HTTPS reverse proxy or its certificate
-and key options. Set `SAVAGEWIND_MP_RENDEZVOUS` on both game instances and `SAVAGEWIND_MP_CA_BUNDLE` for a
-local CA. Use `SAVAGEWIND_MP_STUN` and `SAVAGEWIND_MP_TURN` to point to the test ICE services.
-`SWMP_TEST_TURN` configures the standalone relay test. `SAVAGEWIND_MP_RELAY_ONLY=1` advertises relay
-candidates. Verify the selected route because loopback can still select a peer-reflexive path.
+The historical HTTPS fixture uses libcurl 7.85 or newer and runs via make test-multiplayer-rendezvous.
+The game executable does not use that fixture.
 
 This recipe covers source builds. Release package dependency staging and license notices are tracked under
 [M6](MILESTONES.md#m6--release-hardening).
+
+### Direct invite and reply
+
+The Windows standalone test exchanged the actual invite and reply messages for seven clients in one lobby.
+It rejected malformed invites, old replies after a new invite, and replay of a consumed reply. It verified
+invite timeout, a full roster, START, and cleanup when the host left. The Windows application and both menus
+compiled. Two Windows processes also exercised the production runtime's Host, Join, Copy, Paste reply, and disable
+actions with an isolated clipboard fixture. The direct transport objects cross-compiled for Linux x86-64.
+Native menu interaction, gameplay across two external networks, and Linux/Vulkan execution remain pending. The older
+gameplay evidence below used HTTPS signaling.
 
 ### Native build and standalone checks
 
@@ -38,7 +44,7 @@ This recipe covers source builds. Release package dependency staging and license
   Eight Windows WebRTC peers passed the loopback lobby and HTTPS rendezvous tests, including untrusted TLS rejection.
 - The game-site and layout suites passed 50 and 59 checks. The translation check found zero missing or unused entries.
 
-### Native Windows gameplay
+### Native Windows gameplay with the HTTPS prototype
 
 - With separate scratch settings and saves, a fresh game booted with multiplayer off. The F1 tab appeared with
   its toggle off and showed Host and Join after enabling it. System > Options opened the Multiplayer page,
@@ -147,14 +153,13 @@ Follow `AGENTS.md` and `CONTRIBUTING.md`. In particular:
 
 ## Network test matrix for M1+
 
-Record the exact build, game version, OS, transport version, and signaling/relay deployment for each run.
+Record the exact build, game version, OS, transport version, and selected ICE candidate types for each run.
 
 | Case | Minimum expected result |
 |---|---|
 | Same LAN | Direct encrypted connection; correct eight-peer roster |
 | Different home networks | ICE/STUN direct path where available |
-| Forced relay | TURN path connects and reports relay use |
-| Symmetric/restrictive NAT | Relay fallback or actionable error |
+| Symmetric/restrictive NAT | Direct route or a connection failure that returns to the lobby controls |
 | Packet loss/jitter/reordering | State remains bounded; reliable transactions converge |
 | Duplicate/replayed packet | Rejected without duplicate world mutation |
 | Incompatible version | Join rejected before guest/game mutation |
@@ -168,13 +173,17 @@ Record the exact build, game version, OS, transport version, and signaling/relay
    source. Verify the matching local gamelib ID. Use separate scratch settings and saves for each instance.
 2. Open F1 Settings and System > Options in the game. Confirm both expose Multiplayer, reflect the same
    enable state, and control the same lobby. Exercise Host, Join, and Leave through both surfaces.
-3. Invite clients on the other OS, with each OS taking a turn as host. Verify an eight-peer roster and localized
-   incompatible-build rejection. Use two external networks for direct ICE and a controlled forced TURN run,
-   and record the selected candidates.
-4. Count the NPC placeholders on the Plateau after the world is rendered. Each instance must show
+3. On clean installs, host a lobby and copy its invite to a private chat. Paste the invite on the joining
+   machine and send the reply to the host. Paste the reply on the host and confirm admission. Repeat in both
+   menus without a signaling deployment. Reissue an invite and verify that its previous reply is rejected.
+4. Exercise malformed clipboard text, cancellation, timeout, and rapid disable and re-enable. Confirm a new
+   invite leaves admitted players connected and that disabling clears the local session.
+5. Use two external networks and each OS in turn as host. Verify the selected direct candidates, an eight-peer
+   roster, and localized incompatible-build rejection.
+6. Count the NPC placeholders on the Plateau after the world is rendered. Each instance must show
    one per admitted remote peer. Test late join, rejection, slot reuse, disconnect, Leave, disable during a
    session, and reboot. Check that the affected placeholders disappear and scratch saves remain usable.
-5. Boot and play in single-player with multiplayer disabled. Confirm the setting is shared across the two
+7. Boot and play in single-player with multiplayer disabled. Confirm the setting is shared across the two
    surfaces, persists across a normal restart, and can enable hosting again.
 
 Record the build, game version, platform, GPU/driver, FPS, settings, and observed results.

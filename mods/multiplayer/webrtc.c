@@ -155,7 +155,7 @@ static bool start_host(void *context, const char *url, char *error, size_t error
 }
 
 static bool start_join(void *context, const char *url, const char *invite, char *error, size_t error_size) {
-    if (!invite || !*invite || strlen(invite) >= SWMP_INVITE_CODE_SIZE) {
+    if (!invite || !*invite) {
         snprintf(error, error_size, "Invalid lobby invite");
         return false;
     }
@@ -171,7 +171,7 @@ SwmpConnection swmp_webrtc_open(SwmpWebrtc *rtc, const uint8_t binding[SWMP_BIND
                                const char *offer, uint64_t now_ms) {
     static const uint8_t zero[SWMP_BINDING_SIZE];
     if (!rtc->active || !binding || !memcmp(binding, zero, sizeof zero) ||
-        (rtc->hosting ? !valid_sdp(offer) : offer != NULL) || rtc->last_connection == UINT32_MAX)
+        (offer && !valid_sdp(offer)) || rtc->last_connection == UINT32_MAX)
         return 0;
     SwmpWebrtcLink *link = NULL;
     for (unsigned i = 0; i < RTC_LINKS; i++) {
@@ -227,7 +227,7 @@ failed:
 
 bool swmp_webrtc_set_answer(SwmpWebrtc *rtc, SwmpConnection connection, const char *answer) {
     SwmpWebrtcLink *link = find_link(rtc, connection);
-    if (!link || link->closing || rtc->hosting || link->remote_sdp || !valid_sdp(answer)) return false;
+    if (!link || link->closing || link->remote_sdp || !valid_sdp(answer)) return false;
     link->remote_sdp = rtcSetRemoteDescription(link->pc, answer, "answer") == RTC_ERR_SUCCESS;
     if (!link->remote_sdp) link->closing = true;
     return link->remote_sdp;
@@ -256,9 +256,11 @@ void swmp_webrtc_signal_error(SwmpWebrtc *rtc, const char *error) {
 }
 
 void swmp_webrtc_expire(SwmpWebrtc *rtc, uint64_t now_ms) {
+    uint64_t timeout = rtc->config.connect_timeout_ms ? rtc->config.connect_timeout_ms :
+        SWMP_WEBRTC_CONNECT_TIMEOUT_MS;
     for (unsigned i = 0; i < RTC_LINKS; i++) {
         SwmpWebrtcLink *link = &rtc->links[i];
-        if (link->connection && !link->connected && now_ms - link->opened_at >= SWMP_WEBRTC_CONNECT_TIMEOUT_MS)
+        if (link->connection && !link->connected && now_ms - link->opened_at >= timeout)
             link->closing = true;
     }
 }
@@ -364,6 +366,7 @@ SwmpTransport swmp_webrtc_transport(SwmpWebrtc *rtc) {
     return (SwmpTransport){
         .context = rtc, .start_host = start_host, .start_join = start_join, .poll = poll,
         .send = send_packet, .disconnect = disconnect, .stop = stop,
-        .connect_timeout_ms = SWMP_WEBRTC_CONNECT_TIMEOUT_MS,
+        .connect_timeout_ms = rtc->config.connect_timeout_ms ? rtc->config.connect_timeout_ms :
+            SWMP_WEBRTC_CONNECT_TIMEOUT_MS,
     };
 }

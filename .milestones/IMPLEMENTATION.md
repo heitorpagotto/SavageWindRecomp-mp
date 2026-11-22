@@ -2,9 +2,9 @@
 
 ## Status
 
-Windows and Linux source builds link the WebRTC lobby and HTTPS rendezvous. F1 and the game's Options share
-the default-off `multiplayer` INI setting and a copied lobby view. Hosting and joining require a configured
-HTTPS rendezvous URL and a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
+Windows and Linux source builds link the WebRTC lobby and the direct invite and reply exchange. F1 and the
+game's Options share the default-off `multiplayer` INI setting and a copied lobby view. Hosting and joining
+require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 ## Protocol constants
 
@@ -175,14 +175,19 @@ The host and each prospective client get separate random bearer credentials. The
 per-exchange binding. The HTTPS service authenticates the exchange before WebRTC validates the DTLS fingerprints.
 `test-multiplayer-rendezvous` exercises both components with a short-lived TLS certificate.
 
+The native build uses direct.c to exchange versioned, bounded invite and reply messages on the clipboard.
+The host generates a fresh binding and offer for each player. It accepts only a matching reply while that offer
+is live. Preparing a new invite retires the previous outstanding offer. The earlier HTTPS design remains a
+standalone transport fixture.
+
 ## Native migration
 
 The compatibility check combines guest main-module identity with a platform-neutral source fingerprint. The
 render thread submits a copied action and receives a copied view. The window thread owns the transport.
 Leave, exit, and `RT_ON_RESET` release per-session resources.
 
-Both menus send Host, Join, Start, and Leave through the same runtime. The guest Options page uses the existing
-software keyboard for invite entry. Disable clears the published roster and pending command under the view mutex.
+Both menus send Host, Join, Start, and Leave through the same runtime. The window thread handles clipboard reads
+and writes for both menus. Disable clears the published roster and pending command under the view mutex.
 The window thread destroys the transport before processing another action, including after a rapid off/on toggle.
 Guest support checks are independent of the persisted preference.
 

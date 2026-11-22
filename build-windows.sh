@@ -32,8 +32,12 @@ for tool in clang clang++ make git cmake ninja windres pkg-config ldd; do
         exit 1
     fi
 done
-if ! pkg-config --exists sdl3 libavformat libcurl openssl; then
-    echo 'Install the UCRT64 SDL3, FFmpeg, curl and OpenSSL development packages.' >&2
+if ! pkg-config --exists sdl3 libavformat openssl; then
+    echo 'Install the UCRT64 SDL3, FFmpeg and OpenSSL development packages.' >&2
+    exit 1
+fi
+if ! py -3.12 --version >/dev/null 2>&1; then
+    echo 'Run tools/setup_windows.ps1 from PowerShell to install Python 3.12 for the setup tools.' >&2
     exit 1
 fi
 if [[ $mode == game ]]; then
@@ -81,5 +85,14 @@ while IFS= read -r dependency; do
     esac
 done < <(sed -n 's/^.* => \(.*\) (0x[[:xdigit:]]*)$/\1/p' <<<"$dependencies")
 
+# The setup screen builds the game library locally when it opens a player's extracted files.
+PYINSTALLER_CONFIG_DIR="$PWD/build/pyinstaller-cache" make gen-helper
+ZIG_TARGET=x86_64-windows bash tools/fetch_zig.sh
+mkdir -p "$build_dir"/{swgen,zig,gamelib-src}
+cp -R build/helper/swgen/. "$build_dir/swgen/"
+cp -R build/zig/. "$build_dir/zig/"
+cp runtime/cpu.h runtime/simd.h runtime/simd_fp.h runtime/simd_softfma.h runtime/gamelib.h \
+    tools/gamelib_entry.c runtime/hle/hle_symbols.txt "$build_dir/gamelib-src/"
+
 printf 'Windows executable: %s/savagewind.exe\n' "$build_dir"
-printf 'Local runtime DLLs staged next to savagewind.exe.\n'
+printf 'Local runtime DLLs and game setup tools staged next to savagewind.exe.\n'

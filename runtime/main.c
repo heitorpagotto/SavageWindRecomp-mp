@@ -170,12 +170,12 @@ static void boot(const char *root) {
 
     char why[512];
     if (!gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
-#ifdef SW_MULTIPLAYER
-    swmp_m1_boot(gamelib_tables());
-#endif
     loader_load(exefs);
     { extern void fs_title_version_patch(void); fs_title_version_patch(); }  // (runtime/services/fs.c)
     { extern void settings_load(void); settings_load(); }
+#ifdef SW_MULTIPLAYER
+    swmp_m1_boot(gamelib_tables());
+#endif
     { extern void language_booted(void); language_booted(); }  // (runtime/language.c)
     plat_cpu_placement();
     kernel_init();

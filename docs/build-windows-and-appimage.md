@@ -24,8 +24,8 @@ bash build-windows.sh --game '/c/path/to/your/BOTW-1.9.0'
 
 Omit `--game` to use `extracted/`, or use `--app-only` to compile the executable without generating a game
 library. Set `JOBS=4` before the command if the compiler runs out of memory. Outputs are in
-`build/windows-local/`. The script stages the runtime DLLs there for Explorer launches. To play with game files
-stored elsewhere, follow the launch step below.
+`build/windows-local/`. The script stages the runtime DLLs for Explorer launches and the compiler, generator,
+and build headers for **Set up game files**. To play with game files stored elsewhere, follow the launch step below.
 
 The manual steps below give the individual build commands and include the optional Windows ZIP workflow.
 
@@ -42,7 +42,7 @@ The manual steps below give the individual build commands and include the option
    the pinned libdatachannel library.
 
    ```bash
-   pacman -S --needed git mingw-w64-ucrt-x86_64-{curl,openssl,cmake,ninja}
+   pacman -S --needed git mingw-w64-ucrt-x86_64-{openssl,cmake,ninja}
    CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh
    export MP_RTC_PREFIX="$PWD/build/multiplayer-deps"
    export PATH="$MP_RTC_PREFIX/bin:$PATH"
@@ -77,7 +77,7 @@ The manual steps below give the individual build commands and include the option
    ```
 
    Check the startup log for the expected `swgame.dll` and game version 1.9.0. Open F1 Settings and look for
-   Multiplayer. Host and Join require an HTTPS rendezvous URL supplied through `SAVAGEWIND_MP_RENDEZVOUS`.
+   Multiplayer. Test the invite and reply exchange with a friend using the same build.
    [Multiplayer setup](../mods/multiplayer/README.md)
 
 ### Optional Windows ZIP
@@ -103,7 +103,7 @@ Staging the DLL under `build/deps-win/bin/` puts it on the packager's dependency
 ## Linux x86-64 AppImage
 
 Run these steps from an x86-64 Linux system with Podman. Start from the fork checkout containing your Windows
-build's source changes. This fork adds libdatachannel, libcurl and OpenSSL to the original AppImage dependencies.
+build's source changes. This fork adds libdatachannel and OpenSSL to the original AppImage dependencies.
 Stage those libraries in the Ubuntu 22.04 build prefix before running the package script. The procedure is
 for a local test AppImage. Native Linux packaging and release validation are pending.
 [M1 test record](../.milestones/TESTING.md#native-build-and-standalone-checks)
@@ -130,37 +130,13 @@ for a local test AppImage. Native Linux packaging and release validation are pen
    CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh "$prefix"
    ```
 
-3. Still inside the container, build libcurl with OpenSSL and threaded DNS. The fork uses a libcurl API
-   added in 7.85.0. This recipe pins 8.23.0 and checks the source archive against the official release digest.
-   [curl release and checksum](https://github.com/curl/curl/releases/tag/curl-8_23_0)
+3. Stage the OpenSSL runtime libraries in the prefix. The AppImage packager follows shared-library
+   dependencies by soname.
 
-   ```bash
-   work=/src/build/linux/x86_64/curl-build
-   mkdir -p "$work"
-   curl -fL https://github.com/curl/curl/releases/download/curl-8_23_0/curl-8.23.0.tar.xz \
-     -o "$work/curl-8.23.0.tar.xz"
-   (
-     cd "$work"
-     echo '8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5  curl-8.23.0.tar.xz' \
-       | sha256sum -c -
-     tar -xf curl-8.23.0.tar.xz
-     cd curl-8.23.0
-     CC=clang ./configure --prefix="$prefix" --libdir="$prefix/lib" \
-       --enable-shared --disable-static --with-openssl --enable-threaded-resolver \
-       --with-zlib --without-libpsl --without-brotli --without-zstd --without-libidn2 \
-       --disable-ldap --disable-ldaps
-     make -j8
-     make install
-   )
-
+   ~~~bash
    openssl_libdir="$(pkg-config --variable=libdir openssl)"
    cp -L "$openssl_libdir/libssl.so.3" "$openssl_libdir/libcrypto.so.3" "$prefix/lib/"
-   LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/curl" --version
-   ```
-
-   Check for `https` under Protocols and `AsynchDNS` under Features. The AppImage packager follows shared-library
-   dependencies recursively and looks for their exact filenames in `$prefix/lib`.
-   [curl build options](https://curl.se/docs/install.html)
+   ~~~
 
 4. In the same shell, build the generator helper and run the package script. The package script also builds
    the remaining platform libraries, the app, and the AppImage.
@@ -182,9 +158,7 @@ for a local test AppImage. Native Linux packaging and release validation are pen
    ```
 
    If mounting fails because FUSE is unavailable, add `--appimage-extract-and-run` before `--config`. Use
-   the setup screen to point the app at your own game files. If the rendezvous service uses a private CA,
-   pass its certificate bundle with `SAVAGEWIND_MP_CA_BUNDLE`. For a public service, use the Linux host's
-   trusted CA bundle if the curl build's default CA path is unavailable.
+   the setup screen to point the app at your own game files. Use the Multiplayer tab to trade an invite and reply.
    [Linux runtime and platform requirements](linux.md#running-the-appimage)
 
 ## Local files and release packages

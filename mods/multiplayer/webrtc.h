@@ -1,4 +1,4 @@
-// WebRTC transport and the boundary to an authenticated rendezvous provider.
+// WebRTC transport and the offer/answer signaling boundary.
 #pragma once
 
 #include "transport.h"
@@ -13,6 +13,7 @@ typedef struct {
     int ice_server_count;
     const char *bind_address;
     bool relay_only;
+    uint64_t connect_timeout_ms;  // zero uses the default
 } SwmpWebrtcConfig;
 
 typedef struct {
@@ -29,9 +30,9 @@ SwmpWebrtc *swmp_webrtc_create(SwmpWebrtcConfig config, SwmpWebrtcSignaling sign
 void swmp_webrtc_destroy(SwmpWebrtc *rtc);
 SwmpTransport swmp_webrtc_transport(SwmpWebrtc *rtc);
 
-// The signaling provider authenticates the SDP exchange (including certificate fingerprints) and
-// supplies a fresh, nonzero binding scoped to that exchange. Offerer is client, answerer is host.
-// A NULL offer starts a client negotiation. A zero handle indicates failure.
+// The signaling provider exchanges SDP over a trusted channel (including certificate fingerprints)
+// and supplies a fresh, nonzero binding. Either lobby role can make the offer.
+// A NULL offer starts an offer. A zero handle indicates failure.
 SwmpConnection swmp_webrtc_open(SwmpWebrtc *rtc, const uint8_t binding[SWMP_BINDING_SIZE],
                                const char *offer, uint64_t now_ms);
 bool swmp_webrtc_set_answer(SwmpWebrtc *rtc, SwmpConnection connection, const char *answer);

@@ -16,14 +16,14 @@ clone to LF line endings.
 From an MSYS2 UCRT64 shell, or Git Bash with MSYS2 first on PATH:
 
     export PATH="/c/msys64/ucrt64/bin:/c/msys64/usr/bin:$PATH"
-    pacman -S --needed git mingw-w64-ucrt-x86_64-{curl,openssl,cmake,ninja}
+    pacman -S --needed git mingw-w64-ucrt-x86_64-{openssl,cmake,ninja}
     CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh
     export MP_RTC_PREFIX="$PWD/build/multiplayer-deps"
     export PATH="$MP_RTC_PREFIX/bin:$PATH"
     make gen        # once: recompile the game from extracted/exefs (your own game files; see the start screen)
     make -j         # -> build/savagewind.exe and the game code library build/swgame.dll
 
-See [Multiplayer](../mods/multiplayer/README.md) for the rendezvous settings and lobby controls.
+See [Multiplayer](../mods/multiplayer/README.md) for the direct invite and reply flow.
 
 NVIDIA DLSS needs no SDK at build time: `runtime/nvn/vulkan/dlss.c` loads the NVIDIA driver's NGX at run time, and
 NGX loads `nvngx_dlss.dll` from the folder of `savagewind.exe`. It is neither in this repository nor in `make dist`: the

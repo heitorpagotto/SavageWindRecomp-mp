@@ -58,11 +58,11 @@ conventions when preparing an upstream contribution. [Contribution guide](../CON
 - `mods/multiplayer/mock_transport.[ch]`: bounded in-process transport with state faults.
 - `mods/multiplayer/demo.c`: eight-player mock lobby and snapshot demonstration.
 - `mods/multiplayer/webrtc.[ch]` provides bounded WebRTC channels and link ownership via libdatachannel.
-- `mods/multiplayer/rendezvous.[ch]` and `tools/multiplayer_rendezvous.py` implement the HTTPS offer/answer exchange.
+- `mods/multiplayer/direct.[ch]` implements the native invite and reply exchange. The HTTPS service is a standalone test fixture.
 - `tests/test_multiplayer.c`, `tests/test_multiplayer_webrtc.c`, and `tests/test_multiplayer_rendezvous.c`
-  cover the synthetic core, encrypted lobby, and HTTPS signaling.
+  cover the synthetic core, encrypted lobby, and prototype HTTPS signaling. `tests/test_multiplayer_direct.c` covers the native exchange.
 - The Makefile exposes `test-multiplayer`, `multiplayer-demo`, `test-multiplayer-webrtc`, and
-  `test-multiplayer-rendezvous`.
+  `test-multiplayer-direct` and `test-multiplayer-rendezvous`.
 
 ## Bootstrap build environment (historical)
 

@@ -1643,9 +1643,6 @@ static void tab_about(void) {
 // Reboot (runtime/main.c): the game is gone - menu and name dialog close; the ImGui context stays.
 RT_ON_RESET(menu_reset) {
     set_open(false);
-#ifdef SW_MULTIPLAYER
-    multiplayer_tab_reset();
-#endif
     g_kbd = 0;
     osk_cancel();
     pthread_mutex_lock(&q_lock);

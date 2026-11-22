@@ -5,8 +5,8 @@ The product target is an eight-player, host-authoritative cooperative campaign o
 The project owner will manually bring in new Savage Wind releases. Keep the multiplayer core isolated and the
 integration points small so each update can be built and verified on both platforms.
 
-M0 is complete for synthetic scope. M1 is partial. The native build includes an encrypted lobby, HTTPS invite
-signaling, and one multiplayer setting shared by F1 and the game's Options. See the [test record](TESTING.md)
+M0 is complete for synthetic scope. M1 is partial. The native build includes an encrypted lobby, direct invite and reply
+exchange, and one multiplayer setting shared by F1 and the game's Options. See the [test record](TESTING.md)
 for Windows evidence and the remaining Linux, mixed-platform, and external-network checks.
 
 ## Read in this order

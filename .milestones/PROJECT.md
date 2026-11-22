@@ -9,7 +9,7 @@ Required final behavior
 
 - The Multiplayer tab in F1 Settings and the Multiplayer page in the game's System > Options expose the same
   enable/disable setting and Host/Join/Leave controls.
-- Hosting produces an invite code that other players can use to join over the internet.
+- A host and joining player exchange an invite and reply to connect directly over the internet.
 - Up to eight players can share a session.
 - Remote Links show position, movement and actions, armour, weapons, shield, and bow.
 - Players can damage each other. Whether PvP is always on or a session option remains undecided.
@@ -61,9 +61,8 @@ decompilation information must not enter this repository.
   server.
 - **Host authority:** one peer orders persistent and contested gameplay state. P2P does not mean every peer has equal
   authority.
-- **Rendezvous service:** a small internet service maps invite codes to connection offers/ICE candidates. It does not
-  simulate gameplay.
-- **TURN relay:** encrypted packet relay used only when NAT/firewall rules prevent a direct peer route.
+- **Invite and reply:** clipboard messages exchange WebRTC connection details between the host and one client.
+- **STUN:** a public service lets a peer discover its externally visible UDP address.
 - **Remote Link:** a proxy representation of another player, not a replacement for the game's singleton local Link.
 - **Phase:** a compatible world/area/story instance in which players may see and affect one another.
 

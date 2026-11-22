@@ -18,13 +18,12 @@ Each client connects directly to the host. The host orders persistent transactio
 mesh would create 28 pairwise connections at eight players and still would not solve conflict authority. The host may
 forward another player's state while preserving the original `sender_peer`.
 
-## D003 — P2P gameplay, service-assisted connection setup
+## D003 — Host-to-peer gameplay and two-message invites
 
-Status: accepted.
+Status set after the owner confirmed the invite and reply workflow.
 
-Invite codes require a rendezvous/signaling service. ICE/STUN attempts a direct encrypted route. TURN is an optional
-fallback when direct NAT traversal fails. The service does not run game simulation, so the design remains P2P from a
-gameplay perspective.
+Players exchange the WebRTC offer and answer in private chat. Public STUN provides address discovery. The player
+who hosts the lobby remains authoritative. M1 uses direct paths and requires no deployed signaling service.
 
 ## D004 — Three transport channels
 
@@ -104,13 +103,12 @@ and unreliable unordered delivery, and an acceptable redistributable license.
 libdatachannel and libjuice use MPL-2.0. The tested configuration also includes usrsctp (BSD-style), plog (MIT),
 and OpenSSL 3 (Apache-2.0). Review license notices and MPL covered-source obligations for the exact release
 configuration before distribution. A production decision still needs Linux runtime and cross-platform tests,
-forced TURN verification, an advisory review of the pinned dependencies, and release build size measurements.
+an advisory review of the pinned dependencies, and release build size measurements.
 
-The developer build uses libcurl HTTPS for the SDP exchange and libdatachannel for ICE/DTLS/SCTP. The pinned
-libdatachannel WebSocket implementation disables TLS certificate verification on Windows. The service issues
-a 120-bit invite and scopes each offer/answer to separate bearer credentials. The client's per-exchange nonce
-provides the lobby binding. ICE gets an initial 45-second deadline before the separate five-second HELLO
-deadline. Public service deployment, Linux execution, WAN, and TURN validation remain release gates.
+The native build uses clipboard exchange for SDP and libdatachannel for ICE/DTLS/SCTP. The host generates
+a fresh per-invite lobby binding. Allow up to five minutes for the manual exchange before the separate lobby
+handshake. The earlier libcurl HTTPS and TURN fixtures remain standalone tests. Native Linux execution and
+a direct run across two external networks remain acceptance gates.
 
 ## D013 — Connection-bound lobby admission
 

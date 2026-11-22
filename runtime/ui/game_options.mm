@@ -364,23 +364,15 @@ SwmpM1View g_mp_view;
 char g_mp_name[SWMP_PLAYER_NAME_SIZE] = "Link";  // i18n-skip (default player name)
 
 bool mp_action_off(const Item &it, int) {
-    const auto &view = g_mp_view;
-    if (!view.enabled || !view.supported || !view.configured) return true;
-    bool idle = !view.pending && !view.joining && view.session.state == SWMP_SESSION_OFFLINE;
-    switch (it.arg) {
-    case SWMP_M1_LEAVE: return idle;
-    case SWMP_M1_START:
-        return view.pending || view.session.role != SWMP_ROLE_HOST ||
-               view.session.state != SWMP_SESSION_LOBBY || !view.invite[0];
-    default: return !idle;
-    }
+    return !swmp_m1_can(&g_mp_view, it.arg ? static_cast<SwmpM1Action>(it.arg) : SWMP_M1_HOST);
 }
 
 bool mp_view_changed(const SwmpM1View &a, const SwmpM1View &b) {
-    return a.enabled != b.enabled || a.supported != b.supported || a.configured != b.configured ||
+    return a.enabled != b.enabled || a.supported != b.supported || a.direct != b.direct ||
            a.pending != b.pending || a.joining != b.joining || a.failed != b.failed ||
            a.rejection != b.rejection || a.session.state != b.session.state ||
-           a.session.role != b.session.role || strcmp(a.invite, b.invite);
+           a.session.role != b.session.role || a.clipboard_error != b.clipboard_error ||
+           swmp_session_peer_count(&a.session) != swmp_session_peer_count(&b.session);
 }
 #endif
 
@@ -406,22 +398,25 @@ void build_items(void) {
     v.push_back(button(P_MULTIPLAYER, "Multiplayer status", "", nullptr, A_NONE, 0));
     v.back().label = [](const Item &, int) { return multiplayer_status(g_mp_view); };
     v.back().desc_fn = [](const Item &) { return multiplayer_status(g_mp_view); };
-    v.push_back(button(P_MULTIPLAYER, "Invite code", "", nullptr, A_NONE, 0));
-    v.back().label = [](const Item &, int) -> const char * { return g_mp_view.invite[0] ? g_mp_view.invite : "-"; };
-    v.back().desc_fn = [](const Item &) -> const char * { return g_mp_view.invite; };
     v.push_back(button(P_MULTIPLAYER, "Player name", "", nullptr, A_MULTIPLAYER, 0));
     v.back().label = [](const Item &, int) -> const char * { return g_mp_name; };
     v.back().value_off = mp_action_off;
     v.push_back(button(P_MULTIPLAYER, "Host lobby", "", "Host lobby", A_MULTIPLAYER, SWMP_M1_HOST));
     v.back().value_off = mp_action_off;
-    v.push_back(button(P_MULTIPLAYER, "Join lobby", "", "Join lobby", A_MULTIPLAYER, SWMP_M1_JOIN));
+    v.push_back(button(P_MULTIPLAYER, "Paste invite and join", "", "Paste invite and join", A_MULTIPLAYER, SWMP_M1_JOIN));
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Copy invite code", "", nullptr, A_MULTIPLAYER, SWMP_M1_COPY));
+    v.back().label = [](const Item &, int) { return g_mp_view.joining ? tr("Copy reply") : tr("Copy invite code"); };
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Paste reply", "", "Paste reply", A_MULTIPLAYER, SWMP_M1_PASTE_REPLY));
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "New invite", "", "New invite", A_MULTIPLAYER, SWMP_M1_NEW_INVITE));
     v.back().value_off = mp_action_off;
     v.push_back(button(P_MULTIPLAYER, "Start lobby", "", "Start lobby", A_MULTIPLAYER, SWMP_M1_START));
     v.back().value_off = mp_action_off;
     v.push_back(button(P_MULTIPLAYER, "Leave lobby", "", nullptr, A_MULTIPLAYER, SWMP_M1_LEAVE));
     v.back().label = [](const Item &, int) {
-        return g_mp_view.pending || g_mp_view.joining ||
-               (g_mp_view.session.role == SWMP_ROLE_HOST && !g_mp_view.invite[0]) ? tr("Cancel") : tr("Leave lobby");
+        return g_mp_view.joining || g_mp_view.session.state == SWMP_SESSION_OFFLINE ? tr("Cancel") : tr("Leave lobby");
     };
     v.back().value_off = mp_action_off;
 #endif
@@ -2250,10 +2245,7 @@ extern "C" int rt_opt_decide(uint64_t row) {
                 g_dirty.push_back(row);
         } else {
             auto action = static_cast<SwmpM1Action>(it->arg);
-            char invite[SWMP_INVITE_CODE_SIZE] = "";
-            if (action != SWMP_M1_JOIN ||
-                menu_keyboard_prompt("Invite code", "", sizeof invite - 1, invite, sizeof invite))
-                swmp_m1_submit(action, g_mp_name, invite);
+            swmp_m1_submit(action, g_mp_name);
         }
         return 2;
     }

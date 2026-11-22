@@ -29,14 +29,14 @@ Limit: nothing is linked into Savage Wind and no network connection is made.
 ## M1 — Native multiplayer build and internet lobby
 
 Status **partial**. Native source integration and both Settings surfaces are implemented. See the
-[test record](TESTING.md) for verification and pending platform and network acceptance.
+[test record](TESTING.md) for Windows loopback verification and pending native Linux and external-network acceptance.
 
 Delivered
 
 - Eight-peer host-authoritative lobby, compatibility handshake, roster changes, START, ping/pong, and deterministic
   coverage for capacity, build and feature mismatch, spoofing, cancellation, disconnect, and late join.
-- WebRTC with reliable ordered control/event channels and an unreliable unordered state channel. HTTPS rendezvous
-  issues 120-bit opaque invites and brokers bounded, authenticated SDP exchange.
+- WebRTC with reliable ordered control/event channels and an unreliable unordered state channel. The two-message
+  clipboard exchange carries per-peer invites and replies. [Player flow](../mods/multiplayer/README.md#build-and-play)
 - Localized F1 overlay lobby UI, reset and exit cleanup, and a copied admitted roster with slot generations.
 - Default-off persisted enable setting and a native Options page with the same lobby controls.
 - Strict 1.9.0 Great Plateau placeholder lifecycle. The Windows prototype visibly rendered two rocks in each of
@@ -49,9 +49,11 @@ Acceptance criteria
 - Both surfaces share one enable/disable setting and session state. Enable exposes Host and Join. Disable during
   a session leaves or closes it and cleans up the lobby and placeholders. Single-player play and user data
   remain available.
-- A host receives an invite and seven clients can join. Incompatible builds are rejected with a localized error.
+- Fresh Windows and Linux/Vulkan installs can start multiplayer and exchange an invite and reply through chat
+  without deploying a signaling server. Invalid, mismatched, or expired replies leave existing peers connected.
+- A host can invite seven clients to the same lobby. Incompatible builds are rejected with a localized error.
 - Verify authenticated, encrypted lobby traffic on Windows and Linux, with each OS hosting a peer on the other.
-  Verify direct ICE and selected TURN relay paths across two external networks.
+  Verify a direct ICE path across two external networks.
 - In the supported 1.9.0 test area, each peer sees one visible NPC placeholder per admitted remote peer,
   including peers who joined earlier. Rejected joins spawn nothing. Leave, disconnect, disable,
   and reboot clear the appropriate placeholders and release session resources and guest references.

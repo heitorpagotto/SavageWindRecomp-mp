@@ -11,5 +11,3 @@ SwmpRendezvous *swmp_rendezvous_create(const char *ca_bundle);
 void swmp_rendezvous_destroy(SwmpRendezvous *service);
 SwmpWebrtcSignaling swmp_rendezvous_signaling(SwmpRendezvous *service);
 void swmp_rendezvous_update(SwmpRendezvous *service, uint64_t now_ms);
-
-bool swmp_random_bytes(void *out, size_t size);

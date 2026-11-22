@@ -187,19 +187,19 @@ MP_CURL_CFLAGS ?=
 MP_CURL_LIBS ?= -lcurl
 MP_RNG_LIBS := $(if $(filter windows,$(PLATFORM)),-lbcrypt)
 ifneq ($(filter windows linux,$(PLATFORM)),)
-MP_RUNTIME_SRC := $(addprefix mods/multiplayer/,protocol.c session.c lobby.c webrtc.c rendezvous.c)
+MP_RUNTIME_SRC := $(addprefix mods/multiplayer/,protocol.c session.c lobby.c webrtc.c direct.c random.c)
 MP_RUNTIME_OBJ := $(patsubst mods/multiplayer/%.c,$(B)/rt/multiplayer/%.o,$(MP_RUNTIME_SRC))
 MP_RUNTIME_DEPS := $(MP_RUNTIME_SRC) $(wildcard mods/multiplayer/*.h) runtime/multiplayer.c runtime/multiplayer_presence.c tools/game_sites.py tools/patches.py
 MP_RUNTIME_ID := $(shell (git rev-parse 'HEAD^{tree}' 2>/dev/null; cat $(MP_RUNTIME_DEPS)) | tr -d '\r' | (shasum -a 256 2>/dev/null || sha256sum) | cut -c1-40)
 $(shell mkdir -p $(B) && [ "$$(cat $(B)/mp_runtime_id 2>/dev/null)" = '$(MP_RUNTIME_ID)' ] || echo '$(MP_RUNTIME_ID)' > $(B)/mp_runtime_id)
 RT_OBJ += $(MP_RUNTIME_OBJ)
-LDFLAGS += $(MP_RTC_LIBS) $(MP_CURL_LIBS) $(MP_RNG_LIBS)
+LDFLAGS += $(MP_RTC_LIBS) $(MP_RNG_LIBS)
 MP_BUILD_FLAGS := -DSW_MULTIPLAYER -iquote mods/multiplayer
 $(B)/rt/main.o $(B)/rt/multiplayer_presence.o $(B)/rt/nvn/vulkan/device.o: RTFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/ui/menu.o $(B)/rt/ui/multiplayer.o $(B)/rt/ui/game_options.o: CXXFLAGS += $(MP_BUILD_FLAGS)
-$(B)/rt/multiplayer.o: RTFLAGS += $(MP_BUILD_FLAGS) $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS) -DSWMP_RUNTIME_ID='"$(MP_RUNTIME_ID)"'
+$(B)/rt/multiplayer.o: RTFLAGS += $(MP_BUILD_FLAGS) $(MP_RTC_CFLAGS) -DSWMP_RUNTIME_ID='"$(MP_RUNTIME_ID)"'
 $(B)/rt/multiplayer.o: $(MP_RUNTIME_DEPS) $(B)/mp_runtime_id
-$(MP_RUNTIME_OBJ): RTFLAGS += -Imods/multiplayer $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS)
+$(MP_RUNTIME_OBJ): RTFLAGS += -Imods/multiplayer $(MP_RTC_CFLAGS)
 $(B)/rt/multiplayer/%.o: mods/multiplayer/%.c $(wildcard mods/multiplayer/*.h)
 	@mkdir -p $(dir $@)
 	$(CC) $(RTFLAGS) $(RUNTIME_OPTFLAGS) -c $< -o $@
@@ -238,7 +238,7 @@ endif
 RUNTIME_OPTFLAGS += -fprofile-instr-use=$(PGO_PROFILE)
 endif
 LDFLAGS += $(RUNTIME_LINKFLAGS)
-RUNTIME_CONFIG := $(strip $(RUNTIME_OPTFLAGS) $(if $(MP_RUNTIME_ID),SW_MULTIPLAYER $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS) $(MP_RTC_LIBS) $(MP_CURL_LIBS)))
+RUNTIME_CONFIG := $(strip $(RUNTIME_OPTFLAGS) $(if $(MP_RUNTIME_ID),SW_MULTIPLAYER $(MP_RTC_CFLAGS) $(MP_RTC_LIBS)))
 $(shell mkdir -p $(B) && [ -f $(B)/runtime_config ] && [ "$$(cat $(B)/runtime_config 2>/dev/null)" = '$(RUNTIME_CONFIG)' ] || echo '$(RUNTIME_CONFIG)' > $(B)/runtime_config)
 $(RT_OBJ) $(filter $(B)/rt/%,$(BACKEND_OBJ)) $(UI_OBJ): $(B)/runtime_config $(if $(filter use,$(PGO)),$(PGO_PROFILE))
 
@@ -951,8 +951,18 @@ $(MP_RTC_TEST): tests/test_multiplayer_webrtc.c mods/multiplayer/webrtc.c $(filt
 test-multiplayer-webrtc: $(MP_RTC_TEST)
 	$(MP_RTC_TEST)
 
+MP_DIRECT_TEST := $(B)/test_multiplayer_direct$(if $(filter windows,$(PLATFORM)),.exe)
+$(MP_DIRECT_TEST): tests/test_multiplayer_direct.c mods/multiplayer/direct.c mods/multiplayer/webrtc.c mods/multiplayer/random.c \
+                   $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer $(MP_RTC_CFLAGS) \
+	      -o $@ $(filter %.c,$^) $(MP_RTC_LIBS) $(MP_RNG_LIBS)
+
+test-multiplayer-direct: $(MP_DIRECT_TEST)
+	$(MP_DIRECT_TEST)
+
 MP_RENDEZVOUS_TEST := $(B)/test_multiplayer_rendezvous$(if $(filter windows,$(PLATFORM)),.exe)
-$(MP_RENDEZVOUS_TEST): tests/test_multiplayer_rendezvous.c mods/multiplayer/rendezvous.c mods/multiplayer/webrtc.c \
+$(MP_RENDEZVOUS_TEST): tests/test_multiplayer_rendezvous.c mods/multiplayer/rendezvous.c mods/multiplayer/webrtc.c mods/multiplayer/random.c \
                        $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Imods/multiplayer $(MP_RTC_CFLAGS) $(MP_CURL_CFLAGS) \
@@ -961,5 +971,5 @@ $(MP_RENDEZVOUS_TEST): tests/test_multiplayer_rendezvous.c mods/multiplayer/rend
 test-multiplayer-rendezvous: $(MP_RENDEZVOUS_TEST)
 	python3 tools/test_multiplayer_rendezvous.py $<
 
-.PHONY: test-multiplayer-webrtc test-multiplayer-rendezvous
+.PHONY: test-multiplayer-webrtc test-multiplayer-direct test-multiplayer-rendezvous
 endif

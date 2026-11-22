@@ -21,25 +21,33 @@ It joins seven clients to a host through the mock transport, starts the lobby, t
 delivery and rejects a stale duplicate.
 
 The standalone `make test-multiplayer-webrtc` target exercises the lobby over encrypted loopback sockets using
-libdatachannel. `make test-multiplayer-rendezvous` also exercises HTTPS signaling.
+libdatachannel. `make test-multiplayer-direct` runs the invite and reply flow with eight peers.
 
 ## Build and play
 
 Follow the platform build guide and install the [multiplayer dependencies](../../.milestones/TESTING.md#m1-developer-build).
-Point both players' apps at the same trusted service with `SAVAGEWIND_MP_RENDEZVOUS=https://...`.
-For local tests the repository includes [a rendezvous server](../../tools/multiplayer_rendezvous.py).
 
-Open Multiplayer in F1 Settings or System > Options and turn on Enable multiplayer. The host selects Host lobby and
-shares the invite code. Clients select Join lobby and enter that code. Leave lobby disconnects the local player.
-Turning multiplayer off in either menu also ends local participation. The preference defaults to off.
+Both players open Multiplayer in F1 Settings or System > Options and turn on Enable multiplayer.
+
+1. **Host:** Select **Host lobby**, then **Copy invite code**. Send the whole message to your friend in a private chat.
+2. **Joining player:** Copy the invite from chat and select **Paste invite and join**. When **Copy reply**
+   appears, use it and send the whole reply back to the host.
+3. **Host:** Copy the reply from chat and select **Paste reply**. Use **New invite** for each additional player
+   or if an invite expires.
+
+Each invite is single-use and expires after five minutes. Send both messages only to the intended player because
+they contain connection details. If chat truncates a message, send it as a text file and copy the full line.
+Leave lobby or turn multiplayer off to disconnect. Multiplayer defaults to off.
+
+Players can connect across different networks when ICE finds a direct route. The app uses the public STUN
+endpoint from the WebRTC documentation to discover addresses. Game traffic flows between peers. Restrictive
+routers or firewalls can prevent a direct connection. For development, `SAVAGEWIND_MP_STUN` overrides the
+endpoint, and an empty value disables STUN. [WebRTC connection setup](https://webrtc.org/getting-started/peer-connections)
 
 ## Session model
 
-The connection is peer-to-peer over the internet, but gameplay is host-authoritative. The host is peer 0 and up to
-seven clients connect directly to it. A small rendezvous service maps a short invite code to connection offers and ICE
-candidates; it never simulates gameplay. Direct encrypted connections are preferred. A TURN relay is the fallback for
-NATs that cannot establish a direct route, because internet P2P cannot work reliably for every home network without
-one.
+The connection is peer-to-peer and gameplay is host-authoritative. The host is peer 0 and up to seven clients
+connect directly over encrypted WebRTC. The invite and reply carry the ICE candidates and DTLS fingerprints.
 
 Host authority avoids conflicting quest flags, enemy health, chest state, and damage decisions. Clients own their
 local input and predict their own Link, while the host orders persistent transactions. Protocol v1 deliberately has no

@@ -3,7 +3,7 @@
 ## Native build and runtime boundary
 
 Compile multiplayer into the Savage Wind fork on Windows and Linux/Vulkan. Keep codecs, sessions, lobby logic,
-WebRTC, and rendezvous independent of UI, settings, guest addresses, and renderer code. Keep build wiring,
+WebRTC, and connection setup independent of UI, settings, guest addresses, and renderer code. Keep build wiring,
 Settings, runtime lifecycle, and version-aware guest sites in small adapters.
 
 The F1 tab and the game's System > Options page should read the same setting and copied session view and submit
@@ -17,29 +17,21 @@ platform and local compiler/CPU flags. Recheck settings/UI entry points and gues
 ## Topology
 
 ```text
-                         invite code / signaling
-                    +-------------------------------+
-                    | small rendezvous service      |
-                    | offers + ICE candidates only  |
-                    +---------------+---------------+
-                                    |
-          direct encrypted P2P      |      direct encrypted P2P
-      +-----------------------------+-----------------------------+
-      |                             |                             |
+          direct encrypted P2P              direct encrypted P2P
   client 1  <--------------------> host 0 <--------------------> client 7
                                      |
                               gameplay authority
 ```
 
-The host has at most seven direct client connections. Clients do not require direct connections to one another. TURN
-may carry encrypted packets when a direct path cannot be established; it does not gain gameplay authority.
+The host has at most seven direct client connections. The app uses public STUN to discover candidates.
+Each host and client exchange their candidates and DTLS fingerprints privately by copying an invite and reply.
 
 ## Session lifecycle
 
 Planned full lifecycle:
 
-1. Host creates random session identity and asks rendezvous service for a short invite code.
-2. Client enters code. Service exchanges connection offers and ICE candidates.
+1. Host creates a random session identity and a single-use invite for a specific peer.
+2. The invited player pastes that invite and returns a reply. The host pastes the reply.
 3. Encrypted transport connects.
 4. Client sends `HELLO` with protocol/multiplayer build/game compatibility and display name.
 5. Host rejects mismatch/full sessions or replies `WELCOME` with assigned peer ID and session rules.
@@ -48,8 +40,8 @@ Planned full lifecycle:
 8. Host sends `START`; peers enter playing state.
 9. On disconnect, host sends `PEER_LEFT`; if the host leaves, clients stop the session safely.
 
-The mock and WebRTC lobbies implement HELLO through START and PEER_LEFT. The developer build offers HTTPS
-signaling and verified encrypted loopback. Gameplay resync remains ahead.
+The mock and WebRTC lobbies implement HELLO through START and PEER_LEFT. The native clipboard flow passed
+Windows loopback with eight peers. Gameplay resync remains ahead.
 
 ## Compatibility handshake
 
@@ -63,8 +55,7 @@ signaling and verified encrypted loopback. Gameplay resync remains ahead.
 - Lobby state and its eight-player limit are defined in the synthetic protocol. PvP, persistence and DLC rules
   remain open.
 
-Never accept a peer based only on the short invite code. The encrypted transport identity and session nonce must bind
-the handshake to the rendezvous exchange.
+The encrypted transport identity and per-invite binding tie lobby admission to the exchanged invite and reply.
 
 ## Authority and replication
 

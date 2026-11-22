@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T13:02:41-03:00",
+  "updated_at": "2026-11-22T17:38:39-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -38,7 +38,7 @@
     "transport_candidate": "libdatachannel v0.24.6 for native M1 source builds",
     "game_thread_owns_guest_state": true,
     "stable_ids_required": true,
-    "invite_flow": "rendezvous signaling, ICE/STUN direct path, TURN fallback",
+    "invite_flow": "clipboard invite and reply, public STUN address discovery, direct ICE",
     "integration": "isolated multiplayer core with small build, settings, UI, runtime, and guest-site adapters"
   },
   "milestones": [
@@ -53,7 +53,7 @@
       "name": "Native multiplayer build and internet lobby",
       "status": "partial",
       "scope": "Native Windows build and loopback gameplay with shared Settings and visible Plateau NPCs",
-      "pending_test_build": "native Linux/Vulkan execution, mixed-platform lobby in both host directions, and selected direct ICE and TURN paths across two external networks"
+      "pending_test_build": "native Linux/Vulkan execution, clipboard flow in both menus, mixed-platform hosting in both directions, and direct ICE across two external networks"
     },
     {
       "id": "M2",
@@ -98,7 +98,8 @@
     "strict 1.9.0 guest hook for asynchronous Great Plateau placeholder creation and indexed deletion",
     "native Windows/Linux source build with localized F1 and System > Options multiplayer controls",
     "one persisted default-off setting and window-thread teardown when multiplayer is disabled",
-    "per-peer Great Plateau NPC placeholders for the native M1 build"
+    "per-peer Great Plateau NPC placeholders for the native M1 build",
+    "direct single-use clipboard invite and reply with public STUN discovery"
   ],
   "not_implemented": [
     "remote Link actors",
@@ -128,7 +129,8 @@
     "actor_research": "native scratch probe confirmed async request, visible activation and indexed deletion",
     "presence_site_checks": "pass: 50 site checks and 59 layout checks; strict signature group disables the full hook on mismatch",
     "native_windows": "Clang 23.1.5, libdatachannel 0.24.6, matching 1.9.0 gamelib 6bb7f77965924e25; F1 and System > Options share enable, live Host/Join, rejection, two NPCs per renderer, late join, slot reuse, disconnect and disable cleanup; F1 host reboot closed the lobby, and a fresh process restored the enabled preference",
-    "native_linux_cross": "x86-64 and aarch64 multiplayer runtime, presence, settings and menu objects cross-compiled; native link and execution pending"
+    "native_linux_cross": "x86-64 and aarch64 multiplayer runtime, presence, settings and menu objects cross-compiled; native link and execution pending",
+    "direct_signaling": "Windows standalone test passed eight peers, malformed and stale input, single-use replies, expiry and cleanup. A two-process Windows runtime test passed with an isolated clipboard. Linux x86-64 transport objects cross-compiled. Native external-network tests pending."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -140,5 +142,5 @@
     "gameplay": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Finish the native M1 acceptance matrix on Linux/Vulkan, both mixed-platform host directions, and two external networks with direct ICE and forced TURN."
+  "next_recommended_work": "Verify the native clipboard flow on Windows and Linux/Vulkan across two external networks in both host directions."
 }

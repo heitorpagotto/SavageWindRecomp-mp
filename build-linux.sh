@@ -44,38 +44,9 @@ set -euo pipefail
 prefix=/src/build/linux/x86_64/deps
 CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh "$prefix"
 
-curl_version=8.23.0
-archive="curl-$curl_version.tar.xz"
-work=/src/build/linux/x86_64/curl-build
-if [[ ! -f "$prefix/lib/libcurl.so" ]] ||
-   [[ $(sh "$prefix/bin/curl-config" --version 2>/dev/null) != "libcurl $curl_version" ]]; then
-    mkdir -p "$work"
-    (
-        cd "$work"
-        if [[ ! -f $archive ]]; then
-            curl -fsSL "https://github.com/curl/curl/releases/download/curl-${curl_version//./_}/$archive" \
-                -o "$archive.part"
-            mv "$archive.part" "$archive"
-        fi
-        printf '%s  %s\n' 8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5 "$archive" \
-            | sha256sum -c -
-        tar -xf "$archive"
-        cd "curl-$curl_version"
-        CC=clang ./configure --prefix="$prefix" --libdir="$prefix/lib" \
-            --enable-shared --disable-static --with-openssl --enable-threaded-resolver \
-            --with-zlib --without-libpsl --without-brotli --without-zstd --without-libidn2 \
-            --disable-ldap --disable-ldaps
-        make -j"$(nproc)"
-        make install
-    )
-fi
-
 # package.sh resolves the shared libraries by soname from this prefix.
 openssl_libdir=$(pkg-config --variable=libdir openssl)
 cp -L "$openssl_libdir/libssl.so.3" "$openssl_libdir/libcrypto.so.3" "$prefix/lib/"
-curl_info=$(LD_LIBRARY_PATH="$prefix/lib" "$prefix/bin/curl" --version)
-grep -Eq '^Protocols:.*\bhttps\b' <<<"$curl_info"
-grep -Eq '^Features:.*\bAsynchDNS\b' <<<"$curl_info"
 
 bash tools/linux/gen_helper.sh x86_64
 bash tools/linux/package.sh x86_64
