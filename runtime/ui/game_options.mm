@@ -369,7 +369,8 @@ bool mp_action_off(const Item &it, int) {
 
 bool mp_view_changed(const SwmpM1View &a, const SwmpM1View &b) {
     return a.enabled != b.enabled || a.supported != b.supported || a.direct != b.direct ||
-           a.pending != b.pending || a.joining != b.joining || a.failed != b.failed ||
+           a.pending != b.pending || a.joining != b.joining || a.awaiting_peer != b.awaiting_peer ||
+           a.failed != b.failed ||
            a.rejection != b.rejection || a.session.state != b.session.state ||
            a.session.role != b.session.role || a.clipboard_error != b.clipboard_error ||
            swmp_session_peer_count(&a.session) != swmp_session_peer_count(&b.session);

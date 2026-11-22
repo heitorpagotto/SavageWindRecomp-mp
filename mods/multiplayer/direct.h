@@ -19,6 +19,6 @@ void swmp_direct_destroy(SwmpDirect *direct);
 SwmpWebrtcSignaling swmp_direct_signaling(SwmpDirect *direct);
 void swmp_direct_update(SwmpDirect *direct, uint64_t now);
 void swmp_direct_new_invite(SwmpDirect *direct);
-bool swmp_direct_accept_reply(SwmpDirect *direct, const char *reply);
+SwmpConnection swmp_direct_accept_reply(SwmpDirect *direct, const char *reply);
 SwmpDirectState swmp_direct_state(const SwmpDirect *direct);
 const char *swmp_direct_message(const SwmpDirect *direct);

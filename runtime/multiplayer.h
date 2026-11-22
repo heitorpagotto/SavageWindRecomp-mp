@@ -21,7 +21,7 @@ typedef enum {
 } SwmpM1Action;
 
 typedef struct {
-    bool enabled, supported, pending, joining, failed, clipboard_error;
+    bool enabled, supported, pending, joining, awaiting_peer, failed, clipboard_error;
     SwmpDirectState direct;
     SwmpSession session;
     SwmpRejectCode rejection;

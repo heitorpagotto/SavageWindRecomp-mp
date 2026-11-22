@@ -34,6 +34,30 @@ actions with an isolated clipboard fixture. The direct transport objects cross-c
 Native menu interaction, gameplay across two external networks, and Linux/Vulkan execution remain pending. The older
 gameplay evidence below used HTTPS signaling.
 
+The staged Windows build used OpenSSL 4.1.0. See the [security findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings)
+for the applicable DTLS advisory, the configured DTLS minimum, and the checks still open.
+
+### Direct lobby field reports
+
+- Windows host to Linux client returned the incompatible-build error. The inspected Windows executable
+  embedded the fingerprint of the current multiplayer sources combined with the previous Git tree.
+  Rebuilding the same sources from commit `007973d` computed a different fingerprint with the old formula.
+  The fingerprint now uses source contents with normalized line endings. Make produced identical IDs for
+  Windows and for a Linux target with Git metadata hidden. Rebuild both platforms from the updated
+  multiplayer sources for the next test.
+- The owner reported a Linux-to-Linux join that succeeded with the friend hosting and stalled with the owner
+  hosting. In the stalled direction the old host UI could show **Connected** as soon as it accepted the
+  pasted answer. Both menus now show progress until a peer is admitted. The client switches from the reply
+  prompt to connecting at the lobby handshake. The cause of the failed connection remains unverified.
+- The updated Windows executable linked. The core, WebRTC loopback, and eight-peer direct tests passed.
+  The direct test checked that the accepted reply's connection was assigned to the expected peer.
+  The UI text check found zero missing or unused entries. Native Linux and external-network retests
+  of these changes are pending.
+- For the next run, use a fresh invite in each host direction. Confirm both logs show the same multiplayer
+  source ID and BOTW build ID, then check whether both rosters contain both players. For a failure, collect
+  the `[multiplayer]` log lines from both machines, including whether the host applied the reply and whether
+  the client sent the lobby handshake. Keep the clipboard codes private.
+
 ### Native build and standalone checks
 
 - MSYS2 UCRT64 with Clang 23.1.5 built the Windows executable and Vulkan runtime objects against libdatachannel

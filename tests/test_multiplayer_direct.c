@@ -96,11 +96,18 @@ int main(void) {
         invite = message(host, SWMP_DIRECT_INVITE);
         assert(!swmp_direct_accept_reply(host->direct, invite));
         const char *reply = reply_to(&peers[i], invite);
-        assert(swmp_direct_accept_reply(host->direct, reply));
+        SwmpConnection accepted = swmp_direct_accept_reply(host->direct, reply);
+        assert(accepted && swmp_webrtc_has_link(host->rtc, accepted));
+        assert(swmp_session_peer_count(&host->lobby.session) == i);
         assert(!swmp_direct_accept_reply(host->direct, reply));
         uint64_t end = now_ms() + 12000;
         while (swmp_session_peer_count(&peers[i].lobby.session) != i + 1 && now_ms() < end) tick();
         assert(swmp_session_peer_count(&peers[i].lobby.session) == i + 1);
+        bool admitted = false;
+        for (unsigned j = 0; j < SWMP_LOBBY_LINKS; j++)
+            if (host->lobby.links[j].connection == accepted && host->lobby.links[j].peer == i)
+                admitted = true;
+        assert(admitted);
     }
     uint64_t end = now_ms() + 12000;
     while (swmp_session_peer_count(&peers[1].lobby.session) != SWMP_MAX_PEERS && now_ms() < end) tick();

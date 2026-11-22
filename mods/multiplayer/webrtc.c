@@ -336,6 +336,10 @@ static bool poll(void *context, SwmpTransportEvent *event) {
     return false;
 }
 
+bool swmp_webrtc_has_link(SwmpWebrtc *rtc, SwmpConnection connection) {
+    return find_link(rtc, connection) != NULL;
+}
+
 bool swmp_webrtc_link_uses_relay(SwmpWebrtc *rtc, SwmpConnection connection) {
     SwmpWebrtcLink *link = find_link(rtc, connection);
     char local[512], remote[512];

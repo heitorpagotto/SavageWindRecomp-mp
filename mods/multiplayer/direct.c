@@ -120,20 +120,21 @@ void swmp_direct_new_invite(SwmpDirect *d) {
     d->state = SWMP_DIRECT_PREPARING;
 }
 
-bool swmp_direct_accept_reply(SwmpDirect *d, const char *reply) {
+SwmpConnection swmp_direct_accept_reply(SwmpDirect *d, const char *reply) {
     uint8_t payload[PAYLOAD_SIZE + 1];
     if (!d || d->state != SWMP_DIRECT_INVITE || !decode(reply, "SWMP1R.", payload) ||
-        memcmp(payload, d->payload, SWMP_BINDING_SIZE)) return false;
+        memcmp(payload, d->payload, SWMP_BINDING_SIZE)) return 0;
     if (!swmp_webrtc_set_answer(d->rtc, d->link, (char *)payload + SWMP_BINDING_SIZE)) {
         discard_link(d);
         d->state = SWMP_DIRECT_EXPIRED;
-        return false;
+        return 0;
     }
     // The transport now owns this peer. The next invitation gets a new binding and connection.
+    SwmpConnection connection = d->link;
     d->link = 0;
     d->message[0] = 0;
     d->state = SWMP_DIRECT_IDLE;
-    return true;
+    return connection;
 }
 
 void swmp_direct_update(SwmpDirect *d, uint64_t now) {

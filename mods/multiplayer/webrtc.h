@@ -41,4 +41,5 @@ int swmp_webrtc_local_sdp(SwmpWebrtc *rtc, SwmpConnection connection, char out[S
 bool swmp_webrtc_set_invite(SwmpWebrtc *rtc, const char *invite);
 void swmp_webrtc_signal_error(SwmpWebrtc *rtc, const char *error);
 void swmp_webrtc_expire(SwmpWebrtc *rtc, uint64_t now_ms);
+bool swmp_webrtc_has_link(SwmpWebrtc *rtc, SwmpConnection connection);
 bool swmp_webrtc_link_uses_relay(SwmpWebrtc *rtc, SwmpConnection connection);

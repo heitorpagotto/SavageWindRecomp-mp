@@ -24,9 +24,10 @@ const char *multiplayer_status(const SwmpM1View &view) {
     if (view.direct == SWMP_DIRECT_INVITE) return tr("Send the invite and paste the reply.");
     if (view.joining && view.direct == SWMP_DIRECT_REPLY) return tr("Send the reply to the host.");
     if (view.direct == SWMP_DIRECT_EXPIRED) return tr("Create a new invite.");
-    if (view.pending || view.joining || view.direct == SWMP_DIRECT_PREPARING)
+    if (view.pending || view.joining || view.awaiting_peer || view.direct == SWMP_DIRECT_PREPARING)
         return tr("Connecting to multiplayer");
-    return view.session.state == SWMP_SESSION_OFFLINE ? tr("Offline") : tr("Connected");
+    if (swmp_session_peer_count(&view.session) > 1) return tr("Connected");
+    return view.session.role == SWMP_ROLE_HOST ? tr("Waiting for players") : tr("Offline");
 }
 
 void multiplayer_tab_draw() {

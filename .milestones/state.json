@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T17:38:39-03:00",
+  "updated_at": "2026-11-22T18:23:22-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -26,6 +26,7 @@
     "upstream_base_commit": "f488af7",
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
+    "direct_multiplayer_commit": "007973d",
     "workspace_base_commit": "ae7ff1f",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
@@ -142,5 +143,12 @@
     "gameplay": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Verify the native clipboard flow on Windows and Linux/Vulkan across two external networks in both host directions."
+  "security_review": {
+    "reviewed_on": "2026-11-22",
+    "handoff": "DIRECT_MULTIPLAYER_HANDOFF.md#security-findings",
+    "windows_openssl": "4.1.0 confirmed in the staged Windows dependency; affected by CVE-2026-95690, with 4.1.1 listed as the fix target",
+    "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
+    "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
+  },
+  "next_recommended_work": "Verify the native clipboard flow on Windows and Linux/Vulkan across two external networks in both host directions. Follow up on the bundled OpenSSL and negotiated DTLS version."
 }

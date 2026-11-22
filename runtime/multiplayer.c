@@ -29,6 +29,7 @@ static SwmpDirect *direct;
 static SwmpWebrtc *rtc;
 static SwmpLobby lobby;
 static uint64_t lobby_generation;
+static SwmpConnection reply_connection;
 static bool clipboard_error;
 
 static bool read_build_id(uint8_t *out, size_t size, const char *hex) {
@@ -56,6 +57,7 @@ void swmp_m1_boot(const GameLibTables *game) {
         LOG("[multiplayer] invalid source or game build identity\n");
         supported = false;
     }
+    if (supported) LOG("[multiplayer] source ID: %s, game build: %s\n", SWMP_RUNTIME_ID, game->modules[0].build_id);
     pthread_mutex_lock(&view_lock);
     view = (SwmpM1View){
         .enabled = settings_multiplayer_enabled(), .supported = supported,
@@ -92,6 +94,7 @@ static void stop_transport(void) {
     swmp_direct_destroy(direct);
     rtc = NULL;
     direct = NULL;
+    reply_connection = 0;
     rtcCleanup();
 }
 
@@ -207,24 +210,41 @@ void swmp_m1_update(void) {
             snprintf(lobby.error, sizeof lobby.error, "Direct multiplayer is unavailable");
         }
     } else if (pending.action == SWMP_M1_LEAVE) {
+        reply_connection = 0;
         if (rtc) swmp_lobby_leave(&lobby);
         else memset(&lobby, 0, sizeof lobby);
     } else if (pending.action == SWMP_M1_START && rtc) {
         swmp_lobby_start(&lobby);
     } else if (pending.action == SWMP_M1_NEW_INVITE) {
+        lobby.error[0] = 0;
+        reply_connection = 0;
         swmp_direct_new_invite(direct);
     } else if (pending.action == SWMP_M1_COPY) {
         const char *message = swmp_direct_message(direct);
         clipboard_error = !message || !SDL_SetClipboardText(message);
     } else if (pending.action == SWMP_M1_PASTE_REPLY) {
         char *reply = SDL_GetClipboardText();
-        clipboard_error = !swmp_direct_accept_reply(direct, reply);
+        reply_connection = swmp_direct_accept_reply(direct, reply);
+        clipboard_error = !reply_connection;
+        if (reply_connection) LOG("[multiplayer] reply applied, waiting for peer\n");
         SDL_free(reply);
     }
     if (new_lobby && !++lobby_generation) ++lobby_generation;
     if (rtc) {
         swmp_webrtc_expire(rtc, now);
+        bool waiting_welcome = lobby.waiting_welcome;
         swmp_lobby_poll(&lobby, now);
+        if (lobby.joining && lobby.waiting_welcome && !waiting_welcome)
+            LOG("[multiplayer] lobby handshake sent, waiting for host\n");
+        if (reply_connection && !swmp_webrtc_has_link(rtc, reply_connection)) {
+            snprintf(lobby.error, sizeof lobby.error, "Peer connection ended before lobby admission");
+            reply_connection = 0;
+        }
+        for (size_t i = 0; reply_connection && i < SWMP_LOBBY_LINKS; i++) {
+            const SwmpLobbyLink *link = &lobby.links[i];
+            if (link->connection == reply_connection && link->peer != SWMP_UNASSIGNED_PEER)
+                reply_connection = 0;
+        }
     }
 
     SwmpM1Roster admitted = {0};
@@ -244,10 +264,11 @@ void swmp_m1_update(void) {
     size_t after = swmp_session_peer_count(&lobby.session);
     view.pending = command.action != 0;
     view.joining = lobby.joining;
+    view.awaiting_peer = reply_connection != 0;
     view.session = lobby.session;
     view.rejection = lobby.rejection;
     view.failed = failed;
-    view.direct = swmp_direct_state(direct);
+    view.direct = lobby.joining && lobby.waiting_welcome ? SWMP_DIRECT_IDLE : swmp_direct_state(direct);
     view.clipboard_error = clipboard_error;
     roster = admitted;
     pthread_mutex_unlock(&view_lock);

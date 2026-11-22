@@ -189,8 +189,9 @@ MP_RNG_LIBS := $(if $(filter windows,$(PLATFORM)),-lbcrypt)
 ifneq ($(filter windows linux,$(PLATFORM)),)
 MP_RUNTIME_SRC := $(addprefix mods/multiplayer/,protocol.c session.c lobby.c webrtc.c direct.c random.c)
 MP_RUNTIME_OBJ := $(patsubst mods/multiplayer/%.c,$(B)/rt/multiplayer/%.o,$(MP_RUNTIME_SRC))
-MP_RUNTIME_DEPS := $(MP_RUNTIME_SRC) $(wildcard mods/multiplayer/*.h) runtime/multiplayer.c runtime/multiplayer_presence.c tools/game_sites.py tools/patches.py
-MP_RUNTIME_ID := $(shell (git rev-parse 'HEAD^{tree}' 2>/dev/null; cat $(MP_RUNTIME_DEPS)) | tr -d '\r' | (shasum -a 256 2>/dev/null || sha256sum) | cut -c1-40)
+MP_RUNTIME_DEPS := $(MP_RUNTIME_SRC) $(wildcard mods/multiplayer/*.h) runtime/multiplayer.c runtime/multiplayer.h runtime/multiplayer_presence.c runtime/game_sites.h tools/game_sites.py tools/patches.py
+# The source fingerprint must match across checkout, archive and platform builds of the same code.
+MP_RUNTIME_ID := $(shell cat $(MP_RUNTIME_DEPS) | tr -d '\r' | (shasum -a 256 2>/dev/null || sha256sum) | cut -c1-40)
 $(shell mkdir -p $(B) && [ "$$(cat $(B)/mp_runtime_id 2>/dev/null)" = '$(MP_RUNTIME_ID)' ] || echo '$(MP_RUNTIME_ID)' > $(B)/mp_runtime_id)
 RT_OBJ += $(MP_RUNTIME_OBJ)
 LDFLAGS += $(MP_RTC_LIBS) $(MP_RNG_LIBS)

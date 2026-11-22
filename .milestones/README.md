@@ -11,7 +11,8 @@ for Windows evidence and the remaining Linux, mixed-platform, and external-netwo
 
 ## Read in this order
 
-1. [Native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md) for the direction change, checkpoint, and first task.
+1. [Direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) for the current checkpoint, security findings, and
+   remaining work. See the [native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md) for the migration history.
 2. [Project charter](PROJECT.md) and [milestone ledger](MILESTONES.md) for goals and acceptance criteria.
 3. [Architecture](ARCHITECTURE.md) and [decisions](DECISIONS.md) for boundaries and rationale.
 4. [Repository map](REPOSITORY.md) and [implementation notes](IMPLEMENTATION.md) for the current source.

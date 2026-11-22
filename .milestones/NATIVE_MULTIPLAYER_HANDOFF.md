@@ -1,8 +1,11 @@
 # Native multiplayer handoff
 
-Direction recorded 2026-11-22. At this handoff, branch `multiplayer/windows-test` is at `1ff0af6`, which contains
-the M1 integration and build guide. The two build scripts, their guide updates, and this handoff are local
-working-tree changes. The owner asked to keep changes in this repository and leave commits and pushes to them.
+The native migration was recorded on 2026-11-22 when `multiplayer/windows-test` was at `1ff0af6`. That commit
+contains the M1 integration and build guide. The two build scripts and their guide updates were still in the
+working tree at that checkpoint. The owner asked to handle commits and pushes themselves.
+
+This records the earlier native migration. See the [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md)
+for the current commit, verified direct invite behavior, and open security work.
 
 ## Owner's direction
 
@@ -28,8 +31,8 @@ combat, story progress, and chest rewards. [Milestone ledger](MILESTONES.md)
 - The protocol, session, lobby, WebRTC adapter, and direct invite and reply exchange live in
   `mods/multiplayer/`. The HTTPS prototype remains a standalone test.
 - Windows and Linux source builds link multiplayer. F1 and System > Options share a default-off `multiplayer`
-  setting and the runtime's copied lobby state. Both surfaces offer Host, Join, Start, and Leave. Native Options
-  uses the existing keyboard for invite entry. The migration removed the test-build gate, marker package, and
+  setting and the runtime's copied lobby state. Both surfaces offer Host, Join, Start, and Leave and share
+  clipboard actions for invites and replies. The migration removed the test-build gate, marker package, and
   dynamic-module fixtures. Build the transport with `tools/build_multiplayer_deps.sh`.
 - `runtime/multiplayer.c` owns lobby and transport state on the window thread, receives UI commands, and
   publishes copies of the session and admitted roster. `runtime/main.c` and `runtime/nvn/vulkan/device.c`

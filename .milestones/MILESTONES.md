@@ -30,6 +30,7 @@ Limit: nothing is linked into Savage Wind and no network connection is made.
 
 Status **partial**. Native source integration and both Settings surfaces are implemented. See the
 [test record](TESTING.md) for Windows loopback verification and pending native Linux and external-network acceptance.
+The [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) records the open transport security findings.
 
 Delivered
 
