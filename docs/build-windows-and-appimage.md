@@ -4,6 +4,30 @@ Use the same fork source revision on both systems. Carry over any local source e
 The Windows steps produce a local x86-64 executable and its BOTW 1.9.0 game library. The Linux steps produce
 an x86-64 AppImage that builds the game library on the player's machine during setup.
 
+## Build scripts
+
+On x86-64 Linux, including Bazzite, run this from a regular source checkout with Podman available:
+
+```bash
+bash build-linux.sh
+```
+
+The script builds in an Ubuntu container and writes the AppImage under `build/dist/`. The host needs Podman,
+and the compiler and development libraries live in the container. Use a source checkout without extracted game
+files or a locally generated `runtime/game_place_table.inc` when packaging.
+
+On Windows, complete the one-time UCRT64 setup and package installation below, then run:
+
+```bash
+bash build-windows.sh --game '/c/path/to/your/BOTW-1.9.0'
+```
+
+Omit `--game` to use `extracted/`, or use `--app-only` to compile the executable without generating a game
+library. Set `JOBS=4` before the command if the compiler runs out of memory. Outputs are in
+`build/windows-local/`. To play, follow the launch step below.
+
+The manual steps below give the individual build commands and include the optional Windows ZIP workflow.
+
 ## Windows x86-64 local build
 
 1. Open PowerShell in the repository root. Run the one-time setup if you need MSYS2 UCRT64, Clang, Vulkan

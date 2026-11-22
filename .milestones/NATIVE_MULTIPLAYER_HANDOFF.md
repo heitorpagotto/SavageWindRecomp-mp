@@ -1,6 +1,8 @@
 # Native multiplayer handoff
 
-Direction recorded 2026-11-22. Working branch `multiplayer/windows-test`, base `ae7ff1f` with local M1 changes.
+Direction recorded 2026-11-22. At this handoff, branch `multiplayer/windows-test` is at `1ff0af6`, which contains
+the M1 integration and build guide. The two build scripts, their guide updates, and this handoff are local
+working-tree changes. The owner asked to keep changes in this repository and leave commits and pushes to them.
 
 ## Owner's direction
 
@@ -27,7 +29,8 @@ combat, story progress, and chest rewards. [Milestone ledger](MILESTONES.md)
   `mods/multiplayer/`. The signaling service is `tools/multiplayer_rendezvous.py`.
 - Windows and Linux source builds link multiplayer. F1 and System > Options share a default-off `multiplayer`
   setting and the runtime's copied lobby state. Both surfaces offer Host, Join, Start, and Leave. Native Options
-  uses the existing keyboard for invite entry. Build the transport with `tools/build_multiplayer_deps.sh`.
+  uses the existing keyboard for invite entry. The migration removed the test-build gate, marker package, and
+  dynamic-module fixtures. Build the transport with `tools/build_multiplayer_deps.sh`.
 - `runtime/multiplayer.c` owns lobby and transport state on the window thread, receives UI commands, and
   publishes copies of the session and admitted roster. `runtime/main.c` and `runtime/nvn/vulkan/device.c`
   provide the boot, polling, and shutdown call sites.
@@ -38,11 +41,52 @@ combat, story progress, and chest rewards. [Milestone ledger](MILESTONES.md)
   The prototype also passed a controlled local TURN test. Native Linux execution, mixed-platform sessions,
   and external-network direct and relay tests remain pending.
 
+## Build scripts
+
+- [build-windows.sh](../build-windows.sh) runs in MSYS2 UCRT64. With no arguments it uses `extracted/`.
+  With `--game` it reads the supplied BOTW 1.9.0 folder. It builds the app and local guest library under
+  `build/windows-local/`. `--app-only` builds the app and configuration executables and passed in UCRT64.
+  The script's full game-library path still needs an end-to-end run. The earlier manual Windows build generated,
+  linked, and loaded gamelib `6bb7f77965924e25`. Use `JOBS=4` if a build runs out of memory.
+- [build-linux.sh](../build-linux.sh) targets x86-64 Linux, including Bazzite. It uses rootless Podman with
+  `--userns=keep-id`, mounts the checkout read-only and `build/` writable, and stages pinned libdatachannel,
+  OpenSSL, and curl 8.23.0 in the Ubuntu 22.04 dependency prefix. It calls the existing helper and AppImage
+  packager and writes to `build/dist/`. Use a regular source-only checkout so the build can read the Git
+  tree identity and so packaging excludes local game-derived data. Both scripts and the Linux container
+  shell body passed Bash syntax checks. No Linux or Podman runner was available for an end-to-end AppImage run.
+- The [build guide](../docs/build-windows-and-appimage.md) has prerequisites, the manual equivalents, and the
+  optional Windows ZIP steps. The stock Windows `make dist` recreates `build/dist/` and needs libdatachannel
+  staged for DLL collection. Release dependency staging and license notices are tracked under M6.
+
+## Windows scratch evidence
+
+When available, `build/m1-tools/` holds the portable UCRT64 toolchain, the build/test logs, and local
+automation. `build/m1/` holds the earlier matching app and gamelib and `build/windows-local/` holds the
+wrapper's app-only test output. Treat the older binaries as evidence. Rebuild both platforms from the same
+current source when testing interoperability because admission compares a platform-neutral source fingerprint
+as well as the game's main-module build ID.
+
+The window thread owns network I/O. Turning multiplayer off clears the published roster and queued action
+immediately, then tears down transport before accepting another action. The guest update retires actors from
+that roster. Test slot reuse with a late join because the same peer ID can represent a new membership.
+
+`build/m1-smoke/` contains local scratch saves, settings, logs, and screenshots. Useful comparisons are
+`plateau/plateau-two.png` and `client/client-two.png` before disable, followed by
+`plateau/plateau-disabled-world.png` and `client/client-after-host-disabled.png`. The `lifecycle/` run
+records a peer dropping on reboot and `restart/` shows the persisted enabled preference. The local Python
+runners under `build/m1-tools/` used the owner's extracted game path and a short-lived loopback certificate.
+Keep the scratch directories, certificates, invites, game data, and screenshots local.
+
 ## Resume here
 
 1. Read [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and the [test record](TESTING.md).
-2. Finish the [native M1 acceptance checks](TESTING.md#native-m1-acceptance) on Windows and Linux/Vulkan. Test
-   both mixed-platform host directions and external direct ICE and TURN. Use separate scratch settings and saves
-   for each instance. Local loopback exercises the encrypted lobby and HTTPS broker.
-3. Record the results in [TESTING.md](TESTING.md), [MILESTONES.md](MILESTONES.md), and [state.json](state.json).
+2. Run `bash build-linux.sh` on x86-64 Linux with Podman, preferably Bazzite. Resolve any container or
+   dependency staging failures. Launch the resulting AppImage, complete game setup with local 1.9.0 files,
+   and exercise both Settings surfaces on Linux/Vulkan.
+3. Complete the [native M1 acceptance checks](TESTING.md#native-m1-acceptance). Test both mixed-platform host
+   directions and record selected ICE candidates for direct and forced TURN across two external networks.
+   In the current native build, test a full in-game roster, localized rejection, explicit Leave, and reboot
+   with visible NPCs. The eight-peer Windows loopback test covered admission, and the live gameplay test
+   rendered up to two NPCs per game. Use separate scratch settings and saves for each instance.
+4. Record the results in [TESTING.md](TESTING.md), [MILESTONES.md](MILESTONES.md), and [state.json](state.json).
    Record the upstream release and rerun the relevant checks whenever the owner brings in an update.
