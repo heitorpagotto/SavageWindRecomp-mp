@@ -2,20 +2,16 @@
 
 ## Snapshot
 
-- M1 working branch: `multiplayer/windows-test`.
-- Base ref: `upstream/test`
-- Base commit: `f488af7` (`No usable GPU: the error names each graphics card and what its driver lacks`)
-- Fork remote: `origin` -> `https://github.com/heitorpagotto/SavageWindRecomp-mp.git`
-- The bootstrap commit is `2b9a27c`. The lobby work started from `11c1af1` on `origin/multiplayer/bootstrap`.
-- The M1 synthetic lobby is committed at `11ed467`. Inspect the current branch and preserve any local edits.
+- Working branch `multiplayer/windows-test`, source checkpoint `9fb424b`.
+- Historical upstream baseline `f488af7`. The bootstrap is `2b9a27c` and the synthetic lobby is `11ed467`.
+- Fork remote is `origin`. Identify the current upstream release and inspect the branch before updating it.
 
-To refresh the upstream development branch without adding a remote:
+## Manual release updates
 
-```sh
-git fetch https://github.com/Revivedx/SavageWindRecomp.git test:refs/remotes/upstream/test
-```
-
-Inspect and rebase carefully; preserve the user's changes. Never reset or overwrite the worktree to update it.
+The project owner selects and brings in new Savage Wind releases. Record the chosen upstream tag or commit.
+Preserve local edits, game data, settings, and saves. Review conflicts around the Makefile, settings, UI,
+runtime lifecycle, and guest sites, then rebuild and verify both platforms. Follow upstream's `test` branch
+conventions when preparing an upstream contribution. [Contribution guide](../CONTRIBUTING.md)
 
 ## Savage Wind architecture relevant to multiplayer
 
@@ -23,7 +19,7 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - `runtime/`: host OS replacement, HLE, platform code, settings, save handling, input, and UI.
 - `runtime/nvn/`: graphics and Vulkan backend. Multiplayer currently needs no Vulkan change.
 - `runtime/ui/game_options.mm`: Savage Wind's pages inside the game's own Options screen. It already supports button
-  rows and page actions, so it is the likely Host/Join UI integration point after the module boundary exists.
+  rows and page actions for the Multiplayer page. Its hooks run on the guest thread.
 - `tools/game_sites.py`: version-aware discovery of guest addresses. New actor, damage, flag, chest, and event hooks
   belong here.
 - `tools/patches.py`: generated hooks. Every replaced instruction must be asserted.
@@ -33,15 +29,16 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - `runtime/hle.h`: `RT_ON_RESET` registration. Every per-boot multiplayer guest pointer, actor handle, or guest-side
   cache must be discarded through reset handling.
 - `runtime/main.c`: boot/reboot lifecycle. The app can tear down the guest and boot again inside one process.
-- `runtime/services/fs.c`: reads `SAVAGEWIND_ROMFS_OVERLAY`; this is how current SWMM content mods reach the game.
+- `runtime/ui/menu.mm`: F1 Settings and the existing prototype Multiplayer tab registration.
 - `runtime/settings.c` and `runtime/settings.h`: persisted options. Player-facing changes require translation updates.
 - `runtime/ui/i18n/`: translation tables. Run `python3 tools/i18n_check.py` after adding UI text.
-- `runtime/multiplayer.c` and `runtime/ui/multiplayer.mm`: marker-gated M1 window-thread ownership and the
+- `runtime/multiplayer.c` and `runtime/ui/multiplayer.mm`: M1 window-thread ownership and the
   localized multiplayer tab. The window thread publishes the admitted roster for the guest update.
 - `runtime/multiplayer_presence.c`: the 1.9.0 guest menu update hook owns native creation, indexed deletion,
   and per-boot placeholder state.
-- `Makefile`: `MP_M1_TEST=1` compiles and links the developer lobby. The standalone tests remain available
-  independently of the game and SWMM.
+- `Makefile` currently uses `MP_M1_TEST=1` to compile and link the prototype. The standalone networking
+  and session tests run independently of the game. The native build should keep platform-specific dependency
+  wiring localized.
 
 ## Required implementation conventions
 
@@ -61,20 +58,13 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - `mods/multiplayer/lobby_protocol.h`, `lobby.[ch]`: lobby payloads and control dispatch.
 - `mods/multiplayer/mock_transport.[ch]`: bounded in-process transport with state faults.
 - `mods/multiplayer/demo.c`: eight-player mock lobby and snapshot demonstration.
-- `mods/multiplayer/README.md`: architecture and status visible beside the code.
-- `mods/multiplayer/SWMM.md`: current manager integration notes.
-- `mods/multiplayer/VERSION`: `0.1.0-dev`.
-- `mods/multiplayer/swmm/`: raw SWMM development archive source.
-- `tests/test_multiplayer.c`: synthetic protocol/session tests.
-- `mods/multiplayer/webrtc.[ch]`: bounded WebRTC channels and link ownership using libdatachannel.
-- `mods/multiplayer/rendezvous.[ch]` and `tools/multiplayer_rendezvous.py`: HTTPS offer/answer exchange.
-- `tests/test_multiplayer_webrtc.c`, `tests/test_multiplayer_rendezvous.c`, and
-  `tests/test_multiplayer_marker.c`: encrypted lobby, HTTPS signaling, and raw/Yaz0 marker checks.
-- `mods/multiplayer/native_abi_draft.h`, `tests/multiplayer_native_fixture.c`, and
-  `tests/test_multiplayer_native.c`: draft ABI and standalone fixture.
-- `tools/package_multiplayer.py`: deterministic package builder/checker.
-- `Makefile`: `test-multiplayer`, `multiplayer-demo`, `multiplayer-swmm-package`, and
-  `test-multiplayer-swmm`, plus standalone `test-multiplayer-native` and `test-multiplayer-webrtc` targets.
+- `mods/multiplayer/VERSION` records the prototype's feature version.
+- `mods/multiplayer/webrtc.[ch]` provides bounded WebRTC channels and link ownership via libdatachannel.
+- `mods/multiplayer/rendezvous.[ch]` and `tools/multiplayer_rendezvous.py` implement the HTTPS offer/answer exchange.
+- `tests/test_multiplayer.c`, `tests/test_multiplayer_webrtc.c`, and `tests/test_multiplayer_rendezvous.c`
+  cover the synthetic core, encrypted lobby, and HTTPS signaling.
+- The Makefile exposes `test-multiplayer`, `multiplayer-demo`, `test-multiplayer-webrtc`, and
+  `test-multiplayer-rendezvous`.
 
 ## Bootstrap build environment (historical)
 
@@ -83,4 +73,3 @@ Inspect and rebase carefully; preserve the user's changes. Never reset or overwr
 - ASan/UBSan runtime libraries were absent, so sanitizer linking could not run.
 - GCC `-fanalyzer` was used successfully on the protocol, session, and demo sources.
 - No generated game sources or extracted game files were needed for current tests.
-

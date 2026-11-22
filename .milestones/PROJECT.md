@@ -2,26 +2,27 @@
 
 ## Product goal
 
-Create a separately installable multiplayer mod for Savage Wind that supports a complete cooperative playthrough of
-the main campaign with up to eight players total. Each player controls their own Link and can see the other players as
-Links wearing their actual equipment.
+Build native multiplayer into the Savage Wind fork for a complete cooperative playthrough of the main campaign
+with up to eight players total. Each player controls their own Link and sees the others in their actual equipment.
 
-Required final behavior:
+Required final behavior
 
-- Host or Join is available from Savage Wind's main menu or Options UI.
-- Hosting produces a short code or equivalent identifier other players can enter.
-- Connections work over the internet, not only on a LAN.
+- The Multiplayer tab in F1 Settings and the Multiplayer page in the game's System > Options expose the same
+  enable/disable setting and Host/Join/Leave controls.
+- Hosting produces an invite code that other players can use to join over the internet.
 - Up to eight players can share a session.
-- Remote Links show position, movement/action state, armour, weapons, shield, and bow.
-- Players can damage each other. Whether PvP is always on or a session option is still undecided.
-- Enemy health and death are shared so players can fight the same enemy cooperatively.
+- Remote Links show position, movement and actions, armour, weapons, shield, and bow.
+- Players can damage each other. Whether PvP is always on or a session option remains undecided.
+- Enemy health and death are shared for cooperative combat.
 - Main-story progression and story quests are shared.
-- Chests grant loot to every eligible player rather than only the opener.
-- The mod builds and runs on every supported Savage Wind platform. The current targets are Windows and Linux/Vulkan.
-- Windows and Linux players can join the same lobby using compatible Savage Wind and mod builds.
-- A build produces an SWMM-compatible archive for each supported platform. Players can drag and drop the archive
-  into Savage Wind Mod Manager (SWMM), then enable, launch, update, disable, and uninstall through the manager.
-- With the mod absent or disabled, ordinary Savage Wind behavior is unchanged.
+- Chests grant loot to every eligible player.
+- The fork builds and runs on every supported Savage Wind platform. The maintained targets are Windows and
+  Linux/Vulkan, and players can join the same lobby across compatible builds.
+- With multiplayer disabled, ordinary single-player play remains available. Disabling during a session ends
+  local participation and clears multiplayer resources and placeholders.
+
+The project owner manually updates the fork as new Savage Wind releases arrive. Keep the multiplayer core separate
+from upstream-facing build, UI, settings, lifecycle, and guest-hook adapters so those updates stay focused.
 
 ## Experience constraints
 
@@ -44,7 +45,7 @@ The project inherits Savage Wind's hard rules:
 - Use synthetic fixtures for automated tests.
 - Game-specific findings must come from the developer's own legal copy and must be expressed as version-aware
   patterns/sites, not committed proprietary data.
-- Work from current upstream `test`, not release-only `main`.
+- Follow upstream's `test` branch convention for upstream contributions. The owner selects and integrates each new Savage Wind release into the multiplayer fork.
 - Fix patch generators and site discovery instead of editing `generated/`.
 - Primary and only supported game target here is 1.9.0.
 
@@ -71,5 +72,4 @@ decompilation information must not enter this repository.
 - Host migration is not part of protocol v1. The session ends safely when the host leaves.
 - Matchmaking, public server browsers, competitive anti-cheat, and dedicated servers are not early requirements.
 - DLC campaign synchronization comes after the base main campaign is validated.
-- No claim of a playable mod should be made until at least lobby transport and remote Link rendering work in game.
-
+- No claim of a playable multiplayer build should be made until at least lobby transport and remote Link rendering work in game.

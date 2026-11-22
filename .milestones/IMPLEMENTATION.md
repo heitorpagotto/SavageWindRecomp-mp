@@ -2,8 +2,11 @@
 
 ## Status
 
-The core runs over the mock or the WebRTC adapter. The M1 test build includes HTTPS rendezvous, a marker-gated
-localized menu, reset/exit cleanup, and a Great Plateau placeholder path.
+At source checkpoint `9fb424b`, the core runs over the mock or WebRTC adapter. The `MP_M1_TEST=1` prototype
+links it into Windows/Linux builds with HTTPS rendezvous, a localized F1 tab, reset/exit cleanup, and the
+Great Plateau placeholder path. The prototype still gates the tab on a deployed overlay marker and a loaded
+1.9.0 game. The updated native target needs to replace that activation path with shared Settings and add
+the game's own Options page.
 
 ## Protocol constants
 
@@ -128,7 +131,7 @@ controls, malformed UTF-8, duplicate roster IDs, and trailing bytes.
 
 | Message | Payload |
 |---|---|
-| HELLO | u16 protocol, two sets of three u16 version components (mod then game), 20-byte Savage Wind build ID, 32-byte main module build ID, u32 supported features, u32 required features, 16-byte connection binding, name |
+| HELLO | u16 protocol, two sets of three u16 version components (multiplayer then game), 20-byte Savage Wind build ID, 32-byte main module build ID, u32 supported features, u32 required features, 16-byte connection binding, name |
 | WELCOME | Assigned client ID, playing flag (0/1), u32 feature intersection, repeated ID/name entries including host and assignee |
 | REJECT | Reason code byte and diagnostic text |
 | PEER_JOINED / PEER_LEFT | Client ID and a name for PEER_JOINED |
@@ -173,39 +176,16 @@ The host and each prospective client get separate random bearer credentials. The
 per-exchange binding. The HTTPS service authenticates the exchange before WebRTC validates the DTLS fingerprints.
 `test-multiplayer-rendezvous` exercises both components with a short-lived TLS certificate.
 
-`MP_M1_TEST=1` gates compilation. In that build, `runtime/multiplayer.c` enables the menu only if the loaded
-1.9.0 game and deployed marker validate. The wire check combines main module identity with a platform-neutral
-source fingerprint. The render thread sends one copied action to the window thread and receives a copied lobby
-view. The window thread owns the transport. Leave, window exit and `RT_ON_RESET` release per-session resources.
+## Native migration
 
-## Draft native boundary
+The compatibility check combines guest main-module identity with a platform-neutral source fingerprint. The
+render thread submits a copied action and receives a copied view. The window thread owns the transport.
+Leave, exit, and `RT_ON_RESET` release per-session resources.
 
-`native_abi_draft.h` provides a versioned C query and lifecycle tables. `test-multiplayer-native` builds
-a project-owned test library and an independent host executable. The fixture covers negotiated capabilities,
-initialization, poll, reset, shutdown, and unload. See [NATIVE_ABI.md](NATIVE_ABI.md) for ownership and the SWMM
-approval proposal.
+Reuse that ownership model when connecting the F1 tab and guest Options page. Route enable, disable, Host,
+Join, and Leave through the runtime. Disable clears the roster so the guest update retires actors, including
+pending creation requests. Keep guest support checks separate from the user's enable preference.
 
-## SWMM package source
-
-Version: `0.1.0-dev`.
-
-The package builder creates exactly:
-
-```text
-info.json
-01007EF00011E000/romfs/System/SavageWind/Multiplayer/package.swmp
-```
-
-The marker contains package format v1, ID `org.savagewind.multiplayer`, protocol 1, and `runtime = native`. The
-archive contains only the marker and its metadata. The builder normalizes source line endings and uses stored
-entries, fixed timestamps and permissions. The checker also rejects duplicate and oversized entries.
-
-Current generated artifact:
-
-```text
-build/mods/SavageWind-Multiplayer-0.1.0-dev-SWMM.zip
-SHA-256 47b9dada32a2d2b22fc0fe943a3b4dc6ad86df5ed10a37a0eb3fa49811b003a1
-```
-
-Build artifacts are not source and should not be committed unless release policy explicitly requires them.
-
+Keep the existing wire fields and version if compatible. Local compiler, CPU, and OS differences should be
+independent of the shared network identity. Use [Repository and upstream context](REPOSITORY.md) to locate
+the narrow integration points.

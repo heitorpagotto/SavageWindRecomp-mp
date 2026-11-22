@@ -1,9 +1,7 @@
 # Milestone ledger
 
-Last reviewed: 2026-11-19. Status values are `complete`, `partial`, `not started`, and `blocked`.
-
-Completion here means the listed acceptance criteria were demonstrated. A synthetic milestone is not gameplay
-verification, and a package that imports is not proof that native multiplayer runs.
+Last reviewed 2026-11-22. Status values are `complete`, `partial`, `not started`, and `blocked`.
+Completion requires demonstrated acceptance criteria. Synthetic, build, network, and gameplay evidence have distinct scopes.
 
 ## M0 — Protocol and session foundation
 
@@ -28,93 +26,35 @@ Accepted by:
 
 Limit: nothing is linked into Savage Wind and no network connection is made.
 
-## M0.5 — SWMM development packaging
+## M1 — Native multiplayer build and internet lobby
 
-Status: **partial**.
+Status **partial**. The existing prototype demonstrates the lobby and Windows placeholder lifecycle. The
+compile-in activation path, both Settings surfaces, and full platform and network acceptance are pending.
 
-Goal: make the work discoverable as a separately installable mod package while defining the missing safe native-code
-integration.
+Delivered in the prototype
 
-Delivered:
+- Eight-peer host-authoritative lobby, compatibility handshake, roster changes, START, ping/pong, and deterministic
+  coverage for capacity, build and feature mismatch, spoofing, cancellation, disconnect, and late join.
+- WebRTC with reliable ordered control/event channels and an unreliable unordered state channel. HTTPS rendezvous
+  issues 120-bit opaque invites and brokers bounded, authenticated SDP exchange.
+- Localized F1 overlay lobby UI, reset and exit cleanup, and a copied admitted roster with slot generations.
+- Strict 1.9.0 Great Plateau placeholder creation and deletion. The Windows prototype visibly rendered two
+  placeholders in each of three live instances. [Test record](TESTING.md#m1-windows-presence-check)
 
-- Mod identity `org.savagewind.multiplayer`, development version `0.1.0-dev`.
-- Deterministic ZIP builder and package validation target.
-- Raw RomFS marker at `System/SavageWind/Multiplayer/package.swmp`.
-- Source-level investigation of current SWMM and its UKMM dependency.
-- Canonical ZIP metadata and line endings, strict archive validation, and validated atomic replacement.
-- Windows SWMM 0.1.3 portable CLI install, merge, deploy, and uninstall of the marker in a synthetic profile.
-- Windows SWMM 0.1.3 GUI drag-and-drop, enable, deploy, Play, disable, and uninstall for the marker test build.
-  [Windows GUI evidence](TESTING.md#m1-windows-swmm-gui)
-- A separate compiled ABI fixture bundle for Windows x86-64, Linux x86-64, and Linux aarch64. Its draft manifest
-  records target, ABI, size, and SHA-256.
+Acceptance criteria
 
-The marker archive passes deterministic rebuild and validation. The portable CLI deployed the expected marker,
-removed it on uninstall, and preserved the synthetic base data.
-
-Still required:
-
-- A versioned Savage Wind native-plugin ABI/loader.
-- Explicit native-code approval and approved-plugin-path handoff from SWMM.
-- Built native modules for every supported Savage Wind target, packaged for drag-and-drop SWMM installation, and an agreed integrity policy.
-
-Stock SWMM 0.1.3 deploys the marker as content. The separate native ABI fixture bundle is for validating a
-proposed archive format. Production integration depends on the native approval and loader contract.
-
-## M1 — Native bridge and internet lobby
-
-Status: **partial (opt-in test build with Great Plateau placeholders and Windows SWMM GUI verification)**.
-
-Delivered:
-
-- Reliable control payloads for the compatibility handshake, roster changes, start, and ping/pong.
-- Host-authoritative admission over opaque connection handles, including bounded UTF-8 fields and handshake deadlines.
-- Deterministic in-process transport with state faults and bounded queues. The eight-peer demo joins through the transport.
-- Synthetic coverage for eight players, capacity rejection, build and feature mismatch, spoofing, repeated HELLO,
-  queue exhaustion, cancellation, disconnect, and late join. Late join receives lobby state. Gameplay resync is pending.
-- Reusable WebRTC adapter with reliable ordered control/event and unreliable unordered state. Windows loopback
-  verified an eight-peer roster, build and capacity rejection, START, rejoin, and disconnect.
-- HTTPS rendezvous with 120-bit opaque invites, bounded authenticated SDP exchange, and an eight-peer Windows test.
-- Stock SWMM marker validation for raw and Yaz0 data, localized Host/Join/Leave UI in the opt-in Windows/Linux
-  build, and runtime reset/exit cleanup.
-- Copied admitted roster with local peer generations, and a strict 1.9.0 guest hook for static placeholders
-  outside the Shrine of Resurrection. Native creation, activation, and deletion were verified in a scratch probe.
-- Windows presence verification covered late join, rejection, disconnect, same-slot replacement, Leave lobby,
-  live reboot, and marker-free startup. The host, first client, and late client each showed two placeholders
-  while all three were in the Great Plateau world.
-  [Windows evidence](TESTING.md#m1-windows-presence-check)
-- Windows SWMM GUI Play started the test build with the Multiplayer tab enabled. Disabling and uninstalling the
-  marker preserved scratch settings and saves. The game booted in single-player mode after removal.
-  [Windows GUI evidence](TESTING.md#m1-windows-swmm-gui)
-- Standalone draft native ABI fixture. Windows lifecycle passed and Linux x86-64 binaries cross-compiled.
-
-Goal: host and join a real encrypted internet session using an invite code, with the multiplayer module loaded and
-unloaded independently from core gameplay.
-
-Planned deliverables:
-
-- A small versioned plugin ABI between Savage Wind and the multiplayer module.
-- Reset/unload-safe runtime lifecycle using `RT_ON_RESET` where applicable.
-- A production transport backend supporting reliable control/event traffic and replaceable unreliable state traffic.
-- Rendezvous signaling, opaque invite codes, ICE/STUN NAT traversal, and TURN relay fallback.
-- Host/Join/Leave UI using existing Savage Wind UI primitives and translation tables.
-- Wire compatibility and lobby lifecycle validation over the production transport, including localized errors and runtime shutdown.
-- A compiled SWMM test build for visual lobby verification in a supported BOTW 1.9.0 gameplay area. On successful
-  lobby admission, each game instance spawns one visible placeholder actor per remote peer. An existing idle NPC
-  or static actor is sufficient. Movement, animation, and equipment synchronization remain M2 deliverables.
-
-Acceptance criteria:
-
-- Host receives an invite code and seven clients can join a test session.
-- Joining works across two different external networks; TURN fallback is deliberately exercised.
-- Incompatible builds are rejected with a useful localized error.
-- Disable/uninstall leaves single-player behavior and user data unchanged.
-- Rebooting or leaving releases threads, queues, sockets, and guest references.
-- Authenticated, encrypted lobby traffic is verified on Windows and Linux, including a session with a host on one OS and a client on the other.
-- Import, approve, enable, and launch the test build through SWMM. Host and join from inside the game. In the
-  supported test area, the host sees one placeholder for each admitted client, and each client sees one for each
-  other admitted peer, including the host and any peers who joined earlier. Rejected joins create no actors.
-  Leaving, disconnecting, or rebooting removes the corresponding placeholders without affecting the local player
-  or saves.
+- Build the native multiplayer Savage Wind app on Windows and Linux/Vulkan. The Multiplayer tab is visible in
+  F1 Settings and a Multiplayer page is reachable from the game's System > Options.
+- Both surfaces share one enable/disable setting and session state. Enable exposes Host and Join. Disable during
+  a session leaves or closes it and cleans up the lobby and placeholders. Single-player play and user data
+  remain available.
+- A host receives an invite and seven clients can join. Incompatible builds are rejected with a localized error.
+- Verify authenticated, encrypted lobby traffic on Windows and Linux, with each OS hosting a peer on the other.
+  Verify direct ICE and selected TURN relay paths across two external networks.
+- In the supported 1.9.0 test area, each peer sees one visible NPC placeholder per admitted remote peer,
+  including peers who joined earlier. Rejected joins spawn nothing. Leave, disconnect, disable,
+  and reboot clear the appropriate placeholders and release session resources and guest references.
+- Movement, animation, and equipment synchronization begin in M2.
 
 ## M2 — Remote Link presence
 
@@ -200,27 +140,28 @@ Acceptance criteria:
 
 ## M6 — Release hardening
 
-Status: **not started**.
+Status **not started**.
 
-Goal: ship a maintainable, removable, safe multiplayer mod for every supported Savage Wind platform, currently Windows and Linux/Vulkan.
+Goal: ship maintainable native multiplayer builds for every supported Savage Wind platform, currently Windows
+and Linux/Vulkan.
 
 Planned deliverables:
 
-- Stable protocol/plugin/package versioning and compatibility policy.
-- Reproducible native builds and SWMM-ready release archives for each supported platform.
+- Stable protocol and build compatibility policy, reproducible native builds, and a documented manual upstream
+  release update procedure.
 - Security review, fuzzing, malformed-packet tests, dependency audit, and resource limits.
 - Localization, diagnostics, privacy notice, and troubleshooting documentation.
-- SWMM drag-and-drop installation, update, disable, and uninstall with native-code consent.
 
 Acceptance criteria:
 
-- On a fresh setup for each supported platform, drag and drop the compiled archive into SWMM and verify the full lifecycle from approval and launch through update, disable, and uninstall.
-- Release packages contain only redistributable project-owned code and metadata.
+- Build and verify the native app on a fresh setup for each maintained platform. Exercise enable, Host, Join,
+  Leave, disable, and single-player operation using the built-in Settings.
+- Build outputs intended for distribution contain only redistributable files.
 - Long-running eight-player soak tests pass with bounded memory and queues.
-- Single-player behavior is unchanged when the mod is absent or disabled.
+- On a subsequent Savage Wind release, apply the multiplayer changes and verify the two platform builds, both
+  Settings surfaces, and compatible cross-platform lobbies.
 
 ## Dependency order
 
-The intended order is M0 → M0.5/M1 → M2 → M3 → M4 → M5 → M6. M0.5 and M1 can overlap only after the native
-plugin boundary and consent model are agreed with SWMM/Savage Wind maintainers. Story work should not precede stable
-identity, resync, and transaction semantics.
+The intended order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Story work follows stable actor identity, resync,
+and transaction semantics.

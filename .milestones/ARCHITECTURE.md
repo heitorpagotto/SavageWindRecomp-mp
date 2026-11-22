@@ -1,5 +1,19 @@
 # Multiplayer architecture
 
+## Native build and runtime boundary
+
+Compile multiplayer into the Savage Wind fork on Windows and Linux/Vulkan. Keep codecs, sessions, lobby logic,
+WebRTC, and rendezvous independent of UI, settings, guest addresses, and renderer code. Keep build wiring,
+Settings, runtime lifecycle, and version-aware guest sites in small adapters.
+
+The F1 tab and the game's System > Options page should read the same setting and copied session view and submit
+commands through one runtime boundary. Keep the controls available while multiplayer is disabled so players
+can enable it. Disable ends active participation and clears the published roster for guest-thread retirement.
+Boot/reset and exit must release session resources and per-boot guest references.
+
+The project owner will manually update to new Savage Wind releases. Keep wire compatibility independent of
+platform and local compiler/CPU flags. Recheck settings/UI entry points and guest sites after each update.
+
 ## Topology
 
 ```text
@@ -27,7 +41,7 @@ Planned full lifecycle:
 1. Host creates random session identity and asks rendezvous service for a short invite code.
 2. Client enters code. Service exchanges connection offers and ICE candidates.
 3. Encrypted transport connects.
-4. Client sends `HELLO` with protocol/mod/game compatibility and display name.
+4. Client sends `HELLO` with protocol/multiplayer build/game compatibility and display name.
 5. Host rejects mismatch/full sessions or replies `WELCOME` with assigned peer ID and session rules.
 6. `PEER_JOINED` makes the lobby membership consistent.
 7. Host sends authoritative resync snapshot for late join.
@@ -40,7 +54,7 @@ signaling and verified encrypted loopback. Gameplay resync remains ahead.
 ## Compatibility handshake
 
 - Wire protocol version.
-- Multiplayer mod semantic version.
+- Multiplayer feature version.
 - Savage Wind source/build identifier.
 - Game version and main-module build ID; primary target must be 1.9.0.
 - Feature-bit set and required/optional feature distinction.
@@ -136,5 +150,3 @@ both off and on where relevant. Never let render frequency multiply network traf
 - Rate-limit handshake, damage, resync, and persistent-event requests.
 - The host validates distance, phase, target existence, cooldown, and plausible damage before applying PvP/enemy hits.
 - No raw memory write API is exposed to peers.
-- Native plugin execution requires explicit user approval; a content overlay alone is insufficient consent.
-

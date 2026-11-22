@@ -1,23 +1,18 @@
 # Resume guide and next work
 
-M1 implements an opt-in Windows/Linux test-build lobby, the reusable WebRTC adapter, HTTPS rendezvous, and
-the Great Plateau placeholder lifecycle.
-See [HANDOFF.md](HANDOFF.md) for the working tree, local Windows build inputs and first outstanding task.
+Start with the [native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md). The prototype's Windows
+presence and encrypted loopback evidence is in [TESTING.md](TESTING.md). M1 is still partial.
 
-## Windows verification
-
-The [Windows SWMM GUI lifecycle](TESTING.md#m1-windows-swmm-gui) passed for the development marker, including
-single-player boot after removal. The [Windows presence test](TESTING.md#m1-windows-presence-check) verified
-two visible placeholders each in the host, first client, and late client on the Great Plateau. Use the replay
-commands when rechecking a new build.
-
-## Finish M1 network acceptance
-
-- Run the HTTPS and WebRTC tests on native Linux and repeat with Windows-to-Linux and Linux-to-Windows.
-- Run a controlled shared HTTPS origin and TURN server for two external networks. Test both direct ICE and the
-  selected relay path, record candidate types and confirm cleanup.
-- Keep the development test executable separate from the ordinary Savage Wind build. The cross-repository
-  release-module approval contract remains in [NATIVE_ABI.md](NATIVE_ABI.md).
-
-Gameplay state replication begins after M1. Define the membership generation and resync protocol before forwarding
-state from peers whose slots may be reused. Keep story transaction and save rules in [ARCHITECTURE.md](ARCHITECTURE.md).
+1. Trace `MP_M1_TEST`, the boot gate, shared runtime commands, M1 presence hooks, and both Settings implementations.
+   Reuse the lobby, transport, and actor lifecycle code. Remove the prototype activation and packaging dependencies
+   from the multiplayer build and keep the platform and guest integration narrowly scoped.
+2. Make the feature part of the native Windows and Linux builds, add one enable/disable setting, and connect the
+   F1 Multiplayer tab and in-game Multiplayer page to the same actions and state. Use existing settings and
+   translation conventions. Test event handling across the UI, window, and guest thread boundaries.
+3. Regenerate and rebuild if guest sites or patches change. Re-run Windows gameplay with scratch settings and
+   saves. Exercise enable/disable, Host, Join, Leave, late join, rejection, reboot, and visible actor cleanup.
+4. Build and run natively on Linux/Vulkan. Test Windows-to-Linux and Linux-to-Windows hosting. Verify direct ICE
+   and forced TURN across two external networks, and record the selected candidate types.
+5. Update the [test record](TESTING.md), [milestone ledger](MILESTONES.md), [handoff](NATIVE_MULTIPLAYER_HANDOFF.md),
+   and [state](state.json). Begin M2 after M1 acceptance. Define wire identity and resync before forwarding
+   gameplay state for reusable peer slots.

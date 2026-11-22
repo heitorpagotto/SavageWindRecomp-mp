@@ -1,6 +1,6 @@
 # Architecture decision record
 
-These decisions are active unless explicitly superseded. If one changes incompatibly, bump the wire protocol version
+These decisions are active unless explicitly superseded. For an incompatible wire change, bump the protocol version
 and document migration behavior.
 
 ## D001 — Eight peers, host is peer 0
@@ -65,20 +65,13 @@ Status: accepted.
 If peer 0 leaves, clients return to offline state. Persistent transactions must be committed at safe points so this
 does not corrupt saves. Host migration can be designed after campaign synchronization is stable.
 
-## D009 — Multiplayer code remains optional and removable
+## D009 — Multiplayer is built into Savage Wind
 
-Status: accepted.
+Status: accepted on 2026-11-22. Native build integration is pending.
 
-The core lives under `mods/multiplayer/`. The opt-in `MP_M1_TEST=1` executable links the core and checks the
-deployed SWMM marker before enabling the lobby. Guest hooks must use strict optional site groups.
-
-## D010 — Native mods require explicit consent
-
-Status: accepted.
-
-Do not scan a RomFS overlay and silently execute DLLs/shared objects. Data mods are not an implicit native-code trust
-decision. SWMM should show a permission warning and pass explicitly approved plugin paths, or Savage Wind should
-verify an approved/signed plugin contract.
+Ship Windows and Linux/Vulkan builds of the fork with the feature compiled in. Expose one enable/disable setting,
+Host, Join, and Leave in F1 Settings and the game's Options. The prototype's overlay activation gate is superseded.
+Keep guest hooks in strict optional site groups and preserve single-player play with the feature disabled.
 
 ## D011 — Reuse installed game assets
 
@@ -110,9 +103,8 @@ and unreliable unordered delivery, and an acceptable redistributable license.
 
 libdatachannel and libjuice use MPL-2.0. The tested configuration also includes usrsctp (BSD-style), plog (MIT),
 and OpenSSL 3 (Apache-2.0). Review license notices and MPL covered-source obligations for the exact release
-configuration before distribution. The probe binaries and dependencies are local build output; they do not go in
-the marker ZIP. A production decision still needs Linux runtime and cross-platform tests, forced TURN verification,
-an advisory review of the pinned dependency set, and size measurements for the chosen release build.
+configuration before distribution. A production decision still needs Linux runtime and cross-platform tests,
+forced TURN verification, an advisory review of the pinned dependencies, and release build size measurements.
 
 The developer build uses libcurl HTTPS for the SDP exchange and libdatachannel for ICE/DTLS/SCTP. The pinned
 libdatachannel WebSocket implementation disables TLS certificate verification on Windows. The service issues
@@ -132,11 +124,14 @@ continue with a divergent roster.
 The mock binding is deterministic. The production transport must derive a binding from authenticated signaling or
 its encrypted channel. Production transport selection remains open.
 
-## D014 — Native lifecycle proposal
+## D014 — Keep upstream release updates small
 
-Status: draft. The test-only [ABI and manifest proposal](NATIVE_ABI.md) defines a C lifecycle fixture and
-describes an approval handoff for review with Savage Wind and SWMM. The runtime loader and SWMM archive
-contract remain pending that agreement.
+Status: accepted on 2026-11-22.
+
+The owner manually integrates new Savage Wind releases. Keep the reusable network/session core independent of
+upstream internals. Limit upstream changes to small build, settings, UI, lifecycle, and guest-site integration
+points. Document the upstream release used and verify Windows and Linux builds and mixed-platform interoperability
+after each update.
 
 ## D015 — M1 presence uses native creation and local generations
 
