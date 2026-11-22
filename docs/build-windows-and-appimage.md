@@ -24,7 +24,8 @@ bash build-windows.sh --game '/c/path/to/your/BOTW-1.9.0'
 
 Omit `--game` to use `extracted/`, or use `--app-only` to compile the executable without generating a game
 library. Set `JOBS=4` before the command if the compiler runs out of memory. Outputs are in
-`build/windows-local/`. To play, follow the launch step below.
+`build/windows-local/`. The script stages the runtime DLLs there for Explorer launches. To play with game files
+stored elsewhere, follow the launch step below.
 
 The manual steps below give the individual build commands and include the optional Windows ZIP workflow.
 

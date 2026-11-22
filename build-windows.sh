@@ -26,7 +26,7 @@ if [[ ${MSYSTEM:-} != UCRT64 || $(uname -m) != x86_64 ]]; then
     echo 'Open the MSYS2 UCRT64 terminal and run the script there.' >&2
     exit 1
 fi
-for tool in clang clang++ make git cmake ninja windres pkg-config; do
+for tool in clang clang++ make git cmake ninja windres pkg-config ldd; do
     if ! command -v "$tool" >/dev/null; then
         echo "Missing $tool. See docs/BUILD-windows.md for the Windows build prerequisites." >&2
         exit 1
@@ -63,5 +63,23 @@ else
     make -j"$JOBS" B="$build_dir" GEN="$build_dir/generated" \
         "$build_dir/savagewind.exe" "$build_dir/savagewind-config.exe"
 fi
+
+# Inspect the new executable away from previously staged DLLs so a rebuild picks up toolchain updates.
+probe_dir=$(mktemp -d "$build_dir/.dll-probe.XXXXXX")
+trap 'rm -f -- "$probe_dir/savagewind.exe"; rmdir -- "$probe_dir"' EXIT
+cp "$build_dir/savagewind.exe" "$probe_dir/"
+dependencies=$(ldd "$probe_dir/savagewind.exe")
+if [[ $dependencies != *'SDL3.dll => '* || $dependencies == *'not found'* ]]; then
+    printf 'Could not resolve Windows runtime DLLs with the UCRT64 toolchain.\n%s\n' "$dependencies" >&2
+    exit 1
+fi
+while IFS= read -r dependency; do
+    case "$dependency" in
+        /ucrt64/bin/*|"$MP_RTC_PREFIX"/bin/*)
+            [[ ${dependency##*/} == vulkan-1.dll ]] || cp -f -- "$dependency" "$build_dir/"
+            ;;
+    esac
+done < <(sed -n 's/^.* => \(.*\) (0x[[:xdigit:]]*)$/\1/p' <<<"$dependencies")
+
 printf 'Windows executable: %s/savagewind.exe\n' "$build_dir"
-printf 'Run from UCRT64 with %s/bin on PATH.\n' "$MP_RTC_PREFIX"
+printf 'Local runtime DLLs staged next to savagewind.exe.\n'
