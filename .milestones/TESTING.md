@@ -1,17 +1,20 @@
 # Test record and verification plan
 
-Reviewed 2026-11-22. The results below are historical prototype evidence on the source leading to
-`9fb424b`. The native enable/disable setting and both Settings surfaces still need verification.
+Reviewed 2026-11-22. The prototype and native build results below have separate verification scopes.
 
 ## M1 developer build
 
-The existing prototype uses `MP_M1_TEST=1`. Use MSYS2 UCRT64 on Windows or the project Linux/Vulkan environment.
-The tested dependency stack used libdatachannel v0.24.6 with libjuice and TLS-enabled libcurl with asynchronous
-DNS. Custom dependency paths use `MP_RTC_CFLAGS`, `MP_RTC_LIBS`, `MP_CURL_CFLAGS`, and `MP_CURL_LIBS`.
-Use a separate build directory and put Windows dependency DLLs on PATH.
+Use MSYS2 UCRT64 on Windows or the project Linux/Vulkan environment. Install Git, CMake, Ninja, OpenSSL development
+files, and libcurl 7.85 or newer with TLS and asynchronous DNS. The dependency script builds libdatachannel v0.24.6
+with libjuice. A system libdatachannel can also be used. Custom flags use `MP_RTC_CFLAGS`, `MP_RTC_LIBS`,
+`MP_CURL_CFLAGS`, and `MP_CURL_LIBS`.
 
 ```sh
-make B=build/m1 MP_M1_TEST=1 -j8
+CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh
+export MP_RTC_PREFIX="$PWD/build/multiplayer-deps"
+export PATH="$MP_RTC_PREFIX/bin:$PATH"   # Windows DLL lookup
+export LD_LIBRARY_PATH="$MP_RTC_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"   # Linux shared library lookup
+make B=build/m1 -j8
 make B=build/m1 test-multiplayer test-multiplayer-webrtc test-multiplayer-rendezvous
 python3 tools/i18n_check.py
 ```
@@ -22,7 +25,41 @@ local CA. Use `SAVAGEWIND_MP_STUN` and `SAVAGEWIND_MP_TURN` to point to the test
 `SWMP_TEST_TURN` configures the standalone relay test. `SAVAGEWIND_MP_RELAY_ONLY=1` advertises relay
 candidates. Verify the selected route because loopback can still select a peer-reflexive path.
 
-### Current M1 evidence
+This recipe covers source builds. Release package dependency staging and license notices are tracked under
+[M6](MILESTONES.md#m6--release-hardening).
+
+### Native build and standalone checks
+
+- MSYS2 UCRT64 with Clang 23.1.5 built the Windows executable and Vulkan runtime objects against libdatachannel
+  0.24.6 and libcurl 8.23.0. The regenerated BOTW 1.9.0 library matched ID `6bb7f77965924e25` at x86-64-v3.
+- The multiplayer runtime, settings, and both UI adapters cross-compiled to Linux x86-64 and aarch64 objects.
+  Native Linux/Vulkan execution and mixed-platform tests are pending.
+- The Windows synthetic core and demo passed, with 560 snapshot deliveries and one stale duplicate rejected.
+  Eight Windows WebRTC peers passed the loopback lobby and HTTPS rendezvous tests, including untrusted TLS rejection.
+- The game-site and layout suites passed 50 and 59 checks. The translation check found zero missing or unused entries.
+
+### Native Windows gameplay
+
+- With separate scratch settings and saves, a fresh game booted with multiplayer off. The F1 tab appeared with
+  its toggle off and showed Host and Join after enabling it. System > Options opened the Multiplayer page,
+  enabled multiplayer, hosted and displayed a 24-character invite. On that same run F1 reflected the enabled
+  preference. The INI recorded both on and off changes.
+- On the Plateau, the Windows renderer showed one `Npc_TripMaster_00` after the first peer joined the
+  certificate-verified loopback lobby, then two after a second peer joined. A deliberately incompatible source
+  identity was rejected and did not acquire a slot. The renderer used a 30 FPS target, 960×540, 50% render scale,
+  a 1400 MiB VRAM budget, and the NVIDIA RTX 4050 Laptop GPU with driver 616.92.
+- The first headless peer disconnected and its actor was retired. A late-joining Windows game reused its
+  slot and rendered the host and remaining peer from its initial roster. The host rendered two actors again.
+  The late client used the same frame, resolution, and memory settings on AMD Radeon driver 25.10.30.02.
+  Its native Join action used the test keyboard response for the invite.
+- Disabling multiplayer through the host's System > Options page disconnected the other peers and retired
+  both actors on each renderer. Screenshots showed the Plateau clear on both games after resuming play.
+- A separate run hosted from F1 and admitted one peer. An in-place game reboot ran the reset hooks, returned to
+  the title sequence, and dropped the observing peer to an empty roster. A fresh process loaded the saved
+  enabled setting and displayed the offline Host and Join controls.
+- The scratch evidence is under the ignored `build/m1-smoke/` directory when available.
+
+### Prototype transport and UI
 
 - Windows checks used Zig 0.15.2, libdatachannel 0.24.6, and libcurl 8.23.0. Eight encrypted WebRTC loopback
   peers passed roster, rejoin, capacity and build rejection, START, state and event delivery, and disconnect.
@@ -80,9 +117,9 @@ and a separate scratch save. The installed game files are inputs to generation a
 ### Prototype evidence on the Windows development machine
 
 When available, the ignored `build/mp-work/m1-runtime-scratch` directory contains the earlier logs and
-screenshots. The old runners target the prototype activation path. Adapt the runners to enable multiplayer
-through Settings before using them against the native build. Wait until the Plateau renders before counting
-actors. A readiness log can arrive during the loading screen.
+screenshots. The old runners target the prototype activation path. Use the native Settings toggle when testing
+the current executable. Wait until the Plateau renders before counting actors. A readiness log can arrive
+during the loading screen.
 
 ## Synthetic checks
 

@@ -1,7 +1,6 @@
 # Native multiplayer handoff
 
-Direction recorded 2026-11-22. Working branch `multiplayer/windows-test`, source checkpoint `9fb424b`.
-This checkpoint updates the milestone records. The source still implements the prototype described below.
+Direction recorded 2026-11-22. Working branch `multiplayer/windows-test`, base `ae7ff1f` with local M1 changes.
 
 ## Owner's direction
 
@@ -26,37 +25,24 @@ combat, story progress, and chest rewards. [Milestone ledger](MILESTONES.md)
 
 - The protocol, session, lobby, mock transport, WebRTC adapter, and HTTPS rendezvous client live in
   `mods/multiplayer/`. The signaling service is `tools/multiplayer_rendezvous.py`.
-- The Makefile's `MP_M1_TEST=1` builds a prototype with code already linked into the executable. Its boot
-  gate in `runtime/multiplayer.c` checks an overlay marker and the loaded 1.9.0 game. `runtime/ui/menu.mm`
-  exposes the tab through the F1 overlay and `runtime/ui/multiplayer.mm` draws it. The new settings toggle
-  and the page in `runtime/ui/game_options.mm` still need implementation.
+- Windows and Linux source builds link multiplayer. F1 and System > Options share a default-off `multiplayer`
+  setting and the runtime's copied lobby state. Both surfaces offer Host, Join, Start, and Leave. Native Options
+  uses the existing keyboard for invite entry. Build the transport with `tools/build_multiplayer_deps.sh`.
 - `runtime/multiplayer.c` owns lobby and transport state on the window thread, receives UI commands, and
   publishes copies of the session and admitted roster. `runtime/main.c` and `runtime/nvn/vulkan/device.c`
-  provide the prototype boot, polling, and shutdown call sites.
-- `runtime/multiplayer_presence.c` uses strict `MP_PRESENCE_SITES` with a guest-thread menu update hook to
-  create and remove static Plateau rocks. It tracks local lobby and slot generations for replacement and cleanup.
-  Reuse the lifecycle for the NPC test. Windows prototype runs visibly showed two rocks in each of three game
-  instances and exercised cleanup. [Test record](TESTING.md#m1-windows-presence-check)
-- Windows encrypted loopback with eight peers, HTTPS certificate rejection, and a controlled local TURN
-  route passed under the prototype. Linux cross-compilation covered runtime/UI/test objects. Native Linux
-  execution, mixed-platform sessions, external-network direct and relay tests, and the new settings flow are pending.
+  provide the boot, polling, and shutdown call sites.
+- `runtime/multiplayer_presence.c` uses strict `MP_PRESENCE_SITES` and the existing guest-thread menu update
+  hook for `Npc_TripMaster_00` on the Plateau. Local lobby and slot generations govern replacement and cleanup.
+  Prototype rock evidence and the current native test results are recorded separately. [Test record](TESTING.md)
+- Native Windows builds, encrypted eight-peer loopback, and gameplay with the shared setting have passed.
+  The prototype also passed a controlled local TURN test. Native Linux execution, mixed-platform sessions,
+  and external-network direct and relay tests remain pending.
 
 ## Resume here
 
-1. Read [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and the [repository map](REPOSITORY.md).
-   Inspect both UI paths and trace the Makefile's prototype activation through boot, window polling, reset,
-   and guest actor retirement.
-2. Replace multiplayer's marker gate and test-build-only activation with built-in Windows/Linux integration and
-   a shared setting. Connect both Settings surfaces to the existing lobby through thread-safe commands and copied
-   views. On disable, stop the connection and publish an empty roster so the guest thread retires its actors.
-   Keep version and site support checks and leave generic upstream RomFS overlay support alone.
-3. Remove the multiplayer-only marker, packaging, and dynamic module fixture paths during the source migration.
-   The prototype code, Makefile targets, tests, and documentation under `mods/multiplayer/` still contain these
-   remnants. Update those docs and their old milestone links as part of that cleanup. Reuse the existing session,
-   transport, and tested guest lifecycle code.
-4. Run the [native M1 acceptance checks](TESTING.md#native-m1-acceptance) on Windows and Linux/Vulkan, including
-   live NPC visibility, both mixed-platform host directions, and external direct ICE and TURN. Use separate scratch
-   settings and saves for each game instance. The prior Windows test used a local 1.9.0 installation. Confirm local
-   Linux/Vulkan and two-network test inputs before claiming those results.
-5. Record the results in [TESTING.md](TESTING.md), [MILESTONES.md](MILESTONES.md), and [state.json](state.json).
+1. Read [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and the [test record](TESTING.md).
+2. Finish the [native M1 acceptance checks](TESTING.md#native-m1-acceptance) on Windows and Linux/Vulkan. Test
+   both mixed-platform host directions and external direct ICE and TURN. Use separate scratch settings and saves
+   for each instance. Local loopback exercises the encrypted lobby and HTTPS broker.
+3. Record the results in [TESTING.md](TESTING.md), [MILESTONES.md](MILESTONES.md), and [state.json](state.json).
    Record the upstream release and rerun the relevant checks whenever the owner brings in an update.

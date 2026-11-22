@@ -1,7 +1,7 @@
-// Built-in M1 developer lobby. The main window thread owns transport and publishes copies to the menu.
+// The window thread owns transport and publishes copies to the menus and guest update.
 #pragma once
 
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
 
 #include "gamelib.h"
 #ifdef __cplusplus
@@ -17,7 +17,7 @@ typedef enum {
 } SwmpM1Action;
 
 typedef struct {
-    bool enabled, configured, joining, failed;
+    bool enabled, supported, configured, pending, joining, failed;
     SwmpSession session;
     SwmpRejectCode rejection;
     char invite[SWMP_INVITE_CODE_SIZE];
@@ -32,6 +32,7 @@ typedef struct {
 void swmp_m1_boot(const GameLibTables *game);
 void swmp_m1_update(void);
 void swmp_m1_shutdown(void);
+void swmp_m1_set_enabled(bool enabled);
 SwmpM1View swmp_m1_view(void);
 // Game-thread reader. No guest references or transport state cross this boundary.
 SwmpM1Roster swmp_m1_roster(void);

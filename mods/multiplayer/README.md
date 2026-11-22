@@ -1,7 +1,7 @@
 # Savage Wind Multiplayer
 
-This directory is the independently removable multiplayer mod. It contains no game assets, generated game code,
-keys, saves, or extracted files. The only supported game target is Savage Wind's supported BOTW 1.9.0 build.
+This directory contains the protocol, lobby, and transport for Savage Wind's native Windows and Linux multiplayer.
+The guest integration targets BOTW 1.9.0.
 
 ## Current status
 
@@ -20,16 +20,18 @@ For a visible end-to-end simulation, run `make CC=gcc multiplayer-demo` (or omit
 It joins seven clients to a host through the mock transport, starts the lobby, then checks in-process Link snapshot
 delivery and rejects a stale duplicate.
 
-See [Build and install the ZIP](SWMM.md#build-and-install-the-zip) for the PowerShell command and SWMM
-drag-and-drop steps.
-
 The standalone `make test-multiplayer-webrtc` target exercises the lobby over encrypted loopback sockets using
-libdatachannel. `make test-multiplayer-native` verifies a draft C ABI using a fixture DLL or shared object.
-See the [test record](../../.milestones/TESTING.md) for build inputs and verified results.
+libdatachannel. `make test-multiplayer-rendezvous` also exercises HTTPS signaling.
 
-The opt-in Windows/Linux test executable includes a stock-SWMM-marker-gated multiplayer tab and HTTPS rendezvous.
-See the [developer build recipe](../../.milestones/TESTING.md#m1-developer-build). The
-[draft native ABI and approval proposal](../../.milestones/NATIVE_ABI.md) covers the separately loadable release module.
+## Build and play
+
+Follow the platform build guide and install the [multiplayer dependencies](../../.milestones/TESTING.md#m1-developer-build).
+Point both players' apps at the same trusted service with `SAVAGEWIND_MP_RENDEZVOUS=https://...`.
+For local tests the repository includes [a rendezvous server](../../tools/multiplayer_rendezvous.py).
+
+Open Multiplayer in F1 Settings or System > Options and turn on Enable multiplayer. The host selects Host lobby and
+shares the invite code. Clients select Join lobby and enter that code. Leave lobby disconnects the local player.
+Turning multiplayer off in either menu also ends local participation. The preference defaults to off.
 
 ## Session model
 
@@ -84,16 +86,7 @@ allowlist. Chest rewards are explicit grants so every player receives loot witho
 
 ## Milestones
 
-1. **Foundation (this milestone):** protocol, session core, transport contract, and synthetic tests.
-2. **Lobby:** approved native-module bridge for SWMM, Host/Join/Leave UI, short invite codes, encrypted ICE transport,
-   compatibility handshake, and eight-instance localhost tests.
-3. **Remote Links:** verified spawn/despawn hooks, position/action interpolation, current armour and weapons, map/phase
-   visibility, reboot-safe cleanup.
-4. **Combat:** stable actor identities, shared enemy health/death, player damage, optional PvP, late-join resync.
-5. **Co-op world:** main-story transaction allowlist, host-controlled phase changes, per-player chest rewards, save
-   backup and disconnect recovery.
-6. **Campaign validation:** Great Plateau through Dark Beast Ganon, then Divine Beasts, shrines and DLC; record player
-   count, FPS, latency/loss, GPU/driver, settings, save result, and observed desyncs.
+See the [milestone ledger](../../.milestones/MILESTONES.md) for the current status and acceptance criteria.
 
 The Wii U multiplayer projects are behavioral references only. No code, addresses, assets, or decompilation output is
 copied from them.

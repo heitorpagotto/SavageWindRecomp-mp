@@ -22,6 +22,8 @@
 #include "imgui_internal.h"  // (NavCursorVisible)
 #include "osk.h"
 #include "console.h"
+#include "menu.h"
+#include "multiplayer.h"
 #ifdef __APPLE__
 #include "imgui_impl_metal.h"
 #else
@@ -33,7 +35,6 @@ extern "C" {
 #include "../amiibo.h"
 #include "../hle.h"
 #include "../items.h"
-#include "../multiplayer.h"
 #include "../settings.h"
 #include "../gamelib.h"
 #include "../quick_inventory_sort.h"
@@ -45,7 +46,6 @@ extern "C" {
 extern "C" {
 #include "../language.h"
 }
-#include "menu.h"
 void input_reset(void);
 void input_pc_escape(bool down);
 void controls_bindings_draw(float scale);  // controls_ui.mm
@@ -170,6 +170,7 @@ static std::atomic<int> g_kbd{0};  // 1 open, 2 confirmed, 3 cancelled
 static std::atomic<bool> g_last_pad{false};
 static char g_kbd_text[96];
 static int g_kbd_max = 8;
+static const char *g_kbd_prompt = "Enter your name";
 // Window size's list over the game's Options screen (game_options.mm A_SIZE_LIST): up, and until when the press that
 // closed it is kept from the game
 static std::atomic<bool> g_sizes{false};
@@ -1642,8 +1643,7 @@ static void tab_about(void) {
 // Reboot (runtime/main.c): the game is gone - menu and name dialog close; the ImGui context stays.
 RT_ON_RESET(menu_reset) {
     set_open(false);
-#ifdef SWMP_M1_TEST
-    extern void multiplayer_tab_reset();
+#ifdef SW_MULTIPLAYER
     multiplayer_tab_reset();
 #endif
     g_kbd = 0;
@@ -1815,7 +1815,7 @@ static void keyboard_draw(ImGuiIO &io, float scale) {
     ImGui::Begin("##kbd", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                                     ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::PushFont(g_font_big);
-    ImGui::TextColored(ImVec4(0.93f, 0.76f, 0.33f, 1), "%s", tr("Enter your name"));
+    ImGui::TextColored(ImVec4(0.93f, 0.76f, 0.33f, 1), "%s", tr(g_kbd_prompt));
     ImGui::PopFont();
     static bool was_open, was_pad;
     bool pad = g_last_pad.load(), appearing = !was_open || pad != was_pad;  // (switching device: focus the new one)
@@ -1916,12 +1916,14 @@ static void size_list_draw(ImGuiIO &io, float scale) {
     }
 }
 
+extern "C" void backend_represent(void);
+
 // Game thread (runtime/hle/swkbd.c): show the dialog, re-present the last frame until it's answered.
 // Returns 1 confirmed (out = text, UTF-8), 0 cancelled.
-extern "C" int menu_keyboard_run(const char *initial, int max_len, char *out, int cap) {
-    extern void backend_represent(void);
+int menu_keyboard_prompt(const char *prompt, const char *initial, int max_len, char *out, int cap) {
     snprintf(g_kbd_text, sizeof g_kbd_text, "%s", initial ? initial : "");
-    g_kbd_max = max_len > 0 && max_len < (int)sizeof g_kbd_text / 4 ? max_len : 8;
+    g_kbd_max = max_len > 0 && max_len < (int)sizeof g_kbd_text ? max_len : 8;
+    g_kbd_prompt = prompt;
     input_reset();
     g_kbd = 1;
     // (test) SAVAGEWIND_KBD_AUTO=<text>: answer at once
@@ -1937,6 +1939,11 @@ extern "C" int menu_keyboard_run(const char *initial, int max_len, char *out, in
     g_kbd = 0;
     input_reset();
     return ok;
+}
+
+extern "C" int menu_keyboard_run(const char *initial, int max_len, char *out, int cap) {
+    return menu_keyboard_prompt("Enter your name", initial,
+                                max_len < (int)sizeof g_kbd_text / 4 ? max_len : 8, out, cap);
 }
 
 // The tab bar and its pages, into the current window: the in-game menu, and the start screen's Settings (in_game
@@ -1957,8 +1964,8 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
         if (i == 10 && !in_game) continue;  // (Cheats: in game only)
         tabs[ntabs++] = {names[i], i, true};
     }
-#ifdef SWMP_M1_TEST
-    if (in_game && !prelaunch && swmp_m1_view().enabled)
+#ifdef SW_MULTIPLAYER
+    if (in_game && !prelaunch)
         tabs[ntabs++] = {"Multiplayer", 11, true};
 #endif
     int cur = 0;  // g_tab / g_tab_request hold ids
@@ -2053,8 +2060,8 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float)) {
                 case 8: tab_about(); break;
                 case 9: tab_quit(scale, in_game); break;
                 case 10: tab_cheats(); break;
-#ifdef SWMP_M1_TEST
-                case 11: { extern void multiplayer_tab_draw(); multiplayer_tab_draw(); break; }
+#ifdef SW_MULTIPLAYER
+        case 11: multiplayer_tab_draw(); break;
 #endif
                 }
                 static const char *scroll_test = getenv("SAVAGEWIND_MENU_SCROLL");  // test hook: page scroll, 0..1

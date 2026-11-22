@@ -18,7 +18,7 @@ ENGINE=${ENGINE:-$(command -v podman || command -v docker)}
 JOBS=${JOBS:-$(nproc)}
 PLATFORM=--platform=linux/amd64
 
-# Every distribution here has all its dependencies in its own archives, as the app needs them (see docs/linux.md).
+# Use distro packages and build the pinned data-channel dependency in the container.
 # Ubuntu 24.04 LTS and older, Debian 12 and openSUSE Leap are not in the list: no SDL3 package (build SDL3 from
 # source, or use the AppImage).
 DISTROS="debian:13 ubuntu:26.04 fedora:44 archlinux:latest opensuse/tumbleweed:latest"
@@ -29,21 +29,22 @@ deps_for() {
             echo 'rm -f /etc/apt/apt.conf.d/docker-clean; apt-get update -qq; \
                 apt-get install -y -qq --no-install-recommends make clang lld pkg-config \
                 libsdl3-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
-                libvulkan-dev libshaderc-dev zlib1g-dev' ;;
+                libvulkan-dev libshaderc-dev zlib1g-dev git ca-certificates cmake ninja-build libssl-dev libcurl4-openssl-dev' ;;
         fedora*)          # SDL3-devel, libshaderc-devel, FFmpeg as the "free" variant
             echo 'dnf install -y -q --setopt=keepcache=True \
                 make clang lld pkgconf-pkg-config SDL3-devel libshaderc-devel vulkan-loader-devel zlib-devel \
                 ffmpeg-free-devel libavformat-free-devel libavcodec-free-devel libavutil-free-devel \
-                libswscale-free-devel' ;;
+                libswscale-free-devel git ca-certificates cmake ninja-build openssl-devel libcurl-devel' ;;
         arch*)
             echo 'pacman -Syu --noconfirm --quiet --needed \
-                base-devel clang lld sdl3 shaderc vulkan-icd-loader vulkan-headers ffmpeg zlib' ;;
+                base-devel clang lld sdl3 shaderc vulkan-icd-loader vulkan-headers ffmpeg zlib git ca-certificates cmake ninja openssl curl' ;;
         opensuse*)        # Tumbleweed: libavformat-devel is its FFmpeg (headers in /usr/include/ffmpeg), SDL3 as SDL3-devel
             echo 'zypper -q modifyrepo --all --keep-packages; \
                 zypper -q --non-interactive --gpg-auto-import-keys refresh; \
                 zypper -q --non-interactive install --no-recommends \
                 make clang lld pkgconf-pkg-config SDL3-devel shaderc-devel vulkan-devel zlib-devel \
-                libavformat-devel libavcodec-devel libavutil-devel libswscale-devel' ;;
+                libavformat-devel libavcodec-devel libavutil-devel libswscale-devel \
+                git ca-certificates cmake ninja libopenssl-devel libcurl-devel' ;;
         *) return 2 ;;
     esac
 }
@@ -72,8 +73,9 @@ for image in $images; do
     [ "${PKG_CACHE:-1}" = 0 ] || cache="-v $volume:$(cache_dir_for "$image")"
     if "$ENGINE" run --rm $PLATFORM -v "$REPO":/src:ro $cache -w /src \
             -e SW_INSTALL="$install" -e JOBS="$JOBS" "$image" \
-            sh -c 'eval "$SW_INSTALL" || exit 1; make -j"$JOBS" B=/tmp/build GEN=/nonexistent || exit 1; \
-                   ldd /tmp/build/savagewind | grep -E "SDL3|avformat|shaderc"' \
+            sh -ec 'eval "$SW_INSTALL"; CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh /tmp/mp-deps; \
+                   make -j"$JOBS" B=/tmp/build GEN=/nonexistent MP_RTC_PREFIX=/tmp/mp-deps; \
+                   LD_LIBRARY_PATH=/tmp/mp-deps/lib ldd /tmp/build/savagewind | grep -E "SDL3|avformat|shaderc|datachannel|curl"' \
             > "$log" 2>&1 < /dev/null; then
         echo "=== $image OK"
         grep -E "SDL3|avformat|shaderc" "$log" | sed "s/^/    /"

@@ -170,7 +170,7 @@ static void boot(const char *root) {
 
     char why[512];
     if (!gamelib_load(root, why, sizeof why)) FATAL("%s\n", why);
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
     swmp_m1_boot(gamelib_tables());
 #endif
     loader_load(exefs);

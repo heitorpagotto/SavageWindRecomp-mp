@@ -1,6 +1,6 @@
 #include "cpu.h"
 
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
 #include "control_cells.h"
 #include "game_sites.h"
 #include "hle.h"
@@ -12,7 +12,7 @@
 enum { INDEX_OFFSET = 0x10, LINK_OFFSET = 0x20, SLOT_SIZE = 0x40 };
 static const uint64_t retry_ns = UINT64_C(1000000000);
 static const uint64_t request_ns = UINT64_C(10000000000);
-static const char placeholder_name[] = "Obj_RockGray_A_M_01";
+static const char placeholder_name[] = "Npc_TripMaster_00";
 
 typedef struct {
     uint64_t generation, deadline;
@@ -132,7 +132,7 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now) {
 #endif
 
 void rt_mp_presence_tick(Cpu *cpu) {
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
     SwmpM1Roster roster = swmp_m1_roster();
     if (!roster.lobby_generation && !storage) return;
     if (!g_site.mp_presence_create || !g_site.actor_index_assign ||

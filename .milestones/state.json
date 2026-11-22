@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T12:21:38.8662418-03:00",
+  "updated_at": "2026-11-22T13:02:41-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -26,7 +26,7 @@
     "upstream_base_commit": "f488af7",
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
-    "workspace_base_commit": "9fb424b",
+    "workspace_base_commit": "ae7ff1f",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -35,7 +35,7 @@
     "host_peer_id": 0,
     "host_migration_v1": false,
     "transport_backend_selected": true,
-    "transport_candidate": "libdatachannel v0.24.6 for the M1 test executable; release selection pending",
+    "transport_candidate": "libdatachannel v0.24.6 for native M1 source builds",
     "game_thread_owns_guest_state": true,
     "stable_ids_required": true,
     "invite_flow": "rendezvous signaling, ICE/STUN direct path, TURN fallback",
@@ -52,8 +52,8 @@
       "id": "M1",
       "name": "Native multiplayer build and internet lobby",
       "status": "partial",
-      "scope": "Prototype encrypted lobby, F1 overlay, and visible Great Plateau placeholders on Windows",
-      "pending_test_build": "compile-in activation and shared Settings on both surfaces, native Linux/Vulkan, mixed-platform lobby in both host directions, and direct ICE and TURN across two external networks, and visible NPC placeholders"
+      "scope": "Native Windows build and loopback gameplay with shared Settings and visible Plateau NPCs",
+      "pending_test_build": "native Linux/Vulkan execution, mixed-platform lobby in both host directions, and selected direct ICE and TURN paths across two external networks"
     },
     {
       "id": "M2",
@@ -96,7 +96,9 @@
     "verified HTTPS rendezvous client and expiring invite service",
     "copied admitted roster with local lobby and remote slot generations",
     "strict 1.9.0 guest hook for asynchronous Great Plateau placeholder creation and indexed deletion",
-    "prototype localized F1 Host/Join/Start/Leave UI and per-boot runtime cleanup"
+    "native Windows/Linux source build with localized F1 and System > Options multiplayer controls",
+    "one persisted default-off setting and window-thread teardown when multiplayer is disabled",
+    "per-peer Great Plateau NPC placeholders for the native M1 build"
   ],
   "not_implemented": [
     "remote Link actors",
@@ -105,9 +107,7 @@
     "PvP",
     "shared quests and story",
     "per-player chest rewards",
-    "gameplay resync and persistence",
-    "native compile-in activation and shared enable/disable setting",
-    "Multiplayer page in the in-game Options"
+    "gameplay resync and persistence"
   ],
   "last_verified": {
     "platform": "Windows",
@@ -126,7 +126,9 @@
     "windows_three_renderers": "pass: host, first client and late client each visibly rendered two remote placeholders at 960x540, 50% render scale and a 30 FPS target on split NVIDIA and AMD adapters; disconnect cleanup passed",
     "windows_build_rejection_ui": "pass: live game host rejected the deliberately mismatched runtime identity; Brazilian Portuguese error visible",
     "actor_research": "native scratch probe confirmed async request, visible activation and indexed deletion",
-    "presence_site_checks": "pass: 50 site checks and 59 layout checks; strict signature group disables the full hook on mismatch"
+    "presence_site_checks": "pass: 50 site checks and 59 layout checks; strict signature group disables the full hook on mismatch",
+    "native_windows": "Clang 23.1.5, libdatachannel 0.24.6, matching 1.9.0 gamelib 6bb7f77965924e25; F1 and System > Options share enable, live Host/Join, rejection, two NPCs per renderer, late join, slot reuse, disconnect and disable cleanup; F1 host reboot closed the lobby, and a fresh process restored the enabled preference",
+    "native_linux_cross": "x86-64 and aarch64 multiplayer runtime, presence, settings and menu objects cross-compiled; native link and execution pending"
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -138,5 +140,5 @@
     "gameplay": "not tested",
     "windows": "not tested"
   },
-  "next_recommended_work": "Migrate prototype activation to native Settings and wire both UI surfaces, then verify Windows, native Linux/Vulkan, mixed-platform sessions, and two-network direct and TURN paths."
+  "next_recommended_work": "Finish the native M1 acceptance matrix on Linux/Vulkan, both mixed-platform host directions, and two external networks with direct ICE and forced TURN."
 }

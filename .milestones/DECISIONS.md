@@ -67,7 +67,7 @@ does not corrupt saves. Host migration can be designed after campaign synchroniz
 
 ## D009 — Multiplayer is built into Savage Wind
 
-Status: accepted on 2026-11-22. Native build integration is pending.
+Status: implemented in the Windows and Linux source builds on 2026-11-22.
 
 Ship Windows and Linux/Vulkan builds of the fork with the feature compiled in. Expose one enable/disable setting,
 Host, Join, and Leave in F1 Settings and the game's Options. The prototype's overlay activation gate is superseded.
@@ -82,7 +82,7 @@ distributed.
 
 ## D012 — Transport backend for M1
 
-Status: libdatachannel is selected for the opt-in M1 developer build. Release selection remains open.
+Status: libdatachannel is selected for the native M1 source build. Release distribution review remains open.
 
 The required properties are encrypted data channels, Windows/Linux support, ICE/STUN, optional TURN, reliable ordered
 and unreliable unordered delivery, and an acceptable redistributable license.
@@ -90,7 +90,7 @@ and unreliable unordered delivery, and an acceptable redistributable license.
 - **libdatachannel** offers a C API over WebRTC data channels on Windows and Linux. Two reliable ordered streams
   and an unordered stream with zero retransmissions map to the existing channels. The Windows probe built v0.24.6
   with libjuice ICE and OpenSSL and exercised a two-peer lobby over DTLS/SCTP loopback. The test code uses the
-  public API and the application links no transport dependency by default. [C API](https://libdatachannel.org/pages/reference.html),
+  public API and the native application links the same backend. [C API](https://libdatachannel.org/pages/reference.html),
   [release](https://github.com/paullouisageneau/libdatachannel/releases/tag/v0.24.6)
 - **GameNetworkingSockets** has encrypted UDP, reliable and unreliable delivery, and Windows/Linux build guidance.
   Its open-source P2P option uses an ICE dependency and custom signaling. The upstream material reviewed does
@@ -135,12 +135,12 @@ after each update.
 
 ## D015 — M1 presence uses native creation and local generations
 
-Status: implemented in the opt-in 1.9.0 test build.
+Status: implemented for BOTW 1.9.0.
 
-Use a static rock outside the Shrine of Resurrection to verify the presence lifecycle before adding remote
-Link actors. The native scratch probe established three distinct steps. The request completes, taking the
-result clears creation suspension, and an explicit native deletion call removes the active actor. Retain a
-native actor index after taking the result so cleanup can resolve the owned actor.
+The prototype used a static rock outside the Shrine of Resurrection to verify the presence lifecycle. The
+native M1 build requests an NPC at the test placements. The request completes, taking the result clears
+creation suspension, and an explicit native deletion call removes the active actor. Retain a native actor
+index after taking the result so cleanup can resolve the owned actor.
 
 Compare the local lobby generation and the remote slot generation when reconciling. The same display name
 and peer ID can return between two guest polls. A generation change still retires the previous placeholder.

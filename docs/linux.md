@@ -1,5 +1,8 @@
 # Savage Wind on Linux (x86-64, aarch64)
 
+Source builds of this fork use libcurl with TLS and asynchronous DNS, and libdatachannel with libjuice and OpenSSL.
+See the [M1 build recipe](../.milestones/TESTING.md#m1-developer-build) for building the latter and running the native lobby.
+
 Status (inherited from LASRecomp): builds and runs on Vulkan on x86-64. aarch64 is **experimental**: cross-compiled, its start screen checked under emulation,
 the game itself untested on real hardware - community reports decide (see the end). `make appimage` / `make appimages`
 package the release AppImages.

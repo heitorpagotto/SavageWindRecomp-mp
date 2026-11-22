@@ -2,6 +2,7 @@
 #include "gpu_select.h"
 
 #include <math.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,12 @@
 bool fsr3_upscaler_enabled(void);  // (nvn/output_scale.c: SAVAGEWIND_FSR3=0 hides FSR 3 / 4)
 
 #define SETTINGS_FILE settings_file()
+
+// Read by the window, guest and render threads.
+static atomic_bool multiplayer_enabled;
+
+bool settings_multiplayer_enabled(void) { return atomic_load(&multiplayer_enabled); }
+void settings_multiplayer_set(bool enabled) { atomic_store(&multiplayer_enabled, enabled); }
 
 // SAVAGEWIND_SETTINGS=<path>: another settings file (test runs never touch the player's savagewind.ini)
 const char *settings_file(void) {
@@ -369,6 +376,7 @@ void settings_load(void) {
             }
         }
         else if (!strcmp(key, "gpu")) g_settings.gpu = gpu_index_parse(val);
+        else if (!strcmp(key, "multiplayer")) settings_multiplayer_set(atoi(val) != 0);
         else if (!strcmp(key, "volume")) g_settings.volume = (float)atof(val);
         else if (!strcmp(key, "audio_output")) {
             for (int i = 0; i < AUDIO_OUT_COUNT; i++)
@@ -736,6 +744,7 @@ void settings_save(void) {
     if (!f) { LOG("[settings] cannot write %s\n", SETTINGS_FILE); return; }
     fprintf(f, "# Savage Wind settings (edited from the in-game menu: F1, Esc, or Minus+Plus on a controller)\n");
     fprintf(f, "settings_version = %d\n", SETTINGS_VERSION);
+    fprintf(f, "multiplayer = %d\n", settings_multiplayer_enabled());
     fprintf(f, "fullscreen = %d\n", g_settings.fullscreen);
     int fm = g_settings.fullscreen_mode;
     fprintf(f, "fullscreen_mode = %s\n", k_fsmode[fm >= 0 && fm < FSMODE_COUNT ? fm : FSMODE_AUTO]);

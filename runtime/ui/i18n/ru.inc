@@ -1141,3 +1141,8 @@ T("Reset save folder to default", "Вернуть папку сохранени�
 T("Revert to using the default save folder inside the game folder.", "Снова использует папку сохранений по умолчанию внутри папки игры.")
 T("Lowers the 3D resolution when a frame takes long, as on the console.", "Снижает 3D-разрешение, когда кадр занимает много времени, как на консоли.")
 T("As on the console: the game lowers its 3D resolution (down to 1280x720 before upscaling) while frames take long, and raises it again after. Off: always the full resolution. On with the Potato preset.", "Как на консоли: игра снижает своё 3D-разрешение (до 1280x720 перед масштабированием), пока кадры занимают много времени, и затем снова повышает. Выкл.: всегда полное разрешение. Включено в пресете Potato.")
+T("Enable multiplayer", "Включить сетевую игру")
+T("Multiplayer status", "Состояние сетевой игры")
+T("Multiplayer is unavailable for this game build.", "Сетевая игра недоступна в этой сборке игры.")
+T("Offline", "Не в сети")
+T("Connected", "Подключено")

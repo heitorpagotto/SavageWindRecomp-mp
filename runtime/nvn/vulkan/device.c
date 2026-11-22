@@ -3572,7 +3572,7 @@ int ui_run(void) {
     atomic_store(&ui_ready, true);
     for (;;) {
         if (rt_reboot_requested()) return rt_reboot_requested();  // (runtime/main.c tears the game down)
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
         swmp_m1_update();
 #endif
         SDL_Event e;
@@ -3583,7 +3583,7 @@ int ui_run(void) {
         while (SDL_GetTicks() - t0 < 16 && SDL_WaitEventTimeout(&e, 16)) {
             if (e.type == SDL_EVENT_QUIT) {
                 LOG("window closed\n");
-#ifdef SWMP_M1_TEST
+#ifdef SW_MULTIPLAYER
                 swmp_m1_shutdown();
 #endif
                 exit(0);

@@ -2,11 +2,9 @@
 
 ## Status
 
-At source checkpoint `9fb424b`, the core runs over the mock or WebRTC adapter. The `MP_M1_TEST=1` prototype
-links it into Windows/Linux builds with HTTPS rendezvous, a localized F1 tab, reset/exit cleanup, and the
-Great Plateau placeholder path. The prototype still gates the tab on a deployed overlay marker and a loaded
-1.9.0 game. The updated native target needs to replace that activation path with shared Settings and add
-the game's own Options page.
+Windows and Linux source builds link the WebRTC lobby and HTTPS rendezvous. F1 and the game's Options share
+the default-off `multiplayer` INI setting and a copied lobby view. Hosting and joining require a configured
+HTTPS rendezvous URL and a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 ## Protocol constants
 
@@ -107,9 +105,10 @@ Membership versions are local, with no wire schema change.
 
 The native menu update hook runs on the guest thread. `MP_PRESENCE_SITES` in
 [`tools/game_sites.py`](../tools/game_sites.py) requires every signature. The generated hook preserves the native
-frame stores. The `MP_M1_TEST=1` runtime reconciles the roster when the spawn context and the local player's
-position in the Plateau test area are available. It uses fixed placements for up to seven rocks and excludes the
-local peer. The [presence code](../runtime/multiplayer_presence.c) owns each slot's lifecycle.
+frame stores. The runtime reconciles the roster when the spawn context and the local player's position in the
+Plateau test area are available. It requests `Npc_TripMaster_00` at up to seven fixed placements and excludes
+the local peer. The test NPC uses its ordinary idle and interaction behavior. The
+[presence code](../runtime/multiplayer_presence.c) owns each slot's lifecycle.
 
 1. Submit an asynchronous native request using the local actor name and transform. The game owns the request
    until completion, so its storage stays at a fixed guest address for the boot.
@@ -182,10 +181,10 @@ The compatibility check combines guest main-module identity with a platform-neut
 render thread submits a copied action and receives a copied view. The window thread owns the transport.
 Leave, exit, and `RT_ON_RESET` release per-session resources.
 
-Reuse that ownership model when connecting the F1 tab and guest Options page. Route enable, disable, Host,
-Join, and Leave through the runtime. Disable clears the roster so the guest update retires actors, including
-pending creation requests. Keep guest support checks separate from the user's enable preference.
+Both menus send Host, Join, Start, and Leave through the same runtime. The guest Options page uses the existing
+software keyboard for invite entry. Disable clears the published roster and pending command under the view mutex.
+The window thread destroys the transport before processing another action, including after a rapid off/on toggle.
+Guest support checks are independent of the persisted preference.
 
-Keep the existing wire fields and version if compatible. Local compiler, CPU, and OS differences should be
-independent of the shared network identity. Use [Repository and upstream context](REPOSITORY.md) to locate
-the narrow integration points.
+The wire version and fields are unchanged. The build normalizes line endings before hashing the source for the
+network identity. The platform-specific gamelib ID is used locally to validate the guest library.

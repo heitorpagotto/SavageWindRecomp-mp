@@ -29,16 +29,15 @@ conventions when preparing an upstream contribution. [Contribution guide](../CON
 - `runtime/hle.h`: `RT_ON_RESET` registration. Every per-boot multiplayer guest pointer, actor handle, or guest-side
   cache must be discarded through reset handling.
 - `runtime/main.c`: boot/reboot lifecycle. The app can tear down the guest and boot again inside one process.
-- `runtime/ui/menu.mm`: F1 Settings and the existing prototype Multiplayer tab registration.
+- `runtime/ui/menu.mm`: F1 Settings, Multiplayer tab registration, and software keyboard.
 - `runtime/settings.c` and `runtime/settings.h`: persisted options. Player-facing changes require translation updates.
 - `runtime/ui/i18n/`: translation tables. Run `python3 tools/i18n_check.py` after adding UI text.
 - `runtime/multiplayer.c` and `runtime/ui/multiplayer.mm`: M1 window-thread ownership and the
   localized multiplayer tab. The window thread publishes the admitted roster for the guest update.
 - `runtime/multiplayer_presence.c`: the 1.9.0 guest menu update hook owns native creation, indexed deletion,
   and per-boot placeholder state.
-- `Makefile` currently uses `MP_M1_TEST=1` to compile and link the prototype. The standalone networking
-  and session tests run independently of the game. The native build should keep platform-specific dependency
-  wiring localized.
+- `Makefile` adds the native multiplayer objects to Windows and Linux builds. The standalone networking and
+  session tests run independently of the game. `tools/build_multiplayer_deps.sh` builds the pinned RTC dependency.
 
 ## Required implementation conventions
 
@@ -58,7 +57,6 @@ conventions when preparing an upstream contribution. [Contribution guide](../CON
 - `mods/multiplayer/lobby_protocol.h`, `lobby.[ch]`: lobby payloads and control dispatch.
 - `mods/multiplayer/mock_transport.[ch]`: bounded in-process transport with state faults.
 - `mods/multiplayer/demo.c`: eight-player mock lobby and snapshot demonstration.
-- `mods/multiplayer/VERSION` records the prototype's feature version.
 - `mods/multiplayer/webrtc.[ch]` provides bounded WebRTC channels and link ownership via libdatachannel.
 - `mods/multiplayer/rendezvous.[ch]` and `tools/multiplayer_rendezvous.py` implement the HTTPS offer/answer exchange.
 - `tests/test_multiplayer.c`, `tests/test_multiplayer_webrtc.c`, and `tests/test_multiplayer_rendezvous.c`

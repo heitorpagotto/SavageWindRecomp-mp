@@ -28,18 +28,19 @@ Limit: nothing is linked into Savage Wind and no network connection is made.
 
 ## M1 — Native multiplayer build and internet lobby
 
-Status **partial**. The existing prototype demonstrates the lobby and Windows placeholder lifecycle. The
-compile-in activation path, both Settings surfaces, and full platform and network acceptance are pending.
+Status **partial**. Native source integration and both Settings surfaces are implemented. See the
+[test record](TESTING.md) for verification and pending platform and network acceptance.
 
-Delivered in the prototype
+Delivered
 
 - Eight-peer host-authoritative lobby, compatibility handshake, roster changes, START, ping/pong, and deterministic
   coverage for capacity, build and feature mismatch, spoofing, cancellation, disconnect, and late join.
 - WebRTC with reliable ordered control/event channels and an unreliable unordered state channel. HTTPS rendezvous
   issues 120-bit opaque invites and brokers bounded, authenticated SDP exchange.
 - Localized F1 overlay lobby UI, reset and exit cleanup, and a copied admitted roster with slot generations.
-- Strict 1.9.0 Great Plateau placeholder creation and deletion. The Windows prototype visibly rendered two
-  placeholders in each of three live instances. [Test record](TESTING.md#m1-windows-presence-check)
+- Default-off persisted enable setting and a native Options page with the same lobby controls.
+- Strict 1.9.0 Great Plateau placeholder lifecycle. The Windows prototype visibly rendered two rocks in each of
+  three live instances. The native build requests an NPC for each peer. [Test record](TESTING.md#m1-windows-presence-check)
 
 Acceptance criteria
 

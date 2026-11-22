@@ -30,4 +30,7 @@ bool menu_render_needed(void);  // menu_render would draw something (it records 
 
 #ifdef __cplusplus
 }
+
+// Game thread: present the last frame while the overlay asks for UTF-8 input.
+int menu_keyboard_prompt(const char *prompt, const char *initial, int max_len, char *out, int cap);
 #endif

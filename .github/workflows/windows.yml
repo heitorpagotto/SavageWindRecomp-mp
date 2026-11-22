@@ -37,5 +37,9 @@ jobs:
             mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-vulkan-headers mingw-w64-ucrt-x86_64-vulkan-loader
             mingw-w64-ucrt-x86_64-shaderc
             mingw-w64-ucrt-x86_64-spirv-tools mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-nasm
+            git mingw-w64-ucrt-x86_64-curl mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
+      - name: Build multiplayer dependency
+        run: CC=clang CXX=clang++ sh tools/build_multiplayer_deps.sh
       - name: Build
-        run: make -j$(nproc) && ls -l build/savagewind.exe build/savagewind.dll.a
+        run: make -j$(nproc) MP_RTC_PREFIX="$PWD/build/multiplayer-deps" && ls -l build/savagewind.exe build/savagewind.dll.a

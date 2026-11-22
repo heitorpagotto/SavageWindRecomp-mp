@@ -30,6 +30,8 @@
 
 #include "i18n.h"
 #include "binding_row_layout.h"
+#include "menu.h"
+#include "multiplayer.h"
 
 extern "C" {
 #include "../input_bind.h"
@@ -95,9 +97,11 @@ struct Entry {           // the game's option entry (0x30)
 static_assert(sizeof(Entry) == 0x30);
 enum { KIND_TOGGLE = 0, KIND_CHOICE = 1, KIND_BUTTON = 2 };
 
-enum Page { P_MAIN, P_GAMEPLAY, P_VIDEO, P_COLOUR, P_AUDIO, P_CONTROLS, P_BINDS, P_LANGUAGE, P_ACCESS, P_VIDEO_ADV, P_HDR, P_COUNT };
+enum Page { P_MAIN, P_GAMEPLAY, P_VIDEO, P_COLOUR, P_AUDIO, P_CONTROLS, P_BINDS, P_LANGUAGE, P_ACCESS, P_VIDEO_ADV,
+            P_HDR, P_MULTIPLAYER, P_COUNT };
 // A_FIXED: a greyed row for an input that can never be rebound (Item.arg: 0 Esc, 1 F2); A_BIND: Item.arg is a binding slot (an input, or BIND_ACTION + an action); the next key, mouse button or controller button binds it
-enum Action { A_NONE, A_PAGE, A_BIND, A_BINDS_HEADER, A_RESET_BINDS, A_RESTART, A_QUIT, A_SIZE_LIST, A_FIXED, A_REPORT, A_SAVE_HDR_LOOK };
+enum Action { A_NONE, A_PAGE, A_BIND, A_BINDS_HEADER, A_RESET_BINDS, A_RESTART, A_QUIT, A_SIZE_LIST, A_FIXED, A_REPORT,
+              A_SAVE_HDR_LOOK, A_MULTIPLAYER };
 static char g_report_dir[64];  // Problem report: the zip made this run (its row's description names it)
 
 struct Item {
@@ -355,6 +359,31 @@ const char *bind_label(const Item &it, int) {
     return buf;
 }
 
+#ifdef SW_MULTIPLAYER
+SwmpM1View g_mp_view;
+char g_mp_name[SWMP_PLAYER_NAME_SIZE] = "Link";  // i18n-skip (default player name)
+
+bool mp_action_off(const Item &it, int) {
+    const auto &view = g_mp_view;
+    if (!view.enabled || !view.supported || !view.configured) return true;
+    bool idle = !view.pending && !view.joining && view.session.state == SWMP_SESSION_OFFLINE;
+    switch (it.arg) {
+    case SWMP_M1_LEAVE: return idle;
+    case SWMP_M1_START:
+        return view.pending || view.session.role != SWMP_ROLE_HOST ||
+               view.session.state != SWMP_SESSION_LOBBY || !view.invite[0];
+    default: return !idle;
+    }
+}
+
+bool mp_view_changed(const SwmpM1View &a, const SwmpM1View &b) {
+    return a.enabled != b.enabled || a.supported != b.supported || a.configured != b.configured ||
+           a.pending != b.pending || a.joining != b.joining || a.failed != b.failed ||
+           a.rejection != b.rejection || a.session.state != b.session.state ||
+           a.session.role != b.session.role || strcmp(a.invite, b.invite);
+}
+#endif
+
 void build_items(void) {
     std::vector<Item> &v = g_items;
     // first page: the sections (the game's own options are on Gameplay and Controls)
@@ -369,6 +398,33 @@ void build_items(void) {
     v.push_back(button(P_MAIN, "Language", "Language of the texts and of the voices.", "Open", A_PAGE, P_LANGUAGE));
     v.push_back(button(P_MAIN, "Accessibility", "Colour vision, and assists that make the game easier.", "Open", A_PAGE,
                        P_ACCESS));
+#ifdef SW_MULTIPLAYER
+    v.push_back(button(P_MAIN, "Multiplayer", "", "Open", A_PAGE, P_MULTIPLAYER));
+    v.push_back(toggle(P_MULTIPLAYER, "Enable multiplayer", "",
+                       [](const Item &) { return (int)settings_multiplayer_enabled(); },
+                       [](const Item &, int on) { swmp_m1_set_enabled(on != 0); }, 0));
+    v.push_back(button(P_MULTIPLAYER, "Multiplayer status", "", nullptr, A_NONE, 0));
+    v.back().label = [](const Item &, int) { return multiplayer_status(g_mp_view); };
+    v.back().desc_fn = [](const Item &) { return multiplayer_status(g_mp_view); };
+    v.push_back(button(P_MULTIPLAYER, "Invite code", "", nullptr, A_NONE, 0));
+    v.back().label = [](const Item &, int) -> const char * { return g_mp_view.invite[0] ? g_mp_view.invite : "-"; };
+    v.back().desc_fn = [](const Item &) -> const char * { return g_mp_view.invite; };
+    v.push_back(button(P_MULTIPLAYER, "Player name", "", nullptr, A_MULTIPLAYER, 0));
+    v.back().label = [](const Item &, int) -> const char * { return g_mp_name; };
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Host lobby", "", "Host lobby", A_MULTIPLAYER, SWMP_M1_HOST));
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Join lobby", "", "Join lobby", A_MULTIPLAYER, SWMP_M1_JOIN));
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Start lobby", "", "Start lobby", A_MULTIPLAYER, SWMP_M1_START));
+    v.back().value_off = mp_action_off;
+    v.push_back(button(P_MULTIPLAYER, "Leave lobby", "", nullptr, A_MULTIPLAYER, SWMP_M1_LEAVE));
+    v.back().label = [](const Item &, int) {
+        return g_mp_view.pending || g_mp_view.joining ||
+               (g_mp_view.session.role == SWMP_ROLE_HOST && !g_mp_view.invite[0]) ? tr("Cancel") : tr("Leave lobby");
+    };
+    v.back().value_off = mp_action_off;
+#endif
     v.push_back(button(P_MAIN, "Problem report",
                        "A zip file to attach to a bug report: the log of the last two runs, your settings and a short "
                        "system summary. No game files and no saves.",
@@ -1922,6 +1978,9 @@ extern "C" void rt_opt_rows(void) {
     if (!install()) return;
     int page = g_switching ? g_next_page : P_MAIN;
     g_switching = false;
+#ifdef SW_MULTIPLAYER
+    if (page == P_MULTIPLAYER) g_mp_view = swmp_m1_view();
+#endif
     std::vector<uint32_t> &o = g_order[page];
     g_shown.assign(g_items.size(), -1);
     if (page == P_COLOUR) g_nluts = color_lut_list();  // (files the player added since the last opening)
@@ -2184,6 +2243,21 @@ extern "C" int rt_opt_decide(uint64_t row) {
     if (it->value_off && it->value_off(*it, 0)) return 2;  // (a button that can't be used: HDR off, Save preset)
     int d, s, ms;
     switch (it->action) {
+#ifdef SW_MULTIPLAYER
+    case A_MULTIPLAYER: {
+        if (!it->arg) {
+            if (menu_keyboard_prompt("Player name", g_mp_name, sizeof g_mp_name - 1, g_mp_name, sizeof g_mp_name))
+                g_dirty.push_back(row);
+        } else {
+            auto action = static_cast<SwmpM1Action>(it->arg);
+            char invite[SWMP_INVITE_CODE_SIZE] = "";
+            if (action != SWMP_M1_JOIN ||
+                menu_keyboard_prompt("Invite code", "", sizeof invite - 1, invite, sizeof invite))
+                swmp_m1_submit(action, g_mp_name, invite);
+        }
+        return 2;
+    }
+#endif
     case A_SIZE_LIST:
         g_size_row = row;
         menu_size_list_open();
@@ -2256,6 +2330,16 @@ extern "C" uint64_t rt_opt_tick(uint64_t screen) {
         mark_bind_rows(screen, cap_slot_was, other);
     }
     if (g_size_redraw.exchange(false) && g_size_row) g_dirty.push_back(g_size_row);
+#ifdef SW_MULTIPLAYER
+    if (g_cur_page == P_MULTIPLAYER) {
+        SwmpM1View next = swmp_m1_view();
+        if (mp_view_changed(g_mp_view, next)) {
+            g_mp_view = next;
+            g_dirty.clear();
+            mark_all_rows(screen);
+        }
+    }
+#endif
     if (!game_options_input_hold() && !menu_size_list_up()) pc_cursor_options_tick(screen);  // (the list has the pointer)
     two_band_refresh(screen);
     if (g_dirty.empty()) return 0;

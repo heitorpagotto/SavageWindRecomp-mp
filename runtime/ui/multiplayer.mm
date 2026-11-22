@@ -1,30 +1,50 @@
-#ifdef SWMP_M1_TEST
-#include "../multiplayer.h"
+#ifdef SW_MULTIPLAYER
+#include "multiplayer.h"
 
 #include "i18n.h"
 #include "imgui.h"
 #include "osk.h"
+extern "C" {
+#include "../settings.h"
+}
 
 static char invite[SWMP_INVITE_CODE_SIZE];
 
 void multiplayer_tab_reset() { invite[0] = 0; }
 
-void multiplayer_tab_draw() {
-    SwmpM1View view = swmp_m1_view();
-    if (!view.configured) {
-        ImGui::TextWrapped("%s", tr("Set an HTTPS rendezvous server to use multiplayer."));
-        return;
-    }
-    if (view.failed) {
+const char *multiplayer_status(const SwmpM1View &view) {
+    if (!view.enabled) return tr("Off");
+    if (!view.supported) return tr("Multiplayer is unavailable for this game build.");
+    if (!view.configured) return tr("Set an HTTPS rendezvous server to use multiplayer.");
+    if (view.failed && !view.pending) {
         switch (view.rejection) {
-        case SWMP_REJECT_PROTOCOL: ImGui::TextUnformatted(tr("Incompatible multiplayer protocol")); break;
-        case SWMP_REJECT_BUILD: ImGui::TextUnformatted(tr("Incompatible game, Savage Wind, or mod build")); break;
-        case SWMP_REJECT_FEATURES: ImGui::TextUnformatted(tr("Required multiplayer features are unavailable")); break;
-        case SWMP_REJECT_FULL: ImGui::TextUnformatted(tr("Lobby is full")); break;
-        default: ImGui::TextUnformatted(tr("Multiplayer connection ended")); break;
+        case SWMP_REJECT_PROTOCOL: return tr("Incompatible multiplayer protocol");
+        case SWMP_REJECT_BUILD: return tr("Incompatible game, Savage Wind, or mod build");
+        case SWMP_REJECT_FEATURES: return tr("Required multiplayer features are unavailable");
+        case SWMP_REJECT_FULL: return tr("Lobby is full");
+        default: return tr("Multiplayer connection ended");
         }
     }
-    if (!view.joining && view.session.state == SWMP_SESSION_OFFLINE) {
+    if (view.pending || view.joining || (view.session.role == SWMP_ROLE_HOST && !view.invite[0]))
+        return tr("Connecting to multiplayer");
+    return view.session.state == SWMP_SESSION_OFFLINE ? tr("Offline") : tr("Connected");
+}
+
+void multiplayer_tab_draw() {
+    SwmpM1View view = swmp_m1_view();
+    if (ImGui::Checkbox(tr("Enable multiplayer"), &view.enabled)) {
+        swmp_m1_set_enabled(view.enabled);
+        settings_save();
+        view = swmp_m1_view();
+    }
+    if (!view.enabled) {
+        invite[0] = 0;
+        return;
+    }
+    if (!view.supported || !view.configured || (view.failed && !view.pending))
+        ImGui::TextWrapped("%s", multiplayer_status(view));
+    if (!view.supported || !view.configured) return;
+    if (!view.pending && !view.joining && view.session.state == SWMP_SESSION_OFFLINE) {
         static char name[SWMP_PLAYER_NAME_SIZE] = "Link";  // i18n-skip (default player name)
         ui_input_text(tr("Player name"), name, sizeof name);
         ui_input_text(tr("Invite code"), invite, sizeof invite, ImGuiInputTextFlags_CharsUppercase);
@@ -35,8 +55,8 @@ void multiplayer_tab_draw() {
         ImGui::EndDisabled();
         return;
     }
-    if (view.joining || (view.session.role == SWMP_ROLE_HOST && !view.invite[0])) {
-        ImGui::TextUnformatted(tr("Connecting to multiplayer"));
+    if (view.pending || view.joining || (view.session.role == SWMP_ROLE_HOST && !view.invite[0])) {
+        ImGui::TextUnformatted(multiplayer_status(view));
         if (ImGui::Button(tr("Cancel"))) swmp_m1_submit(SWMP_M1_LEAVE, nullptr, nullptr);
         return;
     }
