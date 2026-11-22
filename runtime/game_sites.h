@@ -74,6 +74,7 @@
     X(mp_presence_release) \
     X(mp_presence_take) \
     X(mp_presence_delete) \
+    X(mp_presence_move) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {

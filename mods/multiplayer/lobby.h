@@ -6,6 +6,13 @@
 
 #define SWMP_LOBBY_TIMEOUT_MS UINT64_C(5000)
 #define SWMP_LOBBY_LINKS (2u * SWMP_MAX_PEERS)
+#define SWMP_POSITION_INTERVAL_MS UINT64_C(50)
+#define SWMP_POSITION_TIMEOUT_MS UINT64_C(1000)
+
+typedef struct {
+    SwmpPlayerSnapshot snapshot;
+    uint64_t received_at;
+} SwmpPosition;
 
 typedef struct {
     SwmpConnection connection;
@@ -21,6 +28,9 @@ typedef struct {
     SwmpCompatibility compatibility;
     SwmpLobbyLink links[SWMP_LOBBY_LINKS];
     uint64_t join_started_at;
+    uint64_t next_position_at;
+    uint32_t roster_epoch;  // host version of the reliable membership list
+    SwmpPosition positions[SWMP_MAX_PEERS];
     uint32_t features;  // client: negotiated features; host: supported features
     bool joining;       // session ID is unknown until WELCOME
     bool waiting_welcome;
@@ -35,7 +45,10 @@ bool swmp_lobby_host(SwmpLobby *lobby, const SwmpCompatibility *compatibility, c
                     const char *url, uint64_t session_id);
 bool swmp_lobby_join(SwmpLobby *lobby, const SwmpCompatibility *compatibility, const char *name,
                     const char *url, const char *invite, uint64_t now_ms);
-// Consumes control and lifecycle events. Gameplay channel dispatch is reserved for later integration.
+// A sample with area_id zero withdraws local presence. The caller supplies the latest local sample.
+void swmp_lobby_send_position(SwmpLobby *lobby, const SwmpPlayerSnapshot *local, uint64_t now_ms);
+bool swmp_position_fresh(const SwmpPosition *position, uint64_t now_ms);
+// Consumes control, position and lifecycle events.
 void swmp_lobby_poll(SwmpLobby *lobby, uint64_t now_ms);
 bool swmp_lobby_start(SwmpLobby *lobby);
 void swmp_lobby_leave(SwmpLobby *lobby);

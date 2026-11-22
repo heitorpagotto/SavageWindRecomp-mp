@@ -58,6 +58,10 @@ for the applicable DTLS advisory, the configured DTLS minimum, and the checks st
   the `[multiplayer]` log lines from both machines, including whether the host applied the reply and whether
   the client sent the lobby handshake. Keep the clipboard codes private.
 
+The owner confirmed the updated Windows and Linux builds both joined a friend hosting on Linux.
+The reverse host direction still failed. The owner accepted M1 and approved starting M2 while
+investigating the firewall or direct connection separately.
+
 ### Native build and standalone checks
 
 - MSYS2 UCRT64 with Clang 23.1.5 built the Windows executable and Vulkan runtime objects against libdatachannel
@@ -150,6 +154,25 @@ When available, the ignored `build/mp-work/m1-runtime-scratch` directory contain
 screenshots. The old runners target the prototype activation path. Use the native Settings toggle when testing
 the current executable. Wait until the Plateau renders before counting actors. A readiness log can arrive
 during the loading screen.
+
+## M2 Plateau position check
+
+- BOTW 1.9.0, Windows Vulkan, 30 FPS target, 960x540 at 50% render scale, 1400 MiB VRAM budget,
+  and Vulkan heap copy off. The host used an RTX 4050 Laptop GPU on driver 616.92 and the client
+  used AMD Radeon Graphics on driver 25.10.30.02. Each instance had a separate scratch save and settings.
+- Two live instances exchanged direct WebRTC invites and replies using an isolated clipboard. Both
+  rendered a remote Link in the bind pose. Walking and jumping moved the active proxy without
+  respawning. Client leave removed both proxies. A fresh invite reused the slot and host reboot
+  removed the client's proxy. Evidence is under the ignored `build/m2-live-nv1jx2av/` directory.
+- The follow-up compared the local players' and proxies' native matrices before and after turns.
+  Facing converged in both directions on the original actor indices. The client could open and
+  close inventory while the host remained in play. At a 60 FPS target, leaving and returning to the
+  Plateau test bounds withdrew and restored both proxies. The two-instance run reached about
+  65 FPS at a 90 FPS target and 83 FPS at a 120 FPS target. Evidence is under
+  `build/m2-facing-8wcx5jxf/`.
+- The Windows app and regenerated library `a1c9d2072a418844` built at x86-64-v3. The 50 game-site
+  checks, 59 layout checks, multiplayer core and eight-peer WebRTC/direct tests passed. Linux
+  x86-64 runtime, presence, asset and RomFS objects cross-compiled.
 
 ## Synthetic checks
 

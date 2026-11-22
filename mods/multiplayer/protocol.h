@@ -62,7 +62,7 @@ typedef struct {
     uint8_t sender_peer;
     uint8_t channel;
     uint32_t sequence;
-    uint32_t tick;        // sender's fixed multiplayer simulation tick
+    uint32_t tick;        // message-specific tick (host membership epoch for lobby position traffic)
 } SwmpPacketHeader;
 
 typedef enum {
@@ -104,7 +104,7 @@ typedef struct {
     uint32_t area_id;
     uint32_t phase_id;
     int32_t position_mm[3];
-    int16_t rotation[3];       // signed turn fraction: -32768..32767
+    int16_t rotation[3];       // pitch, yaw, roll as signed turn fractions
     int16_t velocity_cm_s[3];
     uint16_t health_q4;
     uint16_t stamina_q4;

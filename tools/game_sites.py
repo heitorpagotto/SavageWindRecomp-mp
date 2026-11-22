@@ -62,7 +62,7 @@ PAD_QUERY = ('a9be7bfd a9014ff4 910003fd 7100a43f 90000008/9f00001f 91000108/ffc
 OPT_TWO_SITES = ('opt_two_redraw', 'opt_two_select', 'opt_two_state', 'opt_two_decide', 'opt_two_after', 'opt_two_row_state', 'opt_two_update_control', 'opt_two_initial_control', 'opt_two_left', 'opt_two_right', 'opt_two_text', 'opt_two_help', 'opt_two_pane_calc')
 MP_PRESENCE_SITES = ('mp_presence_tick', 'mp_presence_context', 'mp_presence_create',
                      'mp_presence_ready', 'mp_presence_failed', 'mp_presence_release',
-                     'mp_presence_take', 'mp_presence_delete')
+                     'mp_presence_take', 'mp_presence_delete', 'mp_presence_move')
 STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES)
 
 SITES = [
@@ -387,6 +387,9 @@ SITES = [
          'aa0003e1 aa1403e0 f9400908 d63f0100 37000000/fff8001f f9404668', 0),
     Site('mp_presence_delete', 'call', '94000000/fc000000 d10043a0 94000000/fc000000 a9554ff4 a95457fc a9537bfd '
          '910583ff d65f03c0', 0),
+    # The actor's native matrix setter also publishes the transform to its model.
+    Site('mp_presence_move', 'code', 'a9bd7bfd a90157f6 a9024ff4 910003fd 2a0303f3 aa0103f4 aa0003f5 '
+         '36000002/fff8001f 3dc00280 910e62a8 3d800100 3dc00680', 0),
     # Add items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # Adding items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # play: the game thread's place for the item get), the pause menu data's item get, and where the pause menu data's
@@ -490,6 +493,7 @@ KNOWN = {
         'mp_presence_release': 0x7001516908,
         'mp_presence_take': 0x7001516b74,
         'mp_presence_delete': 0x7001514bac,
+        'mp_presence_move': 0x70015337ac,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,

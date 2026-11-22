@@ -31,6 +31,9 @@
 #include "../perfcount.h"
 #include "../platform.h"
 #include "../game_place.h"
+#ifdef SW_MULTIPLAYER
+#include "../multiplayer_assets.h"
+#endif
 
 #define FS_PATH_NOT_FOUND MAKE_RESULT(2, 1)
 #define FS_PATH_EXISTS MAKE_RESULT(2, 2)
@@ -58,6 +61,7 @@ typedef struct {
     Overlay *ov;
     int ov_n, ov_cap;
     uint8_t *ov_meta;
+    uint8_t *ov_extended_meta;
     uint64_t ov_meta_off, ov_meta_size, ov_end;
     RomFile *rom_files;
     int rom_nfiles;
@@ -68,12 +72,21 @@ typedef struct {
     uint8_t *hud_pack;       // Pack/Bootup.pack with the HUD letters patched (hud_letters_patch)
     size_t hud_pack_size;
     uint8_t *voice_banks;    // the text language's voice banks with the chosen voices' lengths (bars_hybrid)
+#ifdef SW_MULTIPLAYER
+    uint8_t *proxy_pack, *proxy_actor_info;
+    size_t proxy_pack_size;
+#endif
 } RomImage;
 #define AOC_MAX 8
 static RomImage images[1 + AOC_MAX];  // [0] the game's, [index] add-on content
 static RomImage *R = &images[0];
 static FsInventoryClipLayout inventory_clip_layout;
 static _Atomic bool inventory_clip_layout_valid;
+#ifdef SW_MULTIPLAYER
+static _Atomic bool multiplayer_proxy_ready;
+bool fs_multiplayer_proxy_ready(void) { return atomic_load(&multiplayer_proxy_ready); }
+uint8_t *fs_game_file(const char *path, size_t *out_n);
+#endif
 
 // Reboot: the next boot builds its own index / overlay when the game opens the RomFS again.
 RT_ON_RESET(fs_reset) {
@@ -83,7 +96,12 @@ RT_ON_RESET(fs_reset) {
             if (m->ov[i].fd >= 0) close(m->ov[i].fd);
             free(m->ov[i].path);
         }
-        for (int i = 0; i < m->npatches; i++) free(m->patches[i].data);  // (ov_meta and the extended table are among these)
+        for (int i = 0; i < m->npatches; i++) free(m->patches[i].data);  // (ov_meta is among these)
+        free(m->ov_extended_meta);
+#ifdef SW_MULTIPLAYER
+        free(m->proxy_pack);
+        free(m->proxy_actor_info);
+#endif
         for (int i = 0; i < m->rom_nfiles; i++) free(m->rom_files[i].path);
         free(m->ov), free(m->rom_files), free(m->grown), free(m->rstb_blob), free(m->hud_pack), free(m->voice_banks);
         romfs_image_close(m->img);
@@ -91,6 +109,9 @@ RT_ON_RESET(fs_reset) {
     }
     R = &images[0];
     atomic_store_explicit(&inventory_clip_layout_valid, false, memory_order_release);
+#ifdef SW_MULTIPLAYER
+    atomic_store(&multiplayer_proxy_ready, false);
+#endif
     g_save_dir = "save";
 }
 
@@ -144,7 +165,7 @@ static uint32_t romfs_hash(uint32_t parent, const char *name, uint32_t len) {
 
 static int path_cmp(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
-typedef struct { char rel[1024]; char host[1200]; uint64_t size; } NewFile;
+typedef struct { char rel[1024]; char host[1200]; uint64_t size; const uint8_t *mem; } NewFile;
 
 static void walk_new(const char *root, const char *rel, char **known, int nknown, NewFile **out, int *n, int *cap) {
     char dirp[1200];
@@ -167,6 +188,7 @@ static void walk_new(const char *root, const char *rel, char **known, int nknown
         strlcpy((*out)[*n].rel, r2, sizeof (*out)[*n].rel);
         strlcpy((*out)[*n].host, h2, sizeof (*out)[*n].host);
         (*out)[*n].size = (uint64_t)sb.st_size;
+        (*out)[*n].mem = NULL;
         (*n)++;
     }
     closedir(d);
@@ -193,23 +215,32 @@ static int64_t dir_lookup(const uint8_t *dm, uint64_t dsz, const char *path) {
 }
 
 static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz, uint64_t fsz) {
-    if (!overlay_dir()) return;
-    char root[1100];
-    snprintf(root, sizeof root, "%s/%s", overlay_dir(), R->ov_sub ? R->ov_sub : "");
-    char **known = malloc(sizeof *known * R->rom_nfiles);
-    for (int i = 0; i < R->rom_nfiles; i++) known[i] = R->rom_files[i].path;
-    qsort(known, R->rom_nfiles, sizeof *known, path_cmp);
     NewFile *nf = NULL;
     int n = 0, cap = 0;
-    walk_new(root, "", known, R->rom_nfiles, &nf, &n, &cap);
-    free(known);
+    if (overlay_dir()) {
+        char root[1100];
+        snprintf(root, sizeof root, "%s/%s", overlay_dir(), R->ov_sub ? R->ov_sub : "");
+        char **known = malloc(sizeof *known * R->rom_nfiles);
+        for (int i = 0; i < R->rom_nfiles; i++) known[i] = R->rom_files[i].path;
+        qsort(known, R->rom_nfiles, sizeof *known, path_cmp);
+        walk_new(root, "", known, R->rom_nfiles, &nf, &n, &cap);
+        free(known);
+    }
+#ifdef SW_MULTIPLAYER
+    if (R->proxy_pack) {
+        if (n == cap) nf = realloc(nf, sizeof *nf * (n + 1));
+        nf[n++] = (NewFile){.rel = SWMP_PROXY_PACK, .size = R->proxy_pack_size, .mem = R->proxy_pack};
+    }
+#endif
     if (!n) return;
     R->rom_files = realloc(R->rom_files, sizeof(RomFile) * (R->rom_nfiles + n));
     uint64_t hoff = h[5], hsz = h[6];
     uint8_t *dcopy = malloc(dsz), *hcopy = malloc(hsz), *head = malloc(0x50);
     memcpy(dcopy, dmeta, dsz);
-    if (romfs_image_pread(R->img, hcopy, hsz, hoff) != (ssize_t)hsz || romfs_image_pread(R->img, head, 0x50, 0) != 0x50)
+    if (romfs_image_pread(R->img, hcopy, hsz, hoff) != (ssize_t)hsz || romfs_image_pread(R->img, head, 0x50, 0) != 0x50) {
+        free(dcopy), free(hcopy), free(head), free(nf);
         return;
+    }
     // the file-meta table to extend: the override-patched copy if there is one
     const uint8_t *base_meta = R->ov_meta;
     uint8_t *tmp = NULL;
@@ -230,6 +261,9 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     uint32_t nb = (uint32_t)(hsz / 4);
     uint64_t o = fsz;
     int added = 0;
+#ifdef SW_MULTIPLAYER
+    bool proxy_added = false;
+#endif
     for (int i = 0; i < n; i++) {
         char dirp[1024];
         strlcpy(dirp, nf[i].rel, sizeof dirp);
@@ -254,7 +288,10 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
         memcpy(hcopy + 4 * bucket, &entry, 4);
         o += 0x20 + ((nl + 3) & ~3u);
         if (R->ov_n == R->ov_cap) { R->ov_cap = R->ov_cap ? R->ov_cap * 2 : 256; R->ov = realloc(R->ov, sizeof *R->ov * R->ov_cap); }
-        R->ov[R->ov_n++] = (Overlay){data_at, size, strdup(nf[i].host), -1, NULL};
+        R->ov[R->ov_n++] = (Overlay){data_at, size, nf[i].mem ? NULL : strdup(nf[i].host), -1, nf[i].mem};
+#ifdef SW_MULTIPLAYER
+        proxy_added |= nf[i].mem != NULL;
+#endif
         R->rom_files[R->rom_nfiles++] = (RomFile){data_at, size, strdup(nf[i].rel), entry};
         data_at = (data_at + size + 0xF) & ~0xFull;
         added++;
@@ -263,6 +300,7 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     if (R->ov_n == R->ov_cap) { R->ov_cap = R->ov_cap ? R->ov_cap * 2 : 256; R->ov = realloc(R->ov, sizeof *R->ov * R->ov_cap); }
     memmove(R->ov + (R->ov_n - added) + 1, R->ov + (R->ov_n - added), sizeof *R->ov * added);
     R->ov[R->ov_n - added] = (Overlay){meta_at, nsz, NULL, -1, meta};
+    R->ov_extended_meta = meta;
     R->ov_n++;
     R->ov_end = data_at;
     uint64_t fmeta_off = meta_at, fmeta_size = o;
@@ -271,6 +309,10 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     R->patches[R->npatches++] = (Patch){0, 0x50, head};
     R->patches[R->npatches++] = (Patch){h[3], dsz, dcopy};
     R->patches[R->npatches++] = (Patch){hoff, hsz, hcopy};
+#ifdef SW_MULTIPLAYER
+    if (proxy_added) atomic_store(&multiplayer_proxy_ready, true);
+#endif
+    free(nf);
     LOG("[fs] overlay: %d new romfs files\n", added);
 }
 
@@ -443,6 +485,7 @@ static void voice_redirect(const uint8_t *fmeta, uint64_t foff, uint64_t fsz) {
 // Yaz0 with literal bytes only (a 0xFF flag before every 8): what the game's decoder reads, no search needed
 static uint8_t *yaz0_pack_literal(const uint8_t *d, size_t n, size_t *out_n) {
     uint8_t *o = malloc(16 + n + (n + 7) / 8), *w = o;
+    if (!o) return NULL;
     memcpy(w, "Yaz0", 4);
     w[4] = (uint8_t)(n >> 24), w[5] = (uint8_t)(n >> 16), w[6] = (uint8_t)(n >> 8), w[7] = (uint8_t)n;
     memset(w + 8, 0, 8);
@@ -456,6 +499,54 @@ static uint8_t *yaz0_pack_literal(const uint8_t *d, size_t n, size_t *out_n) {
     *out_n = (size_t)(w - o);
     return o;
 }
+
+#ifdef SW_MULTIPLAYER
+static uint8_t *proxy_resource(const char *path, uint8_t *(*build)(const uint8_t *, size_t, size_t *), size_t *size) {
+    size_t input_size = 0, raw_size = 0;
+    uint8_t *input = fs_game_file(path, &input_size);
+    uint8_t *raw = build(input, input_size, &raw_size);
+    free(input);
+    if (!raw) return NULL;
+    uint8_t *packed = yaz0_pack_literal(raw, raw_size, size);
+    free(raw);
+    return packed;
+}
+
+static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t fsz) {
+    if (R != &images[0] || !g_site.mp_presence_move || strcmp(g_game_version, "1.9.0")) return;
+    char host[1200];
+    if (overlay_file(SWMP_ACTOR_INFO, host, sizeof host) ||
+        overlay_file(SWMP_PROXY_TEMPLATE, host, sizeof host) ||
+        overlay_file(SWMP_PROXY_PACK, host, sizeof host)) return;
+
+    const RomFile *info = NULL;
+    for (int i = 0; i < R->rom_nfiles; i++) {
+        if (!strcmp(R->rom_files[i].path, SWMP_PROXY_PACK)) return;
+        if (!strcmp(R->rom_files[i].path, SWMP_ACTOR_INFO)) info = &R->rom_files[i];
+    }
+    if (!info) return;
+
+    size_t pack_size = 0, info_size = 0;
+    uint8_t *pack = proxy_resource(SWMP_PROXY_TEMPLATE, swmp_proxy_pack, &pack_size);
+    uint8_t *actor_info = pack ? proxy_resource(SWMP_ACTOR_INFO, swmp_proxy_actor_info, &info_size) : NULL;
+    if (!actor_info) {
+        free(pack);
+        LOG("[multiplayer] remote Link resources unavailable, using NPC placeholders\n");
+        return;
+    }
+    // Only the virtual RomFS gains the alias. The installed resources and stock actor entries remain intact.
+    R->proxy_pack = pack;
+    R->proxy_pack_size = pack_size;
+    R->proxy_actor_info = actor_info;
+    uint8_t *meta = meta_copy(fmeta, foff, fsz);
+    uint64_t relative = R->ov_end - R->rom_data_off, size = info_size;
+    memcpy(meta + info->meta + 8, &relative, 8);
+    memcpy(meta + info->meta + 0x10, &size, 8);
+    if (R->ov_n == R->ov_cap) { R->ov_cap = R->ov_cap ? R->ov_cap * 2 : 256; R->ov = realloc(R->ov, sizeof *R->ov * R->ov_cap); }
+    R->ov[R->ov_n++] = (Overlay){R->ov_end, size, NULL, -1, actor_info};
+    R->ov_end = (R->ov_end + size + 0xF) & ~0xFull;
+}
+#endif
 
 // Yaz0 with back-references (greedy, hash chains over the 4 KB window): for files whose size the game holds to
 // (a pack's resources are read into buffers of about their size). hdr: the original's 16 bytes (its alignment).
@@ -1305,6 +1396,7 @@ static void rstb_patch(const uint8_t *fmeta, uint64_t foff, uint64_t fsz) {
     free(R->rstb_blob);
     R->rstb_blob = yaz0_pack_literal(d, n, &bn);
     free(d);
+    if (!R->rstb_blob) return;
     meta_copy(fmeta, foff, fsz);
     uint64_t rel = R->ov_end - R->rom_data_off, size = bn;
     memcpy(R->ov_meta + R->rom_files[k].meta + 8, &rel, 8);
@@ -1398,6 +1490,9 @@ static void rom_index(void) {
     if (R == &images[0] && !atomic_load_explicit(&inventory_clip_layout_valid, memory_order_acquire))
         LOG("[fs] Inventory clip layout unavailable; using the game's clipping\n");
     rstb_patch(fmeta, foff, fsz);
+#ifdef SW_MULTIPLAYER
+    add_multiplayer_proxy(fmeta, foff, fsz);
+#endif
     haze_patch();
     shrine_sensor_note();
     if (R->ov_n) LOG("[fs] overlay: %d romfs files replaced\n", R->ov_n);
@@ -1433,7 +1528,7 @@ static ssize_t romfs_read(RomImage *m, uint8_t *dst, uint64_t size, uint64_t off
             ssize_t r;
             if (m->ov[i].mem) {  // in-memory blob (the extended file table)
                 r = in < m->ov[i].size ? (ssize_t)(n < m->ov[i].size - in ? n : m->ov[i].size - in) : 0;
-                memcpy(dst + done, m->ov[i].mem + in, (size_t)r);
+                if (r) memcpy(dst + done, m->ov[i].mem + in, (size_t)r);
             } else {
                 if (m->ov[i].fd < 0) m->ov[i].fd = open(m->ov[i].path, O_RDONLY);
                 r = in < m->ov[i].size ? pread(m->ov[i].fd, dst + done, n < m->ov[i].size - in ? n : m->ov[i].size - in, (off_t)in) : 0;

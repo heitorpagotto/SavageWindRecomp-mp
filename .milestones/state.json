@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T18:23:22-03:00",
+  "updated_at": "2026-11-22T20:14:44-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -52,14 +52,15 @@
     {
       "id": "M1",
       "name": "Native multiplayer build and internet lobby",
-      "status": "partial",
-      "scope": "Native Windows build and loopback gameplay with shared Settings and visible Plateau NPCs",
-      "pending_test_build": "native Linux/Vulkan execution, clipboard flow in both menus, mixed-platform hosting in both directions, and direct ICE across two external networks"
+      "status": "complete",
+      "scope": "Owner accepted M1 after Windows and Linux clients joined a friend hosting on Linux. Hosting from the owner's network still requires diagnosis.",
+      "open_verification": "owner-host direction, selected ICE candidates and full native acceptance matrix"
     },
     {
       "id": "M2",
       "name": "Remote Link presence",
-      "status": "not_started"
+      "status": "partial",
+      "scope": "Peer position and facing transport and an in-place Link proxy are integrated for the Plateau. The base model renders in its bind pose. Animation, health, equipment and the full acceptance matrix are pending."
     },
     {
       "id": "M3",
@@ -100,10 +101,12 @@
     "native Windows/Linux source build with localized F1 and System > Options multiplayer controls",
     "one persisted default-off setting and window-thread teardown when multiplayer is disabled",
     "per-peer Great Plateau NPC placeholders for the native M1 build",
-    "direct single-use clipboard invite and reply with public STUN discovery"
+    "direct single-use clipboard invite and reply with public STUN discovery",
+    "M2 position and facing snapshots at up to 20 Hz with host batching and roster epoch validation",
+    "Plateau remote Link proxy using a local RomFS actor alias and the native matrix setter"
   ],
   "not_implemented": [
-    "remote Link actors",
+    "remote Link animation, health, and broader area support",
     "equipment replication payload",
     "combat and shared enemy health",
     "PvP",
@@ -131,7 +134,8 @@
     "presence_site_checks": "pass: 50 site checks and 59 layout checks; strict signature group disables the full hook on mismatch",
     "native_windows": "Clang 23.1.5, libdatachannel 0.24.6, matching 1.9.0 gamelib 6bb7f77965924e25; F1 and System > Options share enable, live Host/Join, rejection, two NPCs per renderer, late join, slot reuse, disconnect and disable cleanup; F1 host reboot closed the lobby, and a fresh process restored the enabled preference",
     "native_linux_cross": "x86-64 and aarch64 multiplayer runtime, presence, settings and menu objects cross-compiled; native link and execution pending",
-    "direct_signaling": "Windows standalone test passed eight peers, malformed and stale input, single-use replies, expiry and cleanup. A two-process Windows runtime test passed with an isolated clipboard. Linux x86-64 transport objects cross-compiled. Native external-network tests pending."
+    "direct_signaling": "Windows standalone test passed eight peers, malformed and stale input, single-use replies, expiry and cleanup. A two-process Windows runtime test passed with an isolated clipboard. Linux x86-64 transport objects cross-compiled. Native external-network tests pending.",
+    "m2_plateau_position": "Two Windows Vulkan instances on BOTW 1.9.0 and a1c9d2072a418844 rendered base Link proxies. At a 30 FPS target, walk, jump and facing updated in place. Leave, same-slot rejoin, host reboot cleanup, and independent inventory opening passed. The 60 FPS target run verified area withdrawal and return."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -150,5 +154,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Verify the native clipboard flow on Windows and Linux/Vulkan across two external networks in both host directions. Follow up on the bundled OpenSSL and negotiated DTLS version."
+  "next_recommended_work": "Resume M2 from M2_POSITION_HANDOFF.md. Add native poses to the Plateau proxy and run the remaining gameplay matrix. Keep the owner-host connection issue open."
 }

@@ -1,15 +1,13 @@
 # Resume guide and next work
 
-Start with the [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) and the
-[test record](TESTING.md). M1 is partial.
+Start with the [M2 position and remote Link handoff](M2_POSITION_HANDOFF.md). The project owner accepted
+M1 after joining a Linux host from both Windows and Linux and approved starting M2.
 
-1. Run [build-linux.sh](../build-linux.sh) on x86-64 Linux with Podman and validate its AppImage on Vulkan.
-2. Use scratch settings and saves to finish the [M1 acceptance matrix](TESTING.md#native-m1-acceptance),
-   including the invite and reply flow in both menus, the full roster, Leave, rejection, and reboot cleanup.
-3. Test Windows-to-Linux and Linux-to-Windows hosting across two external networks and record the selected
-   direct ICE candidate types. Regenerate and rebuild whenever the guest sites or patches change.
-4. Follow up on the [OpenSSL and DTLS findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) when preparing the
-   builds for distribution. Verify the bundled OpenSSL package and the negotiated DTLS version.
-5. Update the [test record](TESTING.md), [milestone ledger](MILESTONES.md), [handoff](DIRECT_MULTIPLAYER_HANDOFF.md),
-   and [state](state.json). Begin M2 after M1 acceptance. Define wire identity and resync before forwarding
-   gameplay state for reusable peer slots.
+1. Continue M2 with native idle, walk and jump animation for the Plateau proxy. Build on the existing
+   actor alias, position and facing updates. Verify the gameplay matrix before expanding to equipment
+   and other areas.
+2. Continue the failed host-direction investigation separately. Capture the multiplayer log lines for
+   the accepted reply, WebRTC connection and lobby handshake from both players. Use fresh invites.
+   See the [test record](TESTING.md#direct-lobby-field-reports) and [direct handoff](DIRECT_MULTIPLAYER_HANDOFF.md).
+3. Follow up on the [OpenSSL and DTLS findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings)
+   when preparing builds for distribution. Verify the bundled OpenSSL package and negotiated DTLS version.

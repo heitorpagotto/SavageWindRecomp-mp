@@ -28,8 +28,9 @@ Limit: nothing is linked into Savage Wind and no network connection is made.
 
 ## M1 — Native multiplayer build and internet lobby
 
-Status **partial**. Native source integration and both Settings surfaces are implemented. See the
-[test record](TESTING.md) for Windows loopback verification and pending native Linux and external-network acceptance.
+Status **accepted by the project owner**. The owner confirmed Windows and Linux could join when the friend
+hosted and approved starting M2. Hosting from the owner's network still needs diagnosis. See the
+[test record](TESTING.md) for the verification scope and open cases.
 The [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) records the open transport security findings.
 
 Delivered
@@ -62,7 +63,9 @@ Acceptance criteria
 
 ## M2 — Remote Link presence
 
-Status: **not started**.
+Status **in progress**. The Plateau supports remote Link proxies driven by peer position and facing
+snapshots. The proxies use the base model in its bind pose. Animation, health, equipment and the
+broader acceptance matrix are still open.
 
 Goal: every peer sees the other seven players as Links using existing game assets.
 

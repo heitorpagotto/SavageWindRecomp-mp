@@ -288,7 +288,23 @@ static void lobby_test(void) {
     }
     swmp_lobby_poll(extra, 1);
     CHECK(extra->rejection == SWMP_REJECT_FULL);
+    // Position updates work in an open lobby, without START, and the host relays every peer in a batch.
+    SwmpPlayerSnapshot position = {.area_id = 1};
+    for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
+        position.position_mm[0] = i * 1000;
+        swmp_lobby_send_position(&lobbies[i], &position, 1);
+    }
+    swmp_lobby_poll(host, 1);
+    position.position_mm[0] = 10;
+    swmp_lobby_send_position(host, &position, 1);
+    swmp_lobby_poll(&lobbies[2], 1);
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+        if (i == 2) continue;
+        CHECK(swmp_position_fresh(&lobbies[2].positions[i], 1));
+        CHECK(lobbies[2].positions[i].snapshot.position_mm[0] == (i ? i * 1000 : 10));
+    }
     CHECK(swmp_lobby_start(host));
+    uint32_t old_epoch = host->roster_epoch;
 
     SwmpRemoteRoster host_before = swmp_session_remote_roster(&host->session);
     SwmpRemoteRoster client_before = swmp_session_remote_roster(&lobbies[2].session);
@@ -317,10 +333,35 @@ static void lobby_test(void) {
     CHECK(client_after.generation[3] > client_before.generation[3]);
     CHECK(host_after.generation[1] == host_before.generation[1]);
     CHECK(client_after.generation[0] == client_before.generation[0]);
+    CHECK(!host->positions[3].snapshot.area_id && !lobbies[2].positions[3].snapshot.area_id);
+
+    // A host state datagram from before the replacement cannot populate the reused slot.
+    uint8_t packet[SWMP_PACKET_HEADER_SIZE + SWMP_PLAYER_SNAPSHOT_SIZE];
+    SwmpPacketHeader state = {
+        .version = SWMP_PROTOCOL_VERSION, .type = SWMP_MSG_PLAYER_SNAPSHOT,
+        .payload_size = SWMP_PLAYER_SNAPSHOT_SIZE, .session_id = host->session.session_id,
+        .sender_peer = SWMP_HOST_PEER, .channel = SWMP_CHANNEL_STATE, .sequence = 2, .tick = old_epoch,
+    };
+    position.peer_id = 3;
+    CHECK(swmp_player_snapshot_encode(packet + SWMP_PACKET_HEADER_SIZE, &position));
+    CHECK(swmp_packet_encode(packet, sizeof packet, &state) == SWMP_PACKET_OK);
+    CHECK(host->transport.send(host->transport.context, lobbies[2].links[0].connection,
+                              SWMP_CHANNEL_STATE, packet, sizeof packet));
+    swmp_lobby_poll(&lobbies[2], 2);
+    CHECK(!lobbies[2].positions[3].snapshot.area_id);
+
+    // A late join sees current players with the next batch, and expired entries drop out.
+    swmp_lobby_send_position(host, &position, 51);
+    swmp_lobby_poll(extra, 51);
+    CHECK(extra->positions[2].snapshot.position_mm[0] == 2000);
+    CHECK(!swmp_position_fresh(&extra->positions[2], 1051));
+    swmp_lobby_send_position(host, &position, 1051);
+    swmp_lobby_poll(extra, 1051);
+    CHECK(!extra->positions[2].snapshot.area_id);
 
     swmp_lobby_leave(host);
     for (unsigned i = 1; i <= SWMP_MAX_PEERS; i++) {
-        swmp_lobby_poll(&lobbies[i], 3);
+        swmp_lobby_poll(&lobbies[i], 1052);
         CHECK(!lobbies[i].joining && lobbies[i].session.state == SWMP_SESSION_OFFLINE);
         SwmpRemoteRoster offline = swmp_session_remote_roster(&lobbies[i].session);
         for (uint8_t j = 0; j < SWMP_MAX_PEERS; j++) CHECK(!offline.generation[j]);

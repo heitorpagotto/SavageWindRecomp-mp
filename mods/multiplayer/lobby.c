@@ -77,6 +77,7 @@ static bool send_control(SwmpLobby *l, const SwmpLobbyLink *link, SwmpMessageTyp
         .session_id = s->session_id,
         .sender_peer = s->local_peer,
         .channel = SWMP_CHANNEL_CONTROL,
+        .tick = l->roster_epoch,
     };
     if (type != SWMP_MSG_HELLO && !swmp_session_next_sequence(s, SWMP_CHANNEL_CONTROL, &h.sequence))
         return false;
@@ -139,6 +140,8 @@ static void disconnected(SwmpLobby *l, SwmpLobbyLink *link) {
     if (l->session.role != SWMP_ROLE_HOST) {
         fail(l, SWMP_REJECT_NONE, "Host disconnected");
     } else if (swmp_session_remove_peer(&l->session, peer)) {
+        l->positions[peer] = (SwmpPosition){0};
+        ++l->roster_epoch;
         SwmpControl msg = {.peer.id = peer};
         broadcast(l, SWMP_MSG_PEER_LEFT, &msg, SWMP_UNASSIGNED_PEER);
     }
@@ -186,6 +189,7 @@ static void hello(SwmpLobby *l, SwmpLobbyLink *link, const SwmpControl *m) {
         return;
     }
 
+    ++l->roster_epoch;
     SwmpControl welcome = {
         .welcome.local_peer = (uint8_t)peer,
         .welcome.playing = s->state == SWMP_SESSION_PLAYING,
@@ -195,6 +199,7 @@ static void hello(SwmpLobby *l, SwmpLobbyLink *link, const SwmpControl *m) {
         if (swmp_session_peer(s, i)) strcpy(welcome.welcome.names[i], s->peers[i].name);
     if (!send_control(l, link, SWMP_MSG_WELCOME, &welcome)) {
         swmp_session_remove_peer(s, (uint8_t)peer);
+        --l->roster_epoch;
         close_link(l, link);
         return;
     }
@@ -224,18 +229,86 @@ static void welcome(SwmpLobby *l, SwmpLobbyLink *link, const SwmpPacketHeader *h
     if (m->welcome.playing) swmp_session_remote_start(s);
     swmp_session_receive(s, h);
     l->features = features;
+    l->roster_epoch = h->tick;
     link->peer = SWMP_HOST_PEER;
     l->joining = false;
 }
 
-static void packet(SwmpLobby *l, const SwmpTransportEvent *event, SwmpLobbyLink *link) {
+bool swmp_position_fresh(const SwmpPosition *position, uint64_t now) {
+    return position->snapshot.area_id && now - position->received_at < SWMP_POSITION_TIMEOUT_MS;
+}
+
+void swmp_lobby_send_position(SwmpLobby *l, const SwmpPlayerSnapshot *local, uint64_t now) {
+    SwmpSession *s = &l->session;
+    if (!s->session_id || l->joining || now < l->next_position_at ||
+        swmp_session_peer_count(s) < 2) return;
+    l->next_position_at = now + SWMP_POSITION_INTERVAL_MS;
+    l->positions[s->local_peer] = (SwmpPosition){.snapshot = *local, .received_at = now};
+    l->positions[s->local_peer].snapshot.peer_id = s->local_peer;
+
+    uint8_t data[SWMP_PACKET_HEADER_SIZE + SWMP_MAX_PEERS * SWMP_PLAYER_SNAPSHOT_SIZE];
+    size_t size = 0;
+    bool host = s->role == SWMP_ROLE_HOST;
+    // Each host datagram replaces the entire state for this link. A dropped datagram or a late join
+    // recovers from the next one without letting one player's sample overwrite another's in the transport.
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+        const SwmpPosition *p = &l->positions[i];
+        if ((i != s->local_peer && !host) || !swmp_position_fresh(p, now)) continue;
+        if (swmp_player_snapshot_encode(data + SWMP_PACKET_HEADER_SIZE + size, &p->snapshot))
+            size += SWMP_PLAYER_SNAPSHOT_SIZE;
+    }
+    SwmpPacketHeader h = {
+        .version = SWMP_PROTOCOL_VERSION, .type = SWMP_MSG_PLAYER_SNAPSHOT, .payload_size = (uint32_t)size,
+        .session_id = s->session_id, .sender_peer = s->local_peer, .channel = SWMP_CHANNEL_STATE,
+        .tick = host ? l->roster_epoch : 0,
+    };
+    swmp_session_next_sequence(s, SWMP_CHANNEL_STATE, &h.sequence);
+    size += SWMP_PACKET_HEADER_SIZE;
+    if (swmp_packet_encode(data, size, &h) != SWMP_PACKET_OK) return;
+    for (size_t i = 0; i < SWMP_LOBBY_LINKS; i++) {
+        const SwmpLobbyLink *link = &l->links[i];
+        if (link->connection && !link->closing && link->peer != SWMP_UNASSIGNED_PEER)
+            l->transport.send(l->transport.context, link->connection, SWMP_CHANNEL_STATE, data, size);
+    }
+}
+
+static void position_packet(SwmpLobby *l, const SwmpPacketHeader *h, const uint8_t *data, uint64_t now) {
+    bool host = l->session.role == SWMP_ROLE_HOST;
+    size_t size = h->payload_size;
+    if (size % SWMP_PLAYER_SNAPSHOT_SIZE || size > SWMP_MAX_PEERS * SWMP_PLAYER_SNAPSHOT_SIZE ||
+        (host ? size > SWMP_PLAYER_SNAPSHOT_SIZE || h->tick : h->tick != l->roster_epoch) ||
+        swmp_session_accept(&l->session, h) != SWMP_RECEIVE_ACCEPT) return;
+    SwmpPosition positions[SWMP_MAX_PEERS] = {0};
+    while (size) {
+        SwmpPlayerSnapshot p;
+        if (!swmp_player_snapshot_decode(&p, data) || !p.area_id ||
+            (host && p.peer_id != h->sender_peer) || !swmp_session_peer(&l->session, p.peer_id) ||
+            positions[p.peer_id].snapshot.area_id) return;
+        positions[p.peer_id] = (SwmpPosition){.snapshot = p, .received_at = now};
+        data += SWMP_PLAYER_SNAPSHOT_SIZE;
+        size -= SWMP_PLAYER_SNAPSHOT_SIZE;
+    }
+    swmp_session_receive(&l->session, h);
+    if (host) {
+        l->positions[h->sender_peer] = positions[h->sender_peer];
+    } else {
+        for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++)
+            if (i != l->session.local_peer) l->positions[i] = positions[i];
+    }
+}
+
+static void packet(SwmpLobby *l, const SwmpTransportEvent *event, SwmpLobbyLink *link, uint64_t now) {
     SwmpPacketHeader h;
     SwmpControl m;
-    if (!link || link->closing || event->channel != SWMP_CHANNEL_CONTROL ||
-        swmp_packet_decode(&h, event->data, event->size) != SWMP_PACKET_OK ||
-        h.channel != SWMP_CHANNEL_CONTROL || h.flags != 0 ||
-        !swmp_control_decode(&m, (SwmpMessageType)h.type, event->data + SWMP_PACKET_HEADER_SIZE, h.payload_size))
+    if (!link || link->closing || swmp_packet_decode(&h, event->data, event->size) != SWMP_PACKET_OK ||
+        h.channel != event->channel || h.flags != 0) return;
+    const uint8_t *data = event->data + SWMP_PACKET_HEADER_SIZE;
+    if (h.type == SWMP_MSG_PLAYER_SNAPSHOT) {
+        if (!l->joining && h.sender_peer == link->peer) position_packet(l, &h, data, now);
         return;
+    }
+    if (h.channel != SWMP_CHANNEL_CONTROL ||
+        !swmp_control_decode(&m, (SwmpMessageType)h.type, data, h.payload_size)) return;
     if (l->joining) {
         if (h.sender_peer != SWMP_HOST_PEER || !h.session_id) return;
         if (h.type == SWMP_MSG_WELCOME) welcome(l, link, &h, &m);
@@ -255,9 +328,12 @@ static void packet(SwmpLobby *l, const SwmpTransportEvent *event, SwmpLobbyLink 
     switch (h.type) {
     case SWMP_MSG_PEER_JOINED:
         if (!swmp_session_add_remote_peer(s, m.peer.id, m.peer.name)) return;
+        l->roster_epoch = h.tick;
         break;
     case SWMP_MSG_PEER_LEFT:
         if (!swmp_session_remove_peer(s, m.peer.id)) return;
+        l->positions[m.peer.id] = (SwmpPosition){0};
+        l->roster_epoch = h.tick;
         break;
     case SWMP_MSG_START:
         if (!swmp_session_remote_start(s)) return;
@@ -304,7 +380,7 @@ void swmp_lobby_poll(SwmpLobby *l, uint64_t now) {
             disconnected(l, link);
             break;
         case SWMP_TRANSPORT_PACKET:
-            packet(l, &event, link);
+            packet(l, &event, link, now);
             break;
         case SWMP_TRANSPORT_ERROR:
             fail(l, SWMP_REJECT_NONE, event.text ? event.text : "Lobby transport failed");

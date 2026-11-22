@@ -20,6 +20,7 @@ typedef struct {
 static pthread_mutex_t view_lock = PTHREAD_MUTEX_INITIALIZER;
 static SwmpM1View view;
 static SwmpM1Roster roster;
+static SwmpPosition local_position;
 static Command command;
 static bool stop_requested;
 
@@ -106,6 +107,7 @@ void swmp_m1_shutdown(void) {
     pthread_mutex_lock(&view_lock);
     view = (SwmpM1View){0};
     roster = (SwmpM1Roster){0};
+    local_position = (SwmpPosition){0};
     command = (Command){0};
     stop_requested = false;
     pthread_mutex_unlock(&view_lock);
@@ -122,6 +124,7 @@ void swmp_m1_set_enabled(bool enabled) {
         // even if a menu turns multiplayer back on before the next poll.
         view = (SwmpM1View){.supported = view.supported};
         roster = (SwmpM1Roster){0};
+        local_position = (SwmpPosition){0};
         command = (Command){0};
         stop_requested = true;
     }
@@ -140,6 +143,13 @@ SwmpM1Roster swmp_m1_roster(void) {
     SwmpM1Roster snapshot = roster;
     pthread_mutex_unlock(&view_lock);
     return snapshot;
+}
+
+void swmp_m1_publish_position(uint64_t generation, const SwmpPlayerSnapshot *position, uint64_t now_ms) {
+    pthread_mutex_lock(&view_lock);
+    if (generation && generation == roster.lobby_generation)
+        local_position = (SwmpPosition){.snapshot = *position, .received_at = now_ms};
+    pthread_mutex_unlock(&view_lock);
 }
 
 bool swmp_m1_can(const SwmpM1View *v, SwmpM1Action action) {
@@ -177,6 +187,8 @@ void swmp_m1_update(void) {
     bool stop = stop_requested;
     stop_requested = false;
     Command pending = command;
+    SwmpPosition sample = local_position;
+    uint64_t sample_lobby = roster.lobby_generation;
     command = (Command){0};
     pthread_mutex_unlock(&view_lock);
 
@@ -234,6 +246,10 @@ void swmp_m1_update(void) {
         swmp_webrtc_expire(rtc, now);
         bool waiting_welcome = lobby.waiting_welcome;
         swmp_lobby_poll(&lobby, now);
+        SwmpPlayerSnapshot position = {0};
+        if (sample_lobby == lobby_generation && swmp_position_fresh(&sample, now))
+            position = sample.snapshot;
+        swmp_lobby_send_position(&lobby, &position, now);
         if (lobby.joining && lobby.waiting_welcome && !waiting_welcome)
             LOG("[multiplayer] lobby handshake sent, waiting for host\n");
         if (reply_connection && !swmp_webrtc_has_link(rtc, reply_connection)) {
@@ -251,7 +267,7 @@ void swmp_m1_update(void) {
     if (lobby.session.state == SWMP_SESSION_LOBBY || lobby.session.state == SWMP_SESSION_PLAYING) {
         admitted.lobby_generation = lobby_generation;
         admitted.remotes = swmp_session_remote_roster(&lobby.session);
-        admitted.local_peer = lobby.session.local_peer;
+        memcpy(admitted.positions, lobby.positions, sizeof admitted.positions);
     }
     pthread_mutex_lock(&view_lock);
     if (stop_requested) {
@@ -270,6 +286,8 @@ void swmp_m1_update(void) {
     view.failed = failed;
     view.direct = lobby.joining && lobby.waiting_welcome ? SWMP_DIRECT_IDLE : swmp_direct_state(direct);
     view.clipboard_error = clipboard_error;
+    if (roster.lobby_generation != admitted.lobby_generation)
+        local_position = (SwmpPosition){0};
     roster = admitted;
     pthread_mutex_unlock(&view_lock);
     if (before != after) LOG("[multiplayer] lobby peers: %zu\n", after);

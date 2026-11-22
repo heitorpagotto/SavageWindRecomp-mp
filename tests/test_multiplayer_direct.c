@@ -112,6 +112,25 @@ int main(void) {
     uint64_t end = now_ms() + 12000;
     while (swmp_session_peer_count(&peers[1].lobby.session) != SWMP_MAX_PEERS && now_ms() < end) tick();
     assert(swmp_session_peer_count(&peers[1].lobby.session) == SWMP_MAX_PEERS);
+    end = now_ms() + 5000;
+    unsigned visible = 0;
+    do {
+        uint64_t now = now_ms();
+        for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+            SwmpPlayerSnapshot position = {.area_id = 1, .position_mm = {i * 1000}, .rotation = {0, i * -1000, 0}};
+            swmp_lobby_send_position(&peers[i].lobby, &position, now);
+        }
+        tick();
+        now = now_ms();
+        visible = 0;
+        for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+            const SwmpPosition *position = &peers[7].lobby.positions[i];
+            if (i != 7 && swmp_position_fresh(position, now) && position->snapshot.position_mm[0] == i * 1000 &&
+                position->snapshot.rotation[1] == i * -1000)
+                visible++;
+        }
+    } while (visible != SWMP_MAX_PEERS - 1 && now_ms() < end);
+    assert(visible == SWMP_MAX_PEERS - 1);
     assert(swmp_lobby_start(&host->lobby));
     end = now_ms() + 12000;
     while (peers[7].lobby.session.state != SWMP_SESSION_PLAYING && now_ms() < end) tick();
@@ -131,5 +150,5 @@ int main(void) {
         swmp_direct_destroy(peers[i].direct);
     }
     rtcCleanup();
-    puts("multiplayer direct: eight peers, stale and invalid messages, single-use replies, expiry and cleanup ok");
+    puts("multiplayer direct: eight peers, position relay, stale and invalid messages, single-use replies, expiry and cleanup ok");
 }
