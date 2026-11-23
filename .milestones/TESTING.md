@@ -121,8 +121,7 @@ the verified launcher, and the outstanding host-direction report.
   matched the installed 1.9.0 gamelib ID `e640fd858dc0d033` at x86-64-v3.
 - In two Windows 1.9.0 Vulkan instances connected through the direct lobby, the position-control probe kept
   both proxies active at about 30 m. It withdrew both at about 145 m and restored both on return without a
-  rejoin. The return screenshot showed both Links. This used the position control endpoint. Slate fast travel
-  still needs a save with an unlocked destination and a field retest. Evidence is in ignored
+  rejoin. The return screenshot showed both Links. This run used the position control endpoint. Evidence is in ignored
   `build/m2-travel-live-2c_8l727/`.
 - The final Windows animation probe reported the native Idle, Walk, Run, Dash and Jump states playing on the
   receiver. The Run and Dash input tests used full left-stick travel without and with the sprint button.
@@ -134,6 +133,29 @@ the verified launcher, and the outstanding host-direction report.
   loaded a scratch autosave while both were in the lobby. Both sides retired their original proxies and
   reported fresh native actors when the client returned to the overworld. Both retained the original lobby.
   Evidence is in ignored `build/m2-travel-live-v_njtp_n/`.
+- On 2026-11-23, two Windows scratch clients connected over direct WebRTC with version
+  `0.6.0-alpha.6-0.1.0-mp`, source ID `3344f886df6a2e0a8a90d4dedddc1cc95f37380e` and BOTW 1.9.0
+  gamelib `e640fd858dc0d033`. The probe used isolated clipboard automation and copies of a save with
+  Slate travel unlocked. The client used the native Slate map to travel to Great Plateau Tower, then
+  back to the Shrine of Resurrection. The two-player lobby remained admitted through both loads.
+  At about 92 m separation after returning, both logs reported actors repeatedly becoming inactive
+  and respawning. After the position-control probe put the two Links about 4 m apart outdoors, each
+  visibly rendered the other in the original lobby. Sustained visibility near 92 m remains open.
+  Both ran at a 30 FPS target, 960×540, 50 percent render scale, 1400 MiB VRAM budget and heap copy off
+  on NVIDIA RTX 4050 Laptop (616.92) and AMD Radeon Graphics (25.10.30.02). Logs and captures are in
+  ignored `build/m2-slate-kcjjyehi/`. The native mixed-platform retest remains open.
+
+## M2 release version check
+
+- Windows and Linux Make targets print `0.6.0-alpha.6-0.1.0-mp` via `print-version` and report the same
+  multiplayer source ID as the preceding visibility build. The macOS Make target prints `0.6.0-alpha.6`.
+  The Windows ZIP dry run uses the combined label for the filename and manifest. The Linux launcher
+  translation unit cross-compiled for x86-64, and the AppImage packaging script passed its shell syntax check.
+- The Windows app linked and displayed the combined label in Configuration and in the startup log with
+  BOTW 1.9.0 and x86-64-v3 gamelib `e640fd858dc0d033`. The Windows multiplayer core, eight-peer WebRTC,
+  eight-peer direct and updater core tests passed. The translation check reported zero missing or unused strings.
+  The Windows capture and logs are in ignored `build/m2-version-smoke-dotx5361/`. Native Linux execution and
+  full package creation are pending.
 
 ## M1 Windows presence check
 

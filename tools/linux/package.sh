@@ -13,8 +13,6 @@ L=$PWD/build/linux/$ARCH
 P=$L/deps
 B=$L/game
 APPDIR=$L/AppDir
-VERSION=$(sed -n 's/^#define SAVAGEWIND_VERSION "\(.*\)"/\1/p' runtime/ui/launcher.mm)
-OUT=build/dist/Savage_Wind-$VERSION-$ARCH.AppImage
 JOBS=$(nproc)
 
 tools/linux/build_deps.sh "$ARCH"
@@ -27,6 +25,8 @@ if [ "$ARCH" != "$(uname -m)" ]; then
 else
     MAKEARGS=(ARCH="$ARCH")
 fi
+VERSION=$(make -s B="$B" DEPS="$P" "${MAKEARGS[@]}" print-version)
+OUT=build/dist/Savage_Wind-$VERSION-$ARCH.AppImage
 
 # the app alone (the game code is built on the player's machine)
 make -j"$JOBS" B="$B" DEPS="$P" "${MAKEARGS[@]}" "$B/savagewind"  # (the DEPS link line asks for libshaderc_shared itself)

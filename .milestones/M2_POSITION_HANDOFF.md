@@ -71,7 +71,7 @@ For the later range expansion and Slate travel report, see [M2 visibility follow
 
 ## Resume
 
-1. Add default appearance pieces and reliable equipment revisions. Use
+1. For M2.5, add default appearance pieces and reliable equipment revisions. Use
    the existing read-only equipped-actor query in `runtime/quick_drop_action.c` as a reference for
    equipped weapons. Resolve appearance resources from installed data and apply them to an owned
    proxy. `Armor_Default_Head` selects its head unit from the `Armor_Default` model archive in
@@ -80,7 +80,7 @@ For the later range expansion and Slate travel report, see [M2 visibility follow
    submitted creation requests that failed before activation. Its log is under ignored
    `build/m2-hair-budget-a5ndp610/`. Start by isolating the native model load and attachment path
    with one equipped piece. Verify individual inventory and local control.
-2. Extend the action map when a supported movement or area needs another native pose. Preserve the
+2. For M2.5, extend the action map to cover the full set of player animations. Preserve the
    indexed actor lifecycle, transform and snapshot rate.
 3. Complete extended sessions with eight independently controlled game clients, sustained 90 and
    120 FPS, interiors, travel, live loss/jitter and native Windows/Linux gameplay. Review the

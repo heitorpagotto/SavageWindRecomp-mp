@@ -31,6 +31,12 @@ The manual steps below give the individual build commands and include the option
 
 ## Multiplayer build compatibility
 
+The Configuration screen, startup log, Windows ZIP and Linux AppImage use the release label
+`0.6.0-alpha.6-0.1.0-mp`. It combines the full upstream version with the independent number in
+[`mods/multiplayer/VERSION`](../mods/multiplayer/VERSION). Run `make -s print-version` to get the label for
+the current checkout. Install updates from the multiplayer fork manually. Its packages use that release
+label, and Configuration skips the upstream update feed.
+
 Compare the `[multiplayer] source ID: …, game build: …` startup line from the running app on each system.
 Both values must match. The source ID identifies the multiplayer sources baked into the executable.
 The game build identifies the loaded BOTW main module. Each platform has its own local game-library ID.

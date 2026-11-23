@@ -1,9 +1,10 @@
 # Agent handoff
 
-Checkpoint 2026-11-22 on `multiplayer/windows-test`, with local M2 visibility and animation changes based on
-`7991b79` (`major changes to animation`). Start with the visibility follow-up below. Read [AGENTS.md](../AGENTS.md) and
-[CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and separate
-scratch settings and saves for game tests. Keep generated code and game data local.
+Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `62d4143` (`adjusted range`). The M2 version
+label is `0.6.0-alpha.6-0.1.0-mp`. The versioned Windows build is in ignored `build/m2-version-build/` and
+embeds the same multiplayer source ID as the visibility follow-up. Read [AGENTS.md](../AGENTS.md) and
+[CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
+separate scratch settings and saves for game tests. Keep generated code and game data local.
 
 ## M2 visibility follow-up
 
@@ -16,7 +17,12 @@ scratch settings and saves for game tests. Keep generated code and game data loc
   player. It retains existing requests and actors up to 120 m to prevent repeated spawning near the boundary.
   Loading, a changed spawn context or local actor, and unavailable remote positions retire the corresponding
   actors. A fresh nearby pose can spawn a replacement in the same lobby.
-- Use `build/m2-travel-build/Play-M2-Travel.cmd` for the Windows follow-up. It uses the local 1.9.0 gamelib with
+- Two Windows scratch games stayed in the same lobby while the client used the native Slate to travel to
+  Great Plateau Tower and back to the Shrine of Resurrection. The returned proxy actors repeatedly became
+  inactive at about 92 m separation. At about 4 m apart outdoors, both players were visible again. Use the
+  logs in `build/m2-slate-kcjjyehi/` to compare intermittent native actor activation with the first stable
+  reunion. [Test record](TESTING.md#m2-visibility-follow-up)
+- Use `build/m2-version-build/Play-M2-Version.cmd` for the Windows follow-up. It uses the local 1.9.0 gamelib with
   ID `e640fd858dc0d033`. Build the Linux app from the same source and confirm both runs show source ID
   `3344f886df6a2e0a8a90d4dedddc1cc95f37380e`. For a visibility test, confirm both names and health are
   present in F1, meet at the same overworld waypoint, and face each other. On failure, keep the `[multiplayer]`
@@ -86,11 +92,11 @@ rebuild the library. The reported automatic version rejection still needs invest
   fixtures through START and disconnect. The health test relayed a controlled change from 12 to 9 and back
   to 12 quarter-hearts while the host stayed at 12. The [test record](TESTING.md#m2-plateau-animation-check)
   has GPU, FPS, settings, builds and evidence paths.
-- Appearance and reliable equipment revisions are the next M2 deliverables. The passive proxy failed to
+- Appearance and reliable equipment revisions are planned for M2.5, after M2 is complete. The passive proxy failed to
   activate when the scratch model list included a second model for default hair, including with an 8 MiB
   instance heap. Start from one native equipped model on an owned proxy. The [M2 handoff](M2_POSITION_HANDOFF.md#resume)
   has source entry points and probe paths.
 - M2 remains partial. Eight independently controlled clients, native Linux gameplay verification, interiors,
-  travel, live loss and jitter, and sustained 90/120 FPS remain open. The owner-confirmed cross-platform
+  mixed-platform travel, live loss and jitter, and sustained 90/120 FPS remain open. The owner-confirmed cross-platform
   join verifies lobby admission. See the [milestone ledger](MILESTONES.md#m2--remote-link-presence)
   and [milestone index](README.md).

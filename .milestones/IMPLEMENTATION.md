@@ -143,6 +143,13 @@ The separate native life observation reads current quarter-hearts from PlayerInf
 thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish
 it from missing health. Damage authority and death handling belong to M3.
 
+## M2 multiplayer release version
+
+Windows and Linux append `-<multiplayer version>-mp` to the upstream `SAVAGEWIND_VERSION` in the runtime,
+Configuration and package names. Bump [the multiplayer version file](../mods/multiplayer/VERSION) for a mod
+release. `make -s print-version` prints the combined label. The lobby's protocol, compatibility fields and
+source fingerprint continue to govern admission. The multiplayer fork is updated manually.
+
 ## Control payloads
 
 `lobby_protocol.h` declares the payload types. Integers use network byte order. Text is a one-byte length followed

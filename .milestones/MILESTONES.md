@@ -1,6 +1,6 @@
 # Milestone ledger
 
-Last reviewed 2026-11-22. Status values are `complete`, `partial`, `not started`, and `blocked`.
+Last reviewed 2026-11-23. Status values are `complete`, `partial`, `not started`, and `blocked`.
 Completion requires demonstrated acceptance criteria. Synthetic, build, network, and gameplay evidence have distinct scopes.
 
 ## M0 — Protocol and session foundation
@@ -59,14 +59,14 @@ Acceptance criteria
 - In the supported 1.9.0 test area, each peer sees one visible NPC placeholder per admitted remote peer,
   including peers who joined earlier. Rejected joins spawn nothing. Leave, disconnect, disable,
   and reboot clear the appropriate placeholders and release session resources and guest references.
-- Movement, animation, and equipment synchronization begin in M2.
+- Movement and basic animation synchronization begin in M2.
 
 ## M2 — Remote Link presence
 
 Status **in progress**. The main field supports nearby remote Link proxies driven by peer position,
 facing and native idle, walk, run, sprint and jump clips. The F1 multiplayer roster displays reported
-quarter-heart health. Slate travel, mixed-platform visibility, interiors, appearance and equipment
-are still open.
+quarter-heart health. Windows Slate travel preserved the lobby and nearby presence recovered after reunion.
+Sustained visibility near the spawn radius, mixed-platform travel and visibility, and interiors are still open.
 
 Goal: every peer sees the other seven players as Links using existing game assets.
 
@@ -75,15 +75,41 @@ Planned deliverables:
 - Version-aware game sites/patches for player observation and remote proxy lifecycle.
 - Stable network identity for remote actors; no guest pointer crosses the network or survives a reboot.
 - Snapshot interpolation/extrapolation, teleport/area transition handling, animation mapping, and visibility rules.
-- Reliable equipment/appearance updates keyed by `equipment_revision`.
 - Join-in-progress resync and peer removal cleanup.
+- An independently maintained multiplayer release number, starting at `0.1.0`. Append `-<multiplayer version>-mp`
+  to the full Savage Wind version, for example `0.6.0-alpha.6-0.1.0-mp`.
 
 Acceptance criteria:
 
 - Eight players are visible in the same supported area for an extended session.
-- Movement, facing, common actions, health, and worn equipment converge correctly.
+- Movement, facing, common actions, and health converge correctly.
 - Loss and jitter do not let remote proxies corrupt guest state or become the local-player singleton.
 - Plateau/interior/travel transitions and late join are tested at 30/60/90/120 FPS where relevant.
+- Windows and Linux multiplayer builds show the same combined release label and use it for distribution artifact
+  names. The lobby continues to check protocol and build compatibility independently of the release label.
+
+## M2.5 — Time, weather, and full Link synchronization
+
+Status **not started**. Begins after M2 is complete and before M3.
+
+Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped
+gear and animations.
+
+Planned deliverables:
+
+- Host-authoritative time of day and weather, including clock progression and weather transitions.
+- Reliable appearance and equipment updates keyed by `equipment_revision`, covering every armor slot,
+  weapons, shields, and bows, including equip, unequip, drawn, and stowed states.
+- Full remote animation playback, covering traversal, locomotion, equipment use, and combat animations.
+- Initial state and resync for late join, reconnect, and travel.
+
+Acceptance criteria:
+
+- Windows and Linux clients converge on the host's time of day and observe consistent weather transitions
+  when sharing an area, including after joining late, reconnecting, or traveling.
+- Each peer sees other Links' armor, weapons, shields, and bows update as players change equipment. Their
+  remote animations match the actions they perform, including combat animations.
+- Changes in a peer's gear or animation leave the receiving player's inventory and controls independent.
 
 ## M3 — Combat, enemies, and PvP
 
@@ -171,5 +197,5 @@ Acceptance criteria:
 
 ## Dependency order
 
-The intended order is M0 → M1 → M2 → M3 → M4 → M5 → M6. Story work follows stable actor identity, resync,
+The intended order is M0 → M1 → M2 → M2.5 → M3 → M4 → M5 → M6. Story work follows stable actor identity, resync,
 and transaction semantics.

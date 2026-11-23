@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T23:39:48-03:00",
+  "updated_at": "2026-11-23T09:05:06-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -13,7 +13,8 @@
       "Windows",
       "Linux/Vulkan"
     ],
-    "feature_version": "0.1.0-dev",
+    "feature_version": "0.1.0",
+    "release_version": "0.6.0-alpha.6-0.1.0-mp",
     "upstream_update_policy": "project owner manually integrates new Savage Wind releases",
     "settings_surfaces": [
       "F1 Settings",
@@ -27,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "7991b79",
+    "workspace_base_commit": "62d4143",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -60,7 +61,13 @@
       "id": "M2",
       "name": "Remote Link presence",
       "status": "partial",
-      "scope": "Remote Link presence accepts overworld positions within the local spawn radius. Native idle, walk, run, sprint and jump clips and read-only quarter-heart snapshots are implemented. Mixed-platform visibility, Slate travel, interiors and equipment are pending."
+      "scope": "Remote Link presence accepts overworld positions within the local spawn radius. Native idle, walk, run, sprint and jump clips and read-only quarter-heart snapshots are implemented. The multiplayer release version is tracked independently of upstream. Windows Slate travel preserved the lobby and nearby proxies recovered after reunion. Sustained visibility near the spawn radius, mixed-platform travel and visibility, and interiors are pending."
+    },
+    {
+      "id": "M2.5",
+      "name": "Time, weather, and full Link synchronization",
+      "status": "not_started",
+      "scope": "After M2, synchronize time of day and weather from host to clients, and synchronize armor, weapons, shields, bows and full animations between players."
     },
     {
       "id": "M3",
@@ -107,7 +114,8 @@
     "native idle, walk and jump playback on each owned Plateau proxy",
     "current quarter-heart observation and display in the F1 multiplayer roster",
     "main-field remote presence with 100 m spawn and 120 m retirement radii and local world transition cleanup",
-    "separate run and sprint clips selected from native locomotion and horizontal speed"
+    "separate run and sprint clips selected from native locomotion and horizontal speed",
+    "independent multiplayer release version for runtime and package labels"
   ],
   "not_implemented": [
     "remote Link appearance pieces, extended action mapping and broader area support",
@@ -143,7 +151,9 @@
     "m2_plateau_animation": "Two Windows Vulkan instances with gamelib 34aa482dae306a0d played native idle, walk and jump both ways over direct WebRTC. One renderer sustained all seven fixture-driven proxies for 30 seconds after START. The 60/90/120 targets were exercised below sustained 90/120 FPS.",
     "m2_plateau_health": "Two Windows Vulkan instances with gamelib e640fd858dc0d033 exchanged native quarter-heart values over direct WebRTC. A controlled scratch client change from 12 to 9 to 12 reached the host while the host's own life stayed at 12.",
     "m2_cross_platform_join": "Owner confirmed Windows client to Linux host using source ID 970ccbd296037d6d9aec806b7c0c22dca89d1d9e on both ends. The prior rejection came from a stale Windows executable. The matching local launcher is build/m2-health-build/Play-Matching-M2.cmd.",
-    "m2_visibility_followup": "Windows 1.9.0 at 30 FPS verified active proxies at 30 m, withdrawal at 145 m and return in the same lobby using the position-control probe. The final build played separate run and sprint clips and recovered both proxies after an in-game save load. Linux x86-64 cross-compile passed. Mixed-platform rendering and Slate fast travel remain unverified."
+    "m2_visibility_followup": "Windows 1.9.0 at 30 FPS verified active proxies at 30 m, withdrawal at 145 m and return in the same lobby using the position-control probe. The build played separate run and sprint clips and recovered both proxies after an in-game save load. Linux x86-64 cross-compile passed. Mixed-platform rendering and Slate travel remain unverified.",
+    "m2_windows_slate_travel": "Two 30 FPS Windows 1.9.0 scratch games retained the original lobby through native Slate travel to Great Plateau Tower and back to the Shrine of Resurrection. At about 92 m both actors repeatedly became inactive. Both were visibly rendered at about 4 m outdoors after repositioning with the control probe. Evidence: build/m2-slate-kcjjyehi/.",
+    "m2_release_version": "Windows link, Configuration capture and startup log verified 0.6.0-alpha.6-0.1.0-mp. The Windows and Linux Make targets reported the same combined label and multiplayer source ID. Windows ZIP naming dry run and Linux launcher x86-64 cross-compile passed. Native Linux and full package creation are pending."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -162,5 +172,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Retest remote Link visibility and Slate travel on matching Windows and Linux builds in both host directions. See HANDOFF.md and TESTING.md. Resume appearance and reliable equipment revisions from M2_POSITION_HANDOFF.md."
+  "next_recommended_work": "Retest remote Link visibility and Slate travel on matching Windows and Linux builds in both host directions. Compare native actor activation at about 92 m in open terrain and across the Shrine approach. See HANDOFF.md and TESTING.md. After M2, start M2.5 and resume appearance and reliable equipment revisions from M2_POSITION_HANDOFF.md."
 }

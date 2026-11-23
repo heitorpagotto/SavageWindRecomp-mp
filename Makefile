@@ -187,6 +187,7 @@ MP_CURL_CFLAGS ?=
 MP_CURL_LIBS ?= -lcurl
 MP_RNG_LIBS := $(if $(filter windows,$(PLATFORM)),-lbcrypt)
 ifneq ($(filter windows linux,$(PLATFORM)),)
+MP_RELEASE_VERSION := $(shell tr -d '\r\n' < mods/multiplayer/VERSION)
 MP_RUNTIME_SRC := $(addprefix mods/multiplayer/,protocol.c session.c lobby.c webrtc.c direct.c random.c)
 MP_RUNTIME_OBJ := $(patsubst mods/multiplayer/%.c,$(B)/rt/multiplayer/%.o,$(MP_RUNTIME_SRC))
 MP_RUNTIME_DEPS := $(MP_RUNTIME_SRC) $(wildcard mods/multiplayer/*.h) $(wildcard runtime/multiplayer*.c runtime/multiplayer*.h) runtime/game_sites.h tools/game_sites.py tools/patches.py
@@ -200,6 +201,8 @@ MP_BUILD_FLAGS := -DSW_MULTIPLAYER -iquote mods/multiplayer
 $(B)/rt/main.o $(B)/rt/multiplayer_presence.o $(B)/rt/nvn/vulkan/device.o: RTFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/multiplayer_assets.o $(B)/rt/services/fs.o: RTFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/ui/menu.o $(B)/rt/ui/multiplayer.o $(B)/rt/ui/game_options.o: CXXFLAGS += $(MP_BUILD_FLAGS)
+$(B)/rt/ui/launcher.o: CXXFLAGS += -DSWMP_RELEASE_VERSION='"$(MP_RELEASE_VERSION)"'
+$(B)/rt/ui/launcher.o: mods/multiplayer/VERSION
 $(B)/rt/multiplayer.o: RTFLAGS += $(MP_BUILD_FLAGS) $(MP_RTC_CFLAGS) -DSWMP_RUNTIME_ID='"$(MP_RUNTIME_ID)"'
 $(B)/rt/multiplayer.o: $(MP_RUNTIME_DEPS) $(B)/mp_runtime_id
 $(MP_RUNTIME_OBJ): RTFLAGS += -Imods/multiplayer $(MP_RTC_CFLAGS)
@@ -401,7 +404,11 @@ $(B)/rt/platform/sw_update_core.o: runtime/update_core.c runtime/update_core.h
 $(B)/sw-update.exe: $(B)/rt/platform/windows_update.o $(B)/rt/platform/sw_update_core.o $(B)/rt/platform/sw_update_rc.o
 	$(CC) -o $@ $^ $(SW_UPDATE_LIBS)
 
-VERSION  := $(shell sed -n 's/^\#define SAVAGEWIND_VERSION "\(.*\)"/\1/p' runtime/ui/launcher.mm)
+VERSION  := $(shell sed -n 's/^\#define SAVAGEWIND_VERSION "\(.*\)"/\1/p' runtime/ui/launcher.mm)$(if $(MP_RELEASE_VERSION),-$(MP_RELEASE_VERSION)-mp)
+
+.PHONY: print-version
+print-version:
+	@echo $(VERSION)
 
 # macOS: build/Savage Wind.app, runs on macOS $(APP_MIN)+: the game rebuilt for that in build/mac15 against build/deps
 # (`make deps`: SDL3, LGPL FFmpeg, Python, from pinned sources), the generator helper when built
@@ -443,12 +450,11 @@ dist:
 	@! find tools -maxdepth 1 -name '*.py' -newer build/helper/swgen/swgen.exe | grep -q . || \
 	    { echo "make gen-helper first: tools/*.py changed since build/helper/swgen was frozen"; exit 1; }
 	@[ -x build/zig/zig.exe ] || { echo "tools/fetch_zig.sh first (the compiler)"; exit 1; }
-	$(MAKE) B=$(WIN_B) DEPS=$(CURDIR)/build/deps-win RELEASE=1 PGO=$(DIST_PGO) LTO=$(DIST_LTO) $(WIN_B)/savagewind.exe $(WIN_B)/savagewind-config.exe $(WIN_B)/sw-update.exe
+	$(MAKE) B=$(WIN_B) DEPS=$(CURDIR)/build/deps-win RELEASE=1 PGO=$(DIST_PGO) LTO=$(DIST_LTO) $(WIN_B)/savagewind.exe $(WIN_B)/savagewind-config.exe
 	! nm $(WIN_B)/savagewind.exe | grep ' f_70' >/dev/null  # (no game code inside)
 	rm -rf build/dist && mkdir -p "$(DIST)/gamelib-src"
 	cp $(WIN_B)/savagewind.exe $(WIN_B)/savagewind.dll.a "$(DIST)/"
 	cp $(WIN_B)/savagewind-config.exe "$(DIST)/Savage Wind Configuration.exe"
-	cp $(WIN_B)/sw-update.exe "$(DIST)/SW Update.exe"
 	tools/zig_slim.sh $(strip $(filter-out -Iruntime,$(GENFLAGS))) \
 	    $(if $(GENFLAGS_COMPAT),-- $(strip $(filter-out -Iruntime,$(GENFLAGS_COMPAT))))  # (zig, its runtime built ahead of time)
 	cp -R build/helper/swgen "$(DIST)/"

@@ -105,9 +105,15 @@ static void save_png(id<MTLTexture> tex, const char *path) {
 }
 #endif
 
-// The version this build is (also names the release files; Makefile / tools/bundle_macos.sh / make_dmg.sh read it).
+// Upstream release version, also read by the Makefile and the macOS packagers.
 #define SAVAGEWIND_VERSION "0.6.0-alpha.6"
-extern "C" const char *rt_version(void) { return SAVAGEWIND_VERSION; }  // (the title screen's version line: fs.c)
+extern "C" const char *rt_version(void) {
+#ifdef SWMP_RELEASE_VERSION
+    return SAVAGEWIND_VERSION "-" SWMP_RELEASE_VERSION "-mp";
+#else
+    return SAVAGEWIND_VERSION;
+#endif
+}
 
 // ------------------------------------------------------------------ game files
 static std::string g_root;  // extracted game: <root>/exefs, <root>/romfs
@@ -803,7 +809,7 @@ static void *extract_thread(void *) {
     std::vector<std::string> dlc;
     bool unusable = false;  // (game packages rather than its files)
     bool dlc_only = false;  // (the shaders precompiled are the game's: nothing new to precompile)
-    bool new_version = post_update_pending(SAVAGEWIND_VERSION);  // (runtime/post_update.h: a release's first start)
+    bool new_version = post_update_pending(rt_version());  // (runtime/post_update.h: a release's first start)
     if (src.empty() && check_copied_files(g_root).empty()) {  // copied already (an update needs new game code)
         g_copy_skipped = true;
         if (new_version) {  // what a wrong copy of the game would only show as a crash later (the RomFS of another version)
@@ -900,7 +906,7 @@ check:
         if (why.empty() && !dlc_only && (g_settings.precompile_shaders || new_version) && shader_precompile_available())
             run_precompile();  // (a new version: always, the caches were emptied at its start)
 #endif
-        if (why.empty()) post_update_finish(SAVAGEWIND_VERSION);
+        if (why.empty()) post_update_finish(rt_version());
         if (why.empty() && g_settings.dlss_download && dlss_fetch_offered() && !dlss_fetch_present())
             run_dlss_fetch();  // (not needed to play: the game files are ready either way)
         RtDlcCheck dc = rt_dlc_check(g_root.c_str());
@@ -922,7 +928,7 @@ done:
     pthread_mutex_lock(&g_lock);
     if (g_job_failed) {
         g_stay_on_setup = true;
-        if (new_version) post_update_mark_failed(SAVAGEWIND_VERSION);
+        if (new_version) post_update_mark_failed(rt_version());
     }
     g_busy = false;
     pthread_mutex_unlock(&g_lock);
@@ -1482,7 +1488,7 @@ extern "C" int launcher_prepare(const char *root, const char *src) {
     g_root = root;
     g_src = src;
     g_busy = true;
-    if (post_update_pending(SAVAGEWIND_VERSION)) post_update_reset_shaders(SAVAGEWIND_VERSION);  // (as a plain start does)
+    if (post_update_pending(rt_version())) post_update_reset_shaders(rt_version());  // (as a plain start does)
     pthread_t t;
     pthread_create(&t, NULL, extract_thread, NULL);
     std::string last_step;
@@ -1568,7 +1574,7 @@ extern "C" void launcher_run(const char *root, int mode) {
     bool test_setup =
         getenv("SAVAGEWIND_LAUNCHER_EXTRACT") || getenv("SAVAGEWIND_SETUP_FROM") || getenv("SAVAGEWIND_LAUNCHER_SETUP");
     bool auto_setup = post_update_shipped() && !getenv("SAVAGEWIND_LAUNCHER_SHOT") && !test_setup && check_copied_files(g_root).empty() &&
-                      (post_update_pending(SAVAGEWIND_VERSION) || !status.empty()) && !post_update_failed_before(SAVAGEWIND_VERSION);
+                      (post_update_pending(rt_version()) || !status.empty()) && !post_update_failed_before(rt_version());
     if (!auto_setup) explain_status(status);
     bool play = false;
     bool tip_then_play = false;  // (setup mode: the game files just got ready; the first-start note, then the game)
@@ -1581,7 +1587,10 @@ extern "C" void launcher_run(const char *root, int mode) {
         pthread_create(&t, NULL, extract_thread, NULL);
         pthread_detach(t);
     }
+    // The upstream updater would replace the multiplayer build.
+#ifndef SWMP_RELEASE_VERSION
     if (g_settings.check_updates && !getenv("SAVAGEWIND_NO_UPDATE_CHECK")) update_check_start();
+#endif
     // SAVAGEWIND_LAUNCHER_SHOT=<frame>[:<page>] (test): save build/launcher.png at that frame and exit; page: settings[:<tab>] / askdelete / setup
     long shot_at = getenv("SAVAGEWIND_LAUNCHER_SHOT") ? atol(getenv("SAVAGEWIND_LAUNCHER_SHOT")) : 0, frame = 0;
     if (shot_at) {
@@ -2136,6 +2145,7 @@ extern "C" void launcher_run(const char *root, int mode) {
                     }
 #endif
                     if (shipped_release) {  // (runtime/post_update.h)
+#ifndef SWMP_RELEASE_VERSION
                         if (const char *by = update_launcher())  // (installed by a launcher, which updates it: a row that
                             opt_action("Check for updates", by,  //  only says so - pressing it does nothing)
                                        "Updates come from the launcher that installed Savage Wind (named on the right). "
@@ -2144,9 +2154,12 @@ extern "C" void launcher_run(const char *root, int mode) {
                                             "When Savage Wind Configuration opens, asks GitHub if there is a new version and "
                                             "offers it. Nothing is installed until you press Update."))
                             settings_save();
-                        if (opt_toggle("Open this screen first", &g_settings.start_in_config, true,
-                                       "Starting Savage Wind opens this screen, where updates are offered. Turned off, "
-                                       "savagewind.exe goes straight into the game."))
+                        const char *start_help = "Starting Savage Wind opens this screen, where updates are offered. Turned off, "
+                                                 "savagewind.exe goes straight into the game.";
+#else
+                        const char *start_help = nullptr;
+#endif
+                        if (opt_toggle("Open this screen first", &g_settings.start_in_config, true, start_help))
                             settings_save();
                     }
                     if (steam_supported()) {
@@ -2351,7 +2364,7 @@ extern "C" void launcher_run(const char *root, int mode) {
                 ImFont *font = ImGui::GetFont();
                 float fs = ImGui::GetFontSize(), right = ImGui::GetWindowPos().x + ds.x - 60 * s;
                 char ver[64];
-                snprintf(ver, sizeof ver, tr("Version %s"), SAVAGEWIND_VERSION);
+                snprintf(ver, sizeof ver, tr("Version %s"), rt_version());
                 float vs = fs * 1.4f, y = ImGui::GetWindowPos().y + ds.y - 134 * s;
                 ImVec2 vsz = font->CalcTextSizeA(vs, FLT_MAX, 0, ver);
                 ImVec2 p(right - vsz.x, y);
