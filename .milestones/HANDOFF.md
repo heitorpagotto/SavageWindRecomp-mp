@@ -1,14 +1,15 @@
 # Agent handoff
 
-Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `e92518d` with the M2 area changes in the worktree.
+Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `d7c98b9`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
 
 ## M2 acceptance follow-up
 
-- Mixed Windows/Linux sessions are a manual follow-up for the owner. M2 can be accepted without
-  that joint-platform run. Both build targets still use the same version label and source fingerprint.
+- The owner accepted M2. [M7](MILESTONES.md#m7--deferred-manual-validation) tracks the eight-game soak,
+  Linux AppImage and mixed Windows/Linux sessions. Both build targets use the same version label and
+  source fingerprint.
 - The current range is 50 m to spawn and 60 m to retain. The earlier 100/120 m policy allowed the
   engine to delete actors before multiplayer withdrew them.
 - The Windows launcher is `build/m2-area-build/Play-M2-Area.cmd`. Match source ID
@@ -23,6 +24,15 @@ separate scratch settings and saves for game tests. Keep generated code and game
 - The ignored `build/m2-probe/run_accept_udp.py` passed a two-game run using the test-only
   libdatachannel build in `build/m2-udp-fixture/obj/`. See the test record for loss, delay,
   movement, facing, and health checks.
+- The subsequent full-renderer soak held four Windows games in the same shrine for 90 seconds.
+  Each renderer kept the other three actors active at about 30 FPS, and Leave retired the expected actors.
+  The harness stopped at four with 1.89 GiB of available physical RAM and 4.28 GiB of available commit.
+  Use additional machines for the eight-game check. The local logs and screenshots are in
+  `build/m2-accept-eight-6yslv0ug/`. See the [test record](TESTING.md#m2-acceptance-follow-up).
+- Linux packaging was paused at the owner's request for manual validation. In the source-only Ubuntu
+  22.04 x86-64 VM, rootless Podman built the toolchain, libdatachannel, the generator helper and SDL.
+  The VM was shut down during FFmpeg compilation, before an AppImage was produced. The build log and
+  passing Linux multiplayer test log are in ignored `build/m2-linux-vm/`.
 
 ## M2 shrine identity and native actor retry
 

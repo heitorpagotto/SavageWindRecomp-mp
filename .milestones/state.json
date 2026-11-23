@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-23T10:20:17-03:00",
+  "updated_at": "2026-11-23T16:16:45-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "e92518d",
+    "workspace_base_commit": "d7c98b9",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -60,21 +60,21 @@
     {
       "id": "M2",
       "name": "Remote Link presence",
-      "status": "partial",
-      "scope": "Nearby presence on the main field and in matching shrines, native idle/walk/run/sprint/jump, read-only health, and an independent release version. Windows held both proxies around 48?58 m and verified 50 m spawn/60 m retirement. Slate travel and two native shrine round trips retained lobby membership. Full fixture capacity verified in one Windows renderer.",
-      "open_verification": "Extended session with eight full game clients and native Linux AppImage build.",
-      "manual_follow_up": "Owner will test both mixed Windows/Linux host directions and report issues separately from M2 acceptance."
+      "status": "complete",
+      "scope": "Nearby presence on the main field and in matching shrines, native idle/walk/run/sprint/jump, read-only health, and an independent release version. Windows verified 50 m spawn and 60 m retirement, retained the lobby through Slate travel and two shrine round trips, and held a four-game session for 90 seconds. Full fixture capacity was verified on one renderer.",
+      "manual_follow_up": "The owner accepted M2 and deferred remaining manual validation to M7."
     },
     {
       "id": "M2.5",
       "name": "Time, weather, and full Link synchronization",
       "status": "not_started",
-      "scope": "After M2, synchronize time of day and weather from host to clients, and synchronize armor, weapons, shields, bows and full animations between players."
+      "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible."
     },
     {
       "id": "M3",
       "name": "Combat, enemies, and PvP",
-      "status": "not_started"
+      "status": "not_started",
+      "scope": "Shared combat, enemies and PvP, plus remote player location markers on the in-game map screen."
     },
     {
       "id": "M4",
@@ -90,6 +90,12 @@
       "id": "M6",
       "name": "Release hardening",
       "status": "not_started"
+    },
+    {
+      "id": "M7",
+      "name": "Deferred manual validation",
+      "status": "not_started",
+      "scope": "Extended eight-game soak with late join and Leave cleanup, Linux AppImage build and verification against the matching Windows label, and mixed Windows/Linux visibility and Slate travel in both host directions."
     }
   ],
   "implemented": [
@@ -161,6 +167,8 @@
     "m2_open_field_retry": "At about 92 m the old build repeatedly retired native actors on the open Plateau. A revised 30 FPS Windows loopback probe recorded one native removal per peer at 92 m and successful recovery at about 4 m in the same lobby. Windows app source ID cfca0ce8eae2beffbe4b682fc9d176d656f66d85.",
     "m2_range_acceptance": "Windows 1.9.0 two-client direct game check: stable at about 48 and 58 m, withdrew once at 65 m, stayed withdrawn at 57 m, and returned at 48 m without a rejoin.",
     "m2_capacity_acceptance": "One Windows 1.9.0 renderer held seven fixture-controlled actors in a shrine after START. Six joined late. Fixtures varied snapshot intervals and omitted every third sample. All five clips and changing health appeared in logs. The game measured 60, 90 and 120 FPS at each target. All actors cleaned up on disconnect.",
+    "m2_full_renderer_soak": "Four Windows 1.9.0 games held three remote Links each for 90 seconds at 30.0 measured FPS. Two clients joined after START. Leave cleaned up on all four games. The runner stopped adding peers at 1.89 GiB of available physical RAM and 4.28 GiB of available commit on the 32 GiB host. Evidence: build/m2-accept-eight-6yslv0ug/.",
+    "m2_linux_multiplayer_tests": "Core, eight-peer direct invite and eight-peer WebRTC loopback passed on Ubuntu 22.04 x86-64 under rootless Podman with Clang 21.1.8 and libdatachannel 0.24.6. The Make targets reported the same release label and multiplayer source ID as Windows.",
     "m2_shrine_roundtrips": "Two Windows 1.9.0 games at 30 FPS retained their lobby through two native shrine elevator round trips. Both proxies retired and reactivated each time.",
     "m2_package_acceptance": "Windows release ZIP built with LGPL FFmpeg. Manifest and archive integrity passed, including bundled libdatachannel. Packaged imports resolved from the archive staging directory. Linux Make target reported the identical version label. Native AppImage build pending.",
     "m2_udp_impairment": "Two 30 FPS Windows games exchanged snapshots over direct WebRTC under test-only UDP loss every fifth datagram and 0?45 ms delays. They converged on position, facing and walk/jump/idle in both directions with the same actor and independently reflected a client health change 12 to 9 to 12."
@@ -182,5 +190,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Complete the extended eight-game session and native Linux AppImage build. Mixed Windows/Linux play is a manual owner follow-up."
+  "next_recommended_work": "Begin M2.5. The owner can run the M7 manual validation separately."
 }

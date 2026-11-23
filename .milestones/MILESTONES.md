@@ -63,15 +63,15 @@ Acceptance criteria
 
 ## M2 — Remote Link presence
 
-Status **in progress**. The main field supports nearby remote Link proxies driven by peer position,
+Status **complete**. The owner accepted M2 and moved the remaining manual validation to
+[M7](#m7--deferred-manual-validation). The main field supports nearby remote Link proxies driven by peer position,
 facing and native idle, walk, run, sprint and jump clips. The F1 multiplayer roster displays reported
 quarter-heart health. Windows Slate travel preserved the lobby and nearby presence recovered after reunion.
 Two Windows instances rendered proxies in the same shrine and withheld them across different shrines.
 Two native shrine round trips retired and restored both proxies while the original lobby stayed connected.
 The Windows range test verified 50 m spawn and 60 m retention. A single renderer kept seven fixture-driven
-proxies active through measured 30, 60, 90, and 120 FPS. Eight full game clients and the Linux AppImage
-build remain open. The owner will test mixed Windows/Linux sessions manually and
-report issues separately from M2 acceptance.
+proxies active through measured 30, 60, 90, and 120 FPS. Four full Windows games held mutual presence
+for 90 seconds.
 
 Goal: every peer sees the other seven players as Links using existing game assets.
 
@@ -86,12 +86,11 @@ Planned deliverables:
 
 Acceptance criteria:
 
-- Eight players are visible in the same supported area for an extended session.
 - Movement, facing, common actions, and health converge correctly.
 - Loss and jitter do not let remote proxies corrupt guest state or become the local-player singleton.
 - Plateau/interior/travel transitions and late join are tested at 30/60/90/120 FPS where relevant.
-- Windows and Linux multiplayer builds show the same combined release label and use it for distribution artifact
-  names. The lobby continues to check protocol and build compatibility independently of the release label.
+- Windows and Linux Make targets report the same combined release label. The lobby checks protocol and build
+  compatibility independently of the release label.
 
 ## M2.5 — Time, weather, and full Link synchronization
 
@@ -102,7 +101,11 @@ gear and animations.
 
 Planned deliverables:
 
-- Host-authoritative time of day and weather, including clock progression and weather transitions.
+- Host-authoritative time of day and weather, including clock progression and weather transitions. Expose
+  one multiplayer setting to enable or disable both, enabled by default.
+- Show `[UserName] connected to the game` to the host and existing peers when the host admits a player.
+- If feasible, display player names above their remote Links. Add a multiplayer setting to hide the names,
+  with name display enabled by default.
 - Reliable appearance and equipment updates keyed by `equipment_revision`, covering every armor slot,
   weapons, shields, and bows, including equip, unequip, drawn, and stowed states.
 - Full remote animation playback, covering traversal, locomotion, equipment use, and combat animations.
@@ -110,8 +113,11 @@ Planned deliverables:
 
 Acceptance criteria:
 
-- Windows and Linux clients converge on the host's time of day and observe consistent weather transitions
-  when sharing an area, including after joining late, reconnecting, or traveling.
+- With the default setting enabled, Windows and Linux clients converge on the host's time of day and observe
+  consistent weather transitions when sharing an area, including after joining late, reconnecting, or
+  traveling. Disabling the setting leaves time and weather under local game control.
+- The join notification uses the admitted player's in-game name and appears once per successful admission.
+- If overhead names ship, verify that they follow their remote Links and can be hidden with the setting.
 - Each peer sees other Links' armor, weapons, shields, and bows update as players change equipment. Their
   remote animations match the actions they perform, including combat animations.
 - Changes in a peer's gear or animation leave the receiving player's inventory and controls independent.
@@ -129,6 +135,7 @@ Planned deliverables:
 - Shared enemy health/death and appropriate status/knockback replication.
 - PvP rules that preserve the base combat feel and avoid feedback loops.
 - Ownership/rate/range checks and reconciliation after prediction disagreement.
+- Show remote players' locations as markers on the in-game map screen.
 
 Acceptance criteria:
 
@@ -136,6 +143,8 @@ Acceptance criteria:
 - Replayed, duplicated, forged, stale, and out-of-range requests are rejected.
 - PvP works in both directions with consistent health and death state.
 - High latency, packet loss, and simultaneous-hit cases are reproducible in tests.
+- Map markers follow each player's reported location while it belongs to the displayed map and disappear
+  when that player leaves the session.
 
 ## M4 — Shared world, story, and chests
 
@@ -200,7 +209,23 @@ Acceptance criteria:
 - On a subsequent Savage Wind release, apply the multiplayer changes and verify the two platform builds, both
   Settings surfaces, and compatible cross-platform lobbies.
 
+## M7 — Deferred manual validation
+
+Status **not started**. The owner can run these checks independently of M2.5 and later implementation.
+
+- **Eight-game soak.** With matching builds in the same supported area, confirm that all eight full game
+  instances hold seven remote Links each for a sustained session. Include a late join after START and
+  check actor cleanup after one peer leaves. Record per-client logs, screenshots and measured FPS.
+- **Linux AppImage.** Build and launch the package, verify its bundled dependencies, and confirm that the
+  artifact name and running app report the same combined release label as the matching Windows build.
+- **Mixed Windows/Linux gameplay.** Test both host directions with matching builds. Confirm nearby remote
+  Links are visible in the same supported area and reappear after peers reunite following Slate travel.
+  Record both logs and player locations if either peer fails to reappear within the supported range.
+
+See the [test record](TESTING.md#m2-acceptance-follow-up) for the four-game soak, Windows ZIP, and Linux
+build and loopback results.
+
 ## Dependency order
 
-The intended order is M0 → M1 → M2 → M2.5 → M3 → M4 → M5 → M6. Story work follows stable actor identity, resync,
-and transaction semantics.
+The implementation order is M0 → M1 → M2 → M2.5 → M3 → M4 → M5 → M6. Story work follows stable actor
+identity, resync, and transaction semantics. M7 tracks independent manual validation.

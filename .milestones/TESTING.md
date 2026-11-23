@@ -210,6 +210,8 @@ during the loading screen.
 
 ## M2 acceptance follow-up
 
+The owner accepted M2. Remaining manual checks are tracked under [M7](MILESTONES.md#m7--deferred-manual-validation).
+
 - Source ID `e00ea2478251cec97481ac59c2a297346ec1b855` and BOTW 1.9.0 gamelib
   `e640fd858dc0d033`. Windows runtime and app linked. The core, direct WebRTC, transport loopback,
   and place checks passed. The extended synthetic test verifies that reordered position, facing,
@@ -225,12 +227,30 @@ during the loading screen.
   seven actors at measured 60, 90 and 120 FPS for about ten seconds each, then retired them on
   disconnect. This used RTX 4050 Laptop (616.92), 640×360 at 50% scale and the same heap settings.
   Evidence is in `build/m2-accept-capacity-qpenukgh/`. A session with eight actual game clients remains open.
+- Four full Windows Vulkan games on BOTW 1.9.0 and the same source ID held the Shrine of Resurrection
+  lobby for 90 seconds. The local probe supplied isolated clipboards and extra log markers. Two clients
+  joined after START. Each game logged three distinct active remote
+  actors throughout the hold at 30.0 measured FPS. Three client screenshots each show all four Links.
+  Leaving cleared all three proxies on the departing client and only that client's proxy on the remaining
+  games. Settings were 640×360, 50% render scale, heap copy off and a 650 MiB VRAM cap, with two games
+  each on RTX 4050 Laptop (610.88) and AMD Radeon Graphics (25.10.30.02). Data, settings and saves were
+  isolated per process. Each renderer used about 4 GiB of Windows commit. The 32 GiB host had 1.89 GiB
+  of physical memory and 4.28 GiB of commit available before the fifth launch, so the harness held at four.
+  Logs and screenshots are in `build/m2-accept-eight-6yslv0ug/`. Eight full games still require more hardware.
+  Separate attempts to use the existing Windows sparse heap option failed host-memory import on both adapters.
+  This kept the soak on the default heap path.
+- Ubuntu 22.04 x86-64 in a local VM built the pinned libdatachannel with Clang 21.1.8 in rootless
+  Podman. The multiplayer core, eight-peer direct invite and eight-peer WebRTC loopback tests passed.
+  Linux and Windows Make targets reported the same release label and the same source ID shown above.
+  See `build/m2-linux-vm/linux-tests.log`.
+- The source-only Linux package run built the generator helper and SDL, then reached FFmpeg compilation.
+  The VM was shut down at the owner's request before an AppImage was produced. The owner will verify
+  the AppImage manually. See `build/m2-linux-vm/linux-build.log`.
 - The source-only Windows release built with the project's pinned LGPL FFmpeg and produced
   `build/dist/SavageWind-0.6.0-alpha.6-0.1.0-mp-windows.zip`. ZIP integrity and the manifest passed.
   The included libdatachannel, FFmpeg, and OpenSSL DLLs resolved from the staged package with the
   UCRT64 and custom dependency paths removed from PATH. The archive excluded generated game
   libraries, extracted content, and saves. The Linux Make target reported the identical label.
-  Building the native AppImage still needs a Linux/Podman host.
 - Two 30 FPS Windows peers completed two native shrine round trips in the same lobby. The client
   took the elevator out and back twice. Both proxies retired on each exit and reactivated on each
   return. The test used scratch saves with the shrine gate unlocked before Continue. Evidence is

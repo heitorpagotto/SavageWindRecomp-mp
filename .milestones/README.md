@@ -6,8 +6,9 @@ The project owner will manually bring in new Savage Wind releases. Keep the mult
 integration points small so each update can be built and verified on both platforms.
 
 M0 is complete for synthetic scope. The owner accepted M1 after joining a Linux host from Windows and Linux.
-The latest Windows host admitted a Linux client. Mixed-platform visibility and Slate travel remain open.
-M2 is in progress with native remote Link animation and area-aware presence on the main field and in shrines.
+M2 is complete. It implements native remote Link animation and area-aware presence on the main field and
+in shrines. Windows travel and a four-game soak passed. [M7](MILESTONES.md#m7--deferred-manual-validation)
+tracks the deferred eight-game soak, Linux AppImage check, and mixed-platform visibility and travel.
 [M2.5](MILESTONES.md#m25--time-weather-and-full-link-synchronization) follows M2 and covers host time and
 weather and full player equipment and animation sync.
 See the [session handoff](HANDOFF.md), [M2 handoff](M2_POSITION_HANDOFF.md), and [test record](TESTING.md)

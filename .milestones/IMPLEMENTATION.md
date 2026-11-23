@@ -122,16 +122,17 @@ The slot gives creation and activation up to ten seconds. Retirement puts the sl
 another request can reuse that placement. The `placeholder removed` log marks retirement on the runtime side.
 Native deletion finishes asynchronously, so use a rendered frame to confirm the actor disappeared.
 
-## M2 Plateau proxy
+## M2 remote Link proxy
 
 The receiver combines the admitted roster and 20 Hz position batches to drive a passive Link actor.
-The virtual RomFS builds an alias using the installed model and supplies an animation list with
-idle, walk and jump clips from Player_Animation. The action field uses 0 for idle, 1 for jump and
-2 for locomotion. Unknown action IDs use idle. The guest thread samples local Link's native
+The virtual RomFS builds an alias using the installed model and supplies idle, jump, walk, run and
+sprint clips from Player_Animation. The action field uses 0 through 4 in that order. Unknown action
+IDs use idle. The guest thread samples local Link's native
 full-body state and selects a clip on each proxy's own animation controller while it holds the
 actor link. Playback starts on activation and on action changes. The native clock advances the
-clip while the interpolator applies position and facing. A new slot generation starts with a
-fresh controller and the latest snapshot.
+clip while the interpolator applies position and facing. The interpolator blends over one send
+interval, snaps across corrections above 3 m, and holds the latest pose until the next sample or
+expiry. A new slot generation starts with a fresh controller and the latest snapshot.
 
 The visibility follow-up accepts fresh positions on the main field and in individual shrine scenes.
 The RomFS stage tracker maps the field to area ID 1 and a shrine to 2 plus its pack number. IDs are

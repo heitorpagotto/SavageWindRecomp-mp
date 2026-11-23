@@ -3,7 +3,8 @@
 M1 was accepted on 2026-11-22 after Windows and Linux clients joined a Linux host. Hosting from the
 owner's network still fails and remains a separate investigation. START stays available. The Plateau
 position slice of M2 works in the open lobby and after START. The Plateau proxy now maps the local
-player's idle, movement and jump states to native clips. M2 remains partial.
+player's idle, movement and jump states to native clips. The owner accepted M2 and deferred the
+remaining manual tests to [M7](MILESTONES.md#m7--deferred-manual-validation).
 
 For the current shrine identity and range tests, see the [latest handoff](HANDOFF.md#m2-shrine-identity-and-native-actor-retry).
 The [visibility follow-up](HANDOFF.md#m2-visibility-follow-up) records the earlier Slate travel tests.
@@ -83,7 +84,4 @@ The [visibility follow-up](HANDOFF.md#m2-visibility-follow-up) records the earli
    with one equipped piece. Verify individual inventory and local control.
 2. For M2.5, extend the action map to cover the full set of player animations. Preserve the
    indexed actor lifecycle, transform and snapshot rate.
-3. Complete extended sessions with eight independently controlled game clients, sustained 90 and
-   120 FPS, interiors, travel, live loss/jitter and native Windows/Linux gameplay. Review the
-   [milestone ledger](MILESTONES.md) and
-   [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) before marking M2 accepted.
+3. Use the [M7 checklist](MILESTONES.md#m7--deferred-manual-validation) for deferred manual testing.
