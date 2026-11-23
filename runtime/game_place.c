@@ -24,9 +24,12 @@ static const InteriorEntry interior_table[] = {{"", {"Interior"}, INTERIOR_TRIAL
 #endif
 
 #define COUNT(a) (sizeof(a) / sizeof *(a))
-enum { STAGE_TITLE = -2, STAGE_FIELD = -1 };  // or an index of interior_table
+enum { STAGE_INTERIOR = -4, STAGE_ASSUMED_FIELD = -3, STAGE_TITLE = -2, STAGE_FIELD = -1 };
 static atomic_int stage = STAGE_TITLE;
 static int lang;  // an index of place_languages
+
+void game_place_reset(void) { atomic_store(&stage, STAGE_TITLE); }
+bool game_place_is_main_field(void) { return atomic_load(&stage) == STAGE_FIELD; }
 
 void game_place_set_language(const char *language) {
     if (!strcmp(language, "en")) language = "USen";
@@ -45,7 +48,7 @@ void game_place_on_read(const char *path) {
         if (!strncmp(path, field[i], strlen(field[i]))) { atomic_store(&stage, STAGE_FIELD); return; }
     if (strncmp(path, "Pack/", 5)) return;
     const char *name = path + 5;
-    if (!strcmp(name, "Title.pack")) { atomic_store(&stage, STAGE_TITLE); return; }
+    if (!strcmp(name, "Title.pack")) { game_place_reset(); return; }
     size_t len = strcspn(name, ".");
     if (strcmp(name + len, ".pack")) return;
     for (size_t i = 0; i < COUNT(interior_table); i++)
@@ -53,6 +56,10 @@ void game_place_on_read(const char *path) {
             atomic_store(&stage, (int)i);
             return;
         }
+    // Builds without the generated place table still need to recognize interior loads.
+    if ((!strncmp(name, "Dungeon", 7) && len == 10 && strspn(name + 7, "0123456789") == 3) ||
+        !strncmp(name, "Remains", 7) || (len == 10 && !strncmp(name, "FinalTrial", len)))
+        atomic_store(&stage, STAGE_INTERIOR);
 }
 
 const char *game_place_name(float x, float z) {
@@ -79,8 +86,8 @@ bool game_place_text(float x, float z, bool has_link, char *details, size_t deta
     int s = atomic_load(&stage);
     if (s == STAGE_TITLE && has_link) {  // (Continue: the map files may come before the title leaves)
         int title = STAGE_TITLE;
-        atomic_compare_exchange_strong(&stage, &title, STAGE_FIELD);
-        s = STAGE_FIELD;
+        atomic_compare_exchange_strong(&stage, &title, STAGE_ASSUMED_FIELD);
+        s = atomic_load(&stage);
     }
     if (s == STAGE_TITLE) {
         snprintf(details, details_size, "%s", place_texts[lang][0]);
@@ -88,6 +95,11 @@ bool game_place_text(float x, float z, bool has_link, char *details, size_t deta
         return true;
     }
     if (!has_link) return false;
+    if (s == STAGE_INTERIOR) {
+        snprintf(details, details_size, "%s", place_texts[lang][4]);
+        snprintf(state, state_size, "%s", "");
+        return true;
+    }
     if (s >= 0) {
         snprintf(details, details_size, "%s", interior_table[s].name[lang]);
         snprintf(state, state_size, "%s", place_texts[lang][2 + interior_table[s].kind]);

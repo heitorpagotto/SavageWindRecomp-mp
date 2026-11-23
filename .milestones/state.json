@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-22T22:31:19-03:00",
+  "updated_at": "2026-11-22T23:39:48-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -27,7 +27,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "a77a30e",
+    "workspace_base_commit": "7991b79",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -60,7 +60,7 @@
       "id": "M2",
       "name": "Remote Link presence",
       "status": "partial",
-      "scope": "Plateau position, facing and native idle, walk and jump are verified in Windows direct sessions. Read-only health snapshots and the F1 roster display are implemented. Equipment and the full acceptance matrix are pending."
+      "scope": "Remote Link presence accepts overworld positions within the local spawn radius. Native idle, walk, run, sprint and jump clips and read-only quarter-heart snapshots are implemented. Mixed-platform visibility, Slate travel, interiors and equipment are pending."
     },
     {
       "id": "M3",
@@ -105,7 +105,9 @@
     "M2 position and facing snapshots at up to 20 Hz with host batching and roster epoch validation",
     "Plateau remote Link proxy using a local RomFS actor alias and the native matrix setter",
     "native idle, walk and jump playback on each owned Plateau proxy",
-    "current quarter-heart observation and display in the F1 multiplayer roster"
+    "current quarter-heart observation and display in the F1 multiplayer roster",
+    "main-field remote presence with 100 m spawn and 120 m retirement radii and local world transition cleanup",
+    "separate run and sprint clips selected from native locomotion and horizontal speed"
   ],
   "not_implemented": [
     "remote Link appearance pieces, extended action mapping and broader area support",
@@ -139,7 +141,9 @@
     "direct_signaling": "Windows standalone test passed eight peers, malformed and stale input, single-use replies, expiry and cleanup. A two-process Windows runtime test passed with an isolated clipboard. Linux x86-64 transport objects cross-compiled. Native external-network tests pending.",
     "m2_plateau_position": "Two Windows Vulkan instances on BOTW 1.9.0 and a1c9d2072a418844 rendered base Link proxies. At a 30 FPS target, walk, jump and facing updated in place. Leave, same-slot rejoin, host reboot cleanup, and independent inventory opening passed. The 60 FPS target run verified area withdrawal and return.",
     "m2_plateau_animation": "Two Windows Vulkan instances with gamelib 34aa482dae306a0d played native idle, walk and jump both ways over direct WebRTC. One renderer sustained all seven fixture-driven proxies for 30 seconds after START. The 60/90/120 targets were exercised below sustained 90/120 FPS.",
-    "m2_plateau_health": "Two Windows Vulkan instances with gamelib e640fd858dc0d033 exchanged native quarter-heart values over direct WebRTC. A controlled scratch client change from 12 to 9 to 12 reached the host while the host's own life stayed at 12."
+    "m2_plateau_health": "Two Windows Vulkan instances with gamelib e640fd858dc0d033 exchanged native quarter-heart values over direct WebRTC. A controlled scratch client change from 12 to 9 to 12 reached the host while the host's own life stayed at 12.",
+    "m2_cross_platform_join": "Owner confirmed Windows client to Linux host using source ID 970ccbd296037d6d9aec806b7c0c22dca89d1d9e on both ends. The prior rejection came from a stale Windows executable. The matching local launcher is build/m2-health-build/Play-Matching-M2.cmd.",
+    "m2_visibility_followup": "Windows 1.9.0 at 30 FPS verified active proxies at 30 m, withdrawal at 145 m and return in the same lobby using the position-control probe. The final build played separate run and sprint clips and recovered both proxies after an in-game save load. Linux x86-64 cross-compile passed. Mixed-platform rendering and Slate fast travel remain unverified."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -158,5 +162,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Resume M2 from M2_POSITION_HANDOFF.md. Add appearance and reliable equipment revisions, then complete the remaining gameplay matrix. Keep the owner-host connection issue open."
+  "next_recommended_work": "Retest remote Link visibility and Slate travel on matching Windows and Linux builds in both host directions. See HANDOFF.md and TESTING.md. Resume appearance and reliable equipment revisions from M2_POSITION_HANDOFF.md."
 }

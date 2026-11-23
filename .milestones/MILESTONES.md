@@ -63,9 +63,10 @@ Acceptance criteria
 
 ## M2 — Remote Link presence
 
-Status **in progress**. The Plateau supports remote Link proxies driven by peer position, facing
-and idle, movement and jump snapshots. The F1 multiplayer roster displays reported quarter-heart
-health. Appearance pieces, equipment and the broader acceptance matrix are still open.
+Status **in progress**. The main field supports nearby remote Link proxies driven by peer position,
+facing and native idle, walk, run, sprint and jump clips. The F1 multiplayer roster displays reported
+quarter-heart health. Slate travel, mixed-platform visibility, interiors, appearance and equipment
+are still open.
 
 Goal: every peer sees the other seven players as Links using existing game assets.
 

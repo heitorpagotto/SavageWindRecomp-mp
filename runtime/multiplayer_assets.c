@@ -305,8 +305,10 @@ static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
 static const struct {
     const char *state, *file, *path, *clip;
 } proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
+    [SWMP_PROXY_DASH] = {"Dash", "SwmpProxyDash", "Actor/AS/SwmpProxyDash.bas", "Nml_Move_Dash"},
     [SWMP_PROXY_IDLE] = {"Idle", "SwmpProxyIdle", "Actor/AS/SwmpProxyIdle.bas", "Nml_Wait"},
     [SWMP_PROXY_JUMP] = {"Jump", "SwmpProxyJump", "Actor/AS/SwmpProxyJump.bas", "Nml_Wait_Jump"},
+    [SWMP_PROXY_RUN] = {"Run", "SwmpProxyRun", "Actor/AS/SwmpProxyRun.bas", "Nml_Move_Run"},
     [SWMP_PROXY_WALK] = {"Walk", "SwmpProxyWalk", "Actor/AS/SwmpProxyWalk.bas", "Nml_Move_Walk"},
 };
 
@@ -357,7 +359,9 @@ static unsigned aamp_string(uint8_t *out, unsigned at, const char *key, unsigned
     return value + (unsigned)align4(length);
 }
 
-static size_t proxy_anim_list(uint8_t out[288]) {
+enum { PROXY_ANIM_LIST_SIZE = 400 };
+
+static size_t proxy_anim_list(uint8_t out[PROXY_ANIM_LIST_SIZE]) {
     enum { ROOT = 52, ADD_RES = ROOT + 12, DEFINES = ADD_RES + 12,
            RES_OBJECT = DEFINES + 12, FIRST_STATE = RES_OBJECT + 8,
            PARAMS = FIRST_STATE + 8 * SWMP_PROXY_ACTION_COUNT,
@@ -367,12 +371,15 @@ static size_t proxy_anim_list(uint8_t out[288]) {
     aamp_list(out, DEFINES, "ASDefines", 0, 0, FIRST_STATE, SWMP_PROXY_ACTION_COUNT);
     aamp_object(out, RES_OBJECT, "AddRes_0", PARAMS, 1);
     unsigned end = aamp_string(out, PARAMS, "Anim", STRINGS_AT, "Player_Animation");
-    static const char *const entries[] = {"ASDefine_0", "ASDefine_1", "ASDefine_2"};
+    static const SwmpProxyAction order[] = {
+        SWMP_PROXY_DASH, SWMP_PROXY_IDLE, SWMP_PROXY_JUMP, SWMP_PROXY_RUN, SWMP_PROXY_WALK,
+    };
+    static const char *const entries[] = {"ASDefine_0", "ASDefine_1", "ASDefine_2", "ASDefine_3", "ASDefine_4"};
     for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
         unsigned param = PARAMS + 8 + 16 * i;
         aamp_object(out, FIRST_STATE + 8 * i, entries[i], param, 2);
-        end = aamp_string(out, param, "Name", end, proxy_actions[i].state);
-        end = aamp_string(out, param + 8, "Filename", end, proxy_actions[i].file);
+        end = aamp_string(out, param, "Name", end, proxy_actions[order[i]].state);
+        end = aamp_string(out, param + 8, "Filename", end, proxy_actions[order[i]].file);
     }
     aamp_header(out, end, 3, 1 + SWMP_PROXY_ACTION_COUNT, 1 + 2 * SWMP_PROXY_ACTION_COUNT,
                 0, end - STRINGS_AT);
@@ -426,7 +433,7 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
         size_t link_size;
         uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, &link_size);
         if (link) {
-            uint8_t list[288] = {0}, clips[SWMP_PROXY_ACTION_COUNT][144] = {{0}};
+            uint8_t list[PROXY_ANIM_LIST_SIZE] = {0}, clips[SWMP_PROXY_ACTION_COUNT][144] = {{0}};
             PackFile files[3 + SWMP_PROXY_ACTION_COUNT] = {
                 {proxy_link, link, link_size},
                 {model_list, raw + data + ms, me - ms},

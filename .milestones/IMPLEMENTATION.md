@@ -133,6 +133,12 @@ actor link. Playback starts on activation and on action changes. The native cloc
 clip while the interpolator applies position and facing. A new slot generation starts with a
 fresh controller and the latest snapshot.
 
+The visibility follow-up accepts fresh positions anywhere on the main field, as identified by the existing
+RomFS stage tracker. Title, loading and interior scenes withdraw the pose. The spawn radius is 100 m in
+three dimensions, with retirement beyond 120 m. A changed local actor or spawn context retires owned
+requests and proxies independently of lobby membership. The native Move state is mapped to walk, run
+or sprint using horizontal speed sampled over roughly 100 ms. Each action uses its own installed clip.
+
 The separate native life observation reads current quarter-hearts from PlayerInfo. The window
 thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish
 it from missing health. Damage authority and death handling belong to M3.

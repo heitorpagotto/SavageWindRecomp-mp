@@ -10,6 +10,10 @@ void game_place_set_language(const char *language);
 
 // A RomFS file the game reads (any thread): each interior has its own pack, the main field its map files
 void game_place_on_read(const char *path);
+void game_place_reset(void);
+
+// True after a main-field resource was read, until a title or interior load.
+bool game_place_is_main_field(void);
 
 // The two lines for what the player is doing now; false: nothing new to say (no Link while loading: the last text stays)
 bool game_place_text(float x, float z, bool has_link, char *details, size_t details_size, char *state, size_t state_size);

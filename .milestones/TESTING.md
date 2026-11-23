@@ -62,6 +62,11 @@ The owner confirmed the updated Windows and Linux builds both joined a friend ho
 The reverse host direction still failed. The owner accepted M1 and approved starting M2 while
 investigating the firewall or direct connection separately.
 
+At the M2 checkpoint `7991b79`, the owner confirmed a Windows client joined the Linux host after
+launching the matching Windows build. The original Windows executable had a stale multiplayer
+source ID. The [session handoff](HANDOFF.md#windows-and-linux-lobby-compatibility) records the IDs,
+the verified launcher, and the outstanding host-direction report.
+
 ### Native build and standalone checks
 
 - MSYS2 UCRT64 with Clang 23.1.5 built the Windows executable and Vulkan runtime objects against libdatachannel
@@ -103,6 +108,32 @@ investigating the firewall or direct connection separately.
   A deliberately incompatible app build was rejected with a visible Brazilian Portuguese message.
 - Linux x86-64 and aarch64 runtime, UI, and test sources cross-compiled. Native Linux/Vulkan gameplay,
   mixed-platform execution, and two external networks remain pending.
+
+## M2 visibility follow-up
+
+- Field report on `7991b79`: the Windows host and Linux client joined but saw neither proxy. In the reverse
+  setup a Linux client initially saw the Linux host. A Windows client joined at a different location. After
+  the Linux client used Slate fast travel, it saw neither. Locations, logs, and the lobby state after the
+  warp were unavailable, so the platform-specific cause is open.
+- The follow-up Windows app and configuration launcher linked with Clang 23.1.5. The core, eight-peer direct,
+  eight-peer WebRTC and place tests passed. The changed runtime units cross-compiled for Linux x86-64.
+  Both Make targets produced source ID `3344f886df6a2e0a8a90d4dedddc1cc95f37380e`. The Windows target
+  matched the installed 1.9.0 gamelib ID `e640fd858dc0d033` at x86-64-v3.
+- In two Windows 1.9.0 Vulkan instances connected through the direct lobby, the position-control probe kept
+  both proxies active at about 30 m. It withdrew both at about 145 m and restored both on return without a
+  rejoin. The return screenshot showed both Links. This used the position control endpoint. Slate fast travel
+  still needs a save with an unlocked destination and a field retest. Evidence is in ignored
+  `build/m2-travel-live-2c_8l727/`.
+- The final Windows animation probe reported the native Idle, Walk, Run, Dash and Jump states playing on the
+  receiver. The Run and Dash input tests used full left-stick travel without and with the sprint button.
+  The alias resource check also passed for the synthetic and installed actor tables and the five clip records.
+  Logs and captures are in ignored `build/m2-travel-live-v0ojcsbv/`. Both runs targeted 30 FPS at 960×540,
+  50 percent render scale and a 1400 MiB VRAM budget on NVIDIA RTX 4050 Laptop (616.92) and AMD Radeon
+  Graphics (25.10.30.02), with Vulkan heap copy off.
+- The final build also passed a native System > Load test with the same Windows configuration. One client
+  loaded a scratch autosave while both were in the lobby. Both sides retired their original proxies and
+  reported fresh native actors when the client returned to the overworld. Both retained the original lobby.
+  Evidence is in ignored `build/m2-travel-live-v_njtp_n/`.
 
 ## M1 Windows presence check
 

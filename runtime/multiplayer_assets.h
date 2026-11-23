@@ -14,6 +14,8 @@ typedef enum {
     SWMP_PROXY_IDLE,
     SWMP_PROXY_JUMP,
     SWMP_PROXY_WALK,
+    SWMP_PROXY_DASH,
+    SWMP_PROXY_RUN,
     SWMP_PROXY_ACTION_COUNT,
 } SwmpProxyAction;
 

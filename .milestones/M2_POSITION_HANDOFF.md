@@ -5,6 +5,8 @@ owner's network still fails and remains a separate investigation. START stays av
 position slice of M2 works in the open lobby and after START. The Plateau proxy now maps the local
 player's idle, movement and jump states to native clips. M2 remains partial.
 
+For the later range expansion and Slate travel report, see [M2 visibility follow-up](HANDOFF.md#m2-visibility-follow-up).
+
 ## Implementation
 
 - The guest hook samples the game-published XYZ in PlayerInfo. Facing comes from the local actor's

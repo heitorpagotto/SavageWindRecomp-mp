@@ -90,6 +90,7 @@ uint8_t *fs_game_file(const char *path, size_t *out_n);
 
 // Reboot: the next boot builds its own index / overlay when the game opens the RomFS again.
 RT_ON_RESET(fs_reset) {
+    game_place_reset();
     for (int k = 0; k <= AOC_MAX; k++) {
         RomImage *m = &images[k];
         for (int i = 0; i < m->ov_n; i++) {

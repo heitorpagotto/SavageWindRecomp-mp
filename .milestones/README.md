@@ -6,13 +6,16 @@ The project owner will manually bring in new Savage Wind releases. Keep the mult
 integration points small so each update can be built and verified on both platforms.
 
 M0 is complete for synthetic scope. The owner accepted M1 after joining a Linux host from Windows and Linux.
-Hosting from the owner's network remains open. M2 is in progress with native remote Link animation on the Plateau.
-See the [M2 handoff](M2_POSITION_HANDOFF.md) and [test record](TESTING.md) for the current results.
+The latest Windows host admitted a Linux client. Mixed-platform visibility and Slate travel remain open.
+M2 is in progress with native remote Link animation and overworld presence.
+See the [session handoff](HANDOFF.md), [M2 handoff](M2_POSITION_HANDOFF.md), and [test record](TESTING.md)
+for the current results.
 
 ## Read in this order
 
-1. [Direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) for the current checkpoint, security findings, and
-   remaining work. See the [native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md) for the migration history.
+1. [Session handoff](HANDOFF.md) for the current checkpoint, matching Windows launch path, and open reports.
+   See the [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) for the invite flow and security findings
+   and the [native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md) for the migration history.
 2. [Project charter](PROJECT.md) and [milestone ledger](MILESTONES.md) for goals and acceptance criteria.
 3. [Architecture](ARCHITECTURE.md) and [decisions](DECISIONS.md) for boundaries and rationale.
 4. [Repository map](REPOSITORY.md) and [implementation notes](IMPLEMENTATION.md) for the current source.
