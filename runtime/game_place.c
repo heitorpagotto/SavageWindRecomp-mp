@@ -25,11 +25,27 @@ static const InteriorEntry interior_table[] = {{"", {"Interior"}, INTERIOR_TRIAL
 
 #define COUNT(a) (sizeof(a) / sizeof *(a))
 enum { STAGE_INTERIOR = -4, STAGE_ASSUMED_FIELD = -3, STAGE_TITLE = -2, STAGE_FIELD = -1 };
+enum { STAGE_UNNAMED_SHRINE = -5, LAST_SHRINE_NUMBER = 136 };
 static atomic_int stage = STAGE_TITLE;
 static int lang;  // an index of place_languages
 
 void game_place_reset(void) { atomic_store(&stage, STAGE_TITLE); }
-bool game_place_is_main_field(void) { return atomic_load(&stage) == STAGE_FIELD; }
+
+static int shrine_number(const char *name, size_t len) {
+    if (len != 10 || strncmp(name, "Dungeon", 7) || strspn(name + 7, "0123456789") != 3) return -1;
+    return (name[7] - '0') * 100 + (name[8] - '0') * 10 + name[9] - '0';
+}
+
+uint32_t game_place_area_id(void) {
+    int s = atomic_load(&stage);
+    if (s == STAGE_FIELD) return GAME_PLACE_MAIN_FIELD_AREA;
+
+    int number = -1;
+    if (s <= STAGE_UNNAMED_SHRINE) number = STAGE_UNNAMED_SHRINE - s;
+    else if (s >= 0 && interior_table[s].kind == INTERIOR_SHRINE)
+        number = shrine_number(interior_table[s].pack, strlen(interior_table[s].pack));
+    return number >= 0 && number <= LAST_SHRINE_NUMBER ? GAME_PLACE_FIRST_SHRINE_AREA + number : 0;
+}
 
 void game_place_set_language(const char *language) {
     if (!strcmp(language, "en")) language = "USen";
@@ -57,8 +73,10 @@ void game_place_on_read(const char *path) {
             return;
         }
     // Builds without the generated place table still need to recognize interior loads.
-    if ((!strncmp(name, "Dungeon", 7) && len == 10 && strspn(name + 7, "0123456789") == 3) ||
-        !strncmp(name, "Remains", 7) || (len == 10 && !strncmp(name, "FinalTrial", len)))
+    int number = shrine_number(name, len);
+    if (number >= 0 && number <= LAST_SHRINE_NUMBER)
+        atomic_store(&stage, STAGE_UNNAMED_SHRINE - number);
+    else if (number >= 0 || !strncmp(name, "Remains", 7) || (len == 10 && !strncmp(name, "FinalTrial", len)))
         atomic_store(&stage, STAGE_INTERIOR);
 }
 
@@ -95,7 +113,7 @@ bool game_place_text(float x, float z, bool has_link, char *details, size_t deta
         return true;
     }
     if (!has_link) return false;
-    if (s == STAGE_INTERIOR) {
+    if (s <= STAGE_INTERIOR) {
         snprintf(details, details_size, "%s", place_texts[lang][4]);
         snprintf(state, state_size, "%s", "");
         return true;

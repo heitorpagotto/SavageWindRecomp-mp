@@ -1,10 +1,49 @@
 # Agent handoff
 
-Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `62d4143` (`adjusted range`). The M2 version
-label is `0.6.0-alpha.6-0.1.0-mp`. The versioned Windows build is in ignored `build/m2-version-build/` and
-embeds the same multiplayer source ID as the visibility follow-up. Read [AGENTS.md](../AGENTS.md) and
+Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `e92518d` with the M2 area changes in the worktree.
+The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
+
+## M2 acceptance follow-up
+
+- Mixed Windows/Linux sessions are a manual follow-up for the owner. M2 can be accepted without
+  that joint-platform run. Both build targets still use the same version label and source fingerprint.
+- The current range is 50 m to spawn and 60 m to retain. The earlier 100/120 m policy allowed the
+  engine to delete actors before multiplayer withdrew them.
+- The Windows launcher is `build/m2-area-build/Play-M2-Area.cmd`. Match source ID
+  `e00ea2478251cec97481ac59c2a297346ec1b855` and game library `e640fd858dc0d033` for this checkpoint.
+  The Windows ZIP recipe now collects libdatachannel from the configured dependency prefix.
+  The verified Windows artifact is `build/dist/SavageWind-0.6.0-alpha.6-0.1.0-mp-windows.zip`.
+  See the [test record](TESTING.md#m2-acceptance-follow-up) for range, capacity, and packaging evidence.
+- The ignored `build/m2-probe/run_accept_range.py`, `run_accept_capacity.py` and
+  `run_accept_roundtrip.py` exercise the latest build. Two native Windows shrine round trips passed.
+  One actual renderer plus seven headless clients passed the capacity hold and measured the requested
+  frame rates. Eight full clients still need additional machines or a host with more RAM.
+- The ignored `build/m2-probe/run_accept_udp.py` passed a two-game run using the test-only
+  libdatachannel build in `build/m2-udp-fixture/obj/`. See the test record for loss, delay,
+  movement, facing, and health checks.
+
+## M2 shrine identity and native actor retry
+
+- The RomFS stage tracker now supplies a stable multiplayer area ID for the main field and each shrine.
+  Proxies require a fresh pose in the same area. An area change retires the old proxies even if the guest
+  reuses the same actor or spawn context. Both Windows instances visibly rendered a remote Link in
+  the same shrine. Two instances in different shrines kept the same lobby with no remote actors.
+- The earlier build reproduced the native actor loss at about 92 m on the open Plateau with no Slate travel.
+  Both proxies stayed active near 30 and 60 m. The retry experiment limited repeated spawns after native
+  actor loss beyond 60 m and retried sooner when the players moved at least 10 m closer. A local write watch
+  caught the game's native actor deletion routine setting the flag before the multiplayer tick retired
+  the slot. The native condition that triggers deletion remains open.
+  [Test record](TESTING.md#m2-shrine-identity-and-native-retry)
+- The historical 100/120 m retry experiment used source ID `cfca0ce8eae2beffbe4b682fc9d176d656f66d85`.
+  The current Windows launcher and source ID are listed above.
+- The ignored `build/m2-probe/build_area.py` and `run_area.py` use an isolated clipboard and scratch saves.
+  The runner accepts `shrine`, `mixed`, `range`, or `entry`. With `SWMP_SHRINE_MAP=1`, the shrine run
+  accepts input through its scratch `map-input` file. One client used the native elevator to return to
+  the main field and both proxies retired. In a separate test, a client entered from outdoors and both
+  proxies activated after arrival. The lobby stayed connected during both loads.
+  The ignored watch probe and logs in `build/m2-area-live-xb_xb_z1/` contain the guest call chain for deletion.
 
 ## M2 visibility follow-up
 
@@ -22,7 +61,7 @@ separate scratch settings and saves for game tests. Keep generated code and game
   inactive at about 92 m separation. At about 4 m apart outdoors, both players were visible again. Use the
   logs in `build/m2-slate-kcjjyehi/` to compare intermittent native actor activation with the first stable
   reunion. [Test record](TESTING.md#m2-visibility-follow-up)
-- Use `build/m2-version-build/Play-M2-Version.cmd` for the Windows follow-up. It uses the local 1.9.0 gamelib with
+- The earlier `build/m2-version-build/Play-M2-Version.cmd` used the local 1.9.0 gamelib with
   ID `e640fd858dc0d033`. Build the Linux app from the same source and confirm both runs show source ID
   `3344f886df6a2e0a8a90d4dedddc1cc95f37380e`. For a visibility test, confirm both names and health are
   present in F1, meet at the same overworld waypoint, and face each other. On failure, keep the `[multiplayer]`
@@ -96,7 +135,6 @@ rebuild the library. The reported automatic version rejection still needs invest
   activate when the scratch model list included a second model for default hair, including with an 8 MiB
   instance heap. Start from one native equipped model on an owned proxy. The [M2 handoff](M2_POSITION_HANDOFF.md#resume)
   has source entry points and probe paths.
-- M2 remains partial. Eight independently controlled clients, native Linux gameplay verification, interiors,
-  mixed-platform travel, live loss and jitter, and sustained 90/120 FPS remain open. The owner-confirmed cross-platform
-  join verifies lobby admission. See the [milestone ledger](MILESTONES.md#m2--remote-link-presence)
-  and [milestone index](README.md).
+- See the [milestone ledger](MILESTONES.md#m2--remote-link-presence) for acceptance status.
+  The owner-confirmed cross-platform join verifies lobby admission. Joint-platform travel and presence
+  remain on the owner's manual test list.

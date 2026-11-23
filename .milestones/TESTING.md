@@ -208,6 +208,71 @@ screenshots. The old runners target the prototype activation path. Use the nativ
 the current executable. Wait until the Plateau renders before counting actors. A readiness log can arrive
 during the loading screen.
 
+## M2 acceptance follow-up
+
+- Source ID `e00ea2478251cec97481ac59c2a297346ec1b855` and BOTW 1.9.0 gamelib
+  `e640fd858dc0d033`. Windows runtime and app linked. The core, direct WebRTC, transport loopback,
+  and place checks passed. The extended synthetic test verifies that reordered position, facing,
+  shrine area, action and health converge and that a lost withdrawal expires.
+- Two Windows Vulkan games at 30 FPS held both native proxies for 30 seconds at about 48 m.
+  In the boundary check, both persisted at about 58 m, withdrew once at 65 m, stayed withdrawn
+  at 57 m, and returned at 48 m within the original lobby. Both used 960×540, 50% render scale,
+  heap copy off and a 1400 MiB budget. GPUs were NVIDIA RTX 4050 Laptop (616.92) and AMD Radeon
+  Graphics (25.10.30.02). See `build/m2-accept-range-80pd8pxf/` and `build/m2-accept-range-m9sytrxx/`.
+- One Windows renderer in a shrine kept all seven remote proxies active during a 60-second hold
+  after START. Six fixture peers joined after START. The fixtures varied sample intervals and omitted
+  every third sample. The renderer received changing health and played all five clips. It kept the
+  seven actors at measured 60, 90 and 120 FPS for about ten seconds each, then retired them on
+  disconnect. This used RTX 4050 Laptop (616.92), 640×360 at 50% scale and the same heap settings.
+  Evidence is in `build/m2-accept-capacity-qpenukgh/`. A session with eight actual game clients remains open.
+- The source-only Windows release built with the project's pinned LGPL FFmpeg and produced
+  `build/dist/SavageWind-0.6.0-alpha.6-0.1.0-mp-windows.zip`. ZIP integrity and the manifest passed.
+  The included libdatachannel, FFmpeg, and OpenSSL DLLs resolved from the staged package with the
+  UCRT64 and custom dependency paths removed from PATH. The archive excluded generated game
+  libraries, extracted content, and saves. The Linux Make target reported the identical label.
+  Building the native AppImage still needs a Linux/Podman host.
+- Two 30 FPS Windows peers completed two native shrine round trips in the same lobby. The client
+  took the elevator out and back twice. Both proxies retired on each exit and reactivated on each
+  return. The test used scratch saves with the shrine gate unlocked before Continue. Evidence is
+  in `build/m2-accept-roundtrip-oa3qggwr/`.
+- Two 30 FPS Windows peers passed a local direct WebRTC run with a test-only libjuice build.
+  After admission, it dropped every fifth outbound UDP datagram in both processes and scheduled
+  variable delays of 0–45 ms on the others. Both directions converged on movement, facing and
+  walk/jump/idle while keeping the same proxy actor. The host reported the client's 12 → 9 → 12
+  quarter-hearts while its own health stayed at 12. Evidence is in `build/m2-accept-udp-zuvr0y3n/`.
+  The production app and Windows ZIP use the normal dependency.
+
+## M2 shrine identity and native retry
+
+- The Windows UCRT64 app and runtime objects built with Clang 23.1.5. The core, eight-peer direct
+  and eight-peer WebRTC suites passed. The place test passed with the locally generated name table,
+  and a synthetic test passed without it. Both changed runtime units cross-compiled for Linux x86-64.
+  Source ID `cfca0ce8eae2beffbe4b682fc9d176d656f66d85` uses the existing x86-64-v3 BOTW 1.9.0
+  gamelib `e640fd858dc0d033`. Windows and Linux Make targets reported the same multiplayer source ID.
+- Two Windows 1.9.0 scratch instances joined over direct WebRTC after starting in the same shrine.
+  Both activated a native remote Link under area ID 2. A second pair started in different shrines
+  near the same local coordinates. They stayed admitted under area IDs 2 and 3 with no proxy spawned
+  on either side during the eight-second check. Evidence is in ignored `build/m2-area-live-w93wah52/`
+  and `build/m2-area-live-ng6llt5x/`. These runs used the test warp at Continue.
+- The earlier Windows build retained both proxies at about 30 and 60 m on the open Plateau. At about
+  92 m it logged four native actor removals per peer in an eight-second window without a scene change.
+  With the revised retry policy, the native actor still went inactive at 92 m and each side recorded
+  a single removal with no repeat spawn in the observation window. Both sides recovered at about
+  4 m in the same lobby. See `build/m2-area-live-123f2cxy/` and `build/m2-area-live-lweyuimp/`.
+  The range tests used the position control endpoint. A scratch write watch then traced the flag
+  change to the native delete routine on both peers before multiplayer retirement. The native condition
+  that triggered it remains open. See `build/m2-area-live-xb_xb_z1/`.
+- Captures on both Windows instances showed local and remote Links in the same shrine. The client used
+  the native elevator to return to the overworld while the host remained inside. The client went through
+  areas 2, 0 (loading), and 1. Both proxies retired while both peers remained in the lobby. Evidence is in
+  ignored `build/m2-area-live-8sad4vr6/`.
+- In a separate native entry run, the client joined from the main field while the host was inside that shrine.
+  The client activated the outside terminal and took the elevator. Both activated a remote Link after
+  the client entered area 2, without another lobby admission. Evidence is in `build/m2-area-live-78oyxryd/`.
+- These Windows tests targeted 30 FPS, 960×540 at 50 percent render scale and a 1400 MiB VRAM budget,
+  using Vulkan with heap copy off on NVIDIA RTX 4050 Laptop (616.92) and AMD Radeon Graphics
+  (25.10.30.02). Repeated shrine round trips, mixed-platform gameplay and longer sessions remain open.
+
 ## M2 Plateau position check
 
 - BOTW 1.9.0, Windows Vulkan, 30 FPS target, 960x540 at 50% render scale, 1400 MiB VRAM budget,

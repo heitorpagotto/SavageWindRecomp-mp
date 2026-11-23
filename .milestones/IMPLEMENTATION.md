@@ -133,11 +133,14 @@ actor link. Playback starts on activation and on action changes. The native cloc
 clip while the interpolator applies position and facing. A new slot generation starts with a
 fresh controller and the latest snapshot.
 
-The visibility follow-up accepts fresh positions anywhere on the main field, as identified by the existing
-RomFS stage tracker. Title, loading and interior scenes withdraw the pose. The spawn radius is 100 m in
-three dimensions, with retirement beyond 120 m. A changed local actor or spawn context retires owned
-requests and proxies independently of lobby membership. The native Move state is mapped to walk, run
-or sprint using horizontal speed sampled over roughly 100 ms. Each action uses its own installed clip.
+The visibility follow-up accepts fresh positions on the main field and in individual shrine scenes.
+The RomFS stage tracker maps the field to area ID 1 and a shrine to 2 plus its pack number. IDs are
+independent of the generated display-name table. Title, loading and unsupported scenes withdraw the pose.
+Peers must share the same area ID. A changed local area, actor or spawn context retires owned requests and
+proxies independently of lobby membership. The spawn radius is 50 m in three dimensions, with retirement
+beyond 60 m. This keeps proxy lifetime within the distance sustained in the Windows range probe.
+The native Move state is mapped to walk, run and sprint using horizontal speed sampled over roughly
+100 ms. Each action uses its own installed clip.
 
 The separate native life observation reads current quarter-hearts from PlayerInfo. The window
 thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish

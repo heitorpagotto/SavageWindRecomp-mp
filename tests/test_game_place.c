@@ -31,54 +31,57 @@ int main(void) {
     expect("En el menú principal", "");
     assert(text(1811.7f, 982.6f, true));
     expect("Aldea Kakariko", "Picos Gemelos");
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == 0);
 
     // Without a Link, the last text stays
     assert(!text(0, 0, false));
 
     // A shrine and back
     game_place_on_read("Pack/Dungeon000.pack");
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_FIRST_SHRINE_AREA);
     assert(text(5, 5, true));
     expect("Santuario de Tamuur", "Interior de santuario");
     game_place_on_read("Actor/Pack/Anything.sbactorpack");  // (other files change nothing)
     assert(text(5, 5, true));
     expect("Santuario de Tamuur", "Interior de santuario");
     game_place_on_read("Map/MainField/D-6/D-6_Static.smubin");
-    assert(game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_MAIN_FIELD_AREA);
     assert(text(1811.7f, 982.6f, true));
     expect("Aldea Kakariko", "Picos Gemelos");
 
     // Leaving a shrine with the map files still cached: only the field's physics and navigation are read again
     game_place_on_read("Pack/Dungeon099.pack");
     game_place_on_read("UI/MapTex/MainField/MapTex3_A-0_0.sbmapt");  // (the map screen, inside the shrine)
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_FIRST_SHRINE_AREA + 99);
     assert(text(5, 5, true));
     expect("Santuario de Ranhtoe", "Interior de santuario");
     game_place_on_read("Physics/StaticCompound/MainField/G-5-0.shksc");
-    assert(game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_MAIN_FIELD_AREA);
     assert(text(1811.7f, 982.6f, true));
     expect("Aldea Kakariko", "Picos Gemelos");
     game_place_on_read("Pack/Dungeon099.pack");
     game_place_on_read("NavMesh/MainField/27-19.shknm2");
-    assert(game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_MAIN_FIELD_AREA);
     assert(text(1811.7f, 982.6f, true));
     expect("Aldea Kakariko", "Picos Gemelos");
 
     // A Divine Beast, the add-on content's interiors
     game_place_on_read("Pack/RemainsWater.pack");
+    assert(game_place_area_id() == 0);
     assert(text(48, 3, true));
     expect("Vah Ruta", "Bestia Divina");
     game_place_on_read("Pack/Dungeon120.pack");
+    assert(game_place_area_id() == GAME_PLACE_FIRST_SHRINE_AREA + 120);
     assert(text(48, 3, true));
     expect("Santuario", "Interior de santuario");
     game_place_on_read("Pack/FinalTrial.pack");
+    assert(game_place_area_id() == 0);
     assert(text(48, 3, true));
     expect("Prueba final", "Interior");
 
     // Back to the title
     game_place_on_read("Pack/Title.pack");
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == 0);
     assert(text(48, 3, false));
     expect("En el menú principal", "");
 
@@ -139,10 +142,10 @@ int main(void) {
 
     game_place_on_read("Map/MainField/D-6/D-6_Static.smubin");
     game_place_on_read("Pack/Dungeon999.pack");  // an interior without a generated name
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == 0);
     game_place_on_read("Map/MainField/D-6/D-6_Static.smubin");
-    assert(game_place_is_main_field());
+    assert(game_place_area_id() == GAME_PLACE_MAIN_FIELD_AREA);
     game_place_reset();
-    assert(!game_place_is_main_field());
+    assert(game_place_area_id() == 0);
     puts("PASS: game_place");
 }

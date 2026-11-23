@@ -360,24 +360,42 @@ static void lobby_test(void) {
     CHECK(!extra->positions[2].snapshot.area_id);
 
     // A client snapshot can be lost or delayed. A newer action must survive both cases.
+    position.area_id = 2;
     position.action = 1;
     swmp_mock_fault(mock, SWMP_MAX_PEERS, SWMP_MOCK_DROP_STATE);
     swmp_lobby_send_position(extra, &position, 1101);
     swmp_lobby_poll(host, 1101);
     CHECK(!host->positions[3].snapshot.area_id);
     swmp_lobby_send_position(extra, &position, 1151);
+    position.area_id = 3;
     position.action = 2;
+    position.health_q4 = 9;
+    position.rotation[1] = -16384;
+    position.position_mm[0] = -24000;
     swmp_mock_fault(mock, SWMP_MAX_PEERS, SWMP_MOCK_REORDER_STATE);
     swmp_lobby_send_position(extra, &position, 1201);
     swmp_lobby_poll(host, 1201);
     CHECK(host->positions[3].snapshot.action == 2);
     swmp_lobby_send_position(host, &position, 1201);
     swmp_lobby_poll(&lobbies[2], 1201);
-    CHECK(lobbies[2].positions[3].snapshot.action == 2);
+    const SwmpPlayerSnapshot *latest = &lobbies[2].positions[3].snapshot;
+    CHECK(latest->area_id == 3 && latest->action == 2 && latest->health_q4 == 9);
+    CHECK(latest->rotation[1] == -16384 && latest->position_mm[0] == -24000);
+
+    // A lost withdrawal must expire even if the host continues batching other players.
+    position.area_id = 0;
+    swmp_mock_fault(mock, SWMP_MAX_PEERS, SWMP_MOCK_DROP_STATE);
+    swmp_lobby_send_position(extra, &position, 1251);
+    swmp_lobby_poll(host, 1251);
+    position.area_id = 1;
+    swmp_lobby_send_position(host, &position, 2251);
+    swmp_lobby_poll(&lobbies[2], 2251);
+    CHECK(!lobbies[2].positions[3].snapshot.area_id);
+    CHECK(lobbies[2].positions[SWMP_HOST_PEER].snapshot.area_id == 1);
 
     swmp_lobby_leave(host);
     for (unsigned i = 1; i <= SWMP_MAX_PEERS; i++) {
-        swmp_lobby_poll(&lobbies[i], 1202);
+        swmp_lobby_poll(&lobbies[i], 2252);
         CHECK(!lobbies[i].joining && lobbies[i].session.state == SWMP_SESSION_OFFLINE);
         SwmpRemoteRoster offline = swmp_session_remote_roster(&lobbies[i].session);
         for (uint8_t j = 0; j < SWMP_MAX_PEERS; j++) CHECK(!offline.generation[j]);

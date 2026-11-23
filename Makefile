@@ -445,6 +445,8 @@ DIST_LTO ?= thin
 deps-windows:
 	tools/build_deps_windows.sh
 dist:
+	@[ ! -f extracted/romfs/Pack/Bootup.pack ] && [ ! -f runtime/game_place_table.inc ] || \
+	    { echo "Use a source-only checkout for packaging (the build can embed game place names)"; exit 1; }
 	@[ -f build/deps-win/lib/libavcodec.dll.a ] || { echo "make deps-windows first (LGPL FFmpeg)"; exit 1; }
 	@[ -d build/helper/swgen ] || { echo "make gen-helper first (the game code generator)"; exit 1; }
 	@! find tools -maxdepth 1 -name '*.py' -newer build/helper/swgen/swgen.exe | grep -q . || \
@@ -475,8 +477,14 @@ dist:
 	mkdir "$(DIST)/colour-luts" && cp third_party/luts/*.cube third_party/luts/README.md "$(DIST)/colour-luts/"  # (CC0: Video > Colour)
 	cp README.md LICENSE "$(DIST)/"  # (licenses and source links of the bundled components: README "License")
 	cp recomplauncher.json "$(DIST)/"  # (RecompLauncher reads it from the release to set the game up: next to the exe)
-	PATH="$(CURDIR)/build/deps-win/bin:$$PATH" ldd $(WIN_B)/savagewind.exe | awk '(/ucrt64/ || /deps-win/) && !/vulkan-1/ {print $$3}' | sort -u | \
-	    xargs -I{} cp -u {} "$(DIST)/"
+	rtc_bin=$$(if [ -n "$(MP_RTC_PREFIX)" ]; then cd "$(MP_RTC_PREFIX)/bin" && pwd -P; fi) && \
+	    deps=$$(PATH="$(CURDIR)/build/deps-win/bin$${rtc_bin:+:$$rtc_bin}:$$PATH" ldd $(WIN_B)/savagewind.exe) && \
+	    printf '%s\n' "$$deps" | awk -v rtc="$$rtc_bin" '/ => / { \
+	        sub(/^.* => /, ""); sub(/ \(0x[[:xdigit:]]+\)$$/, ""); \
+	        if ((/ucrt64/ || /deps-win/ || (rtc != "" && index($$0, rtc "/") == 1)) && !/vulkan-1/) print; \
+	    }' | \
+	    sort -u | xargs -I{} cp -u {} "$(DIST)/"
+	@test -f "$(DIST)/libdatachannel.dll" || { echo "libdatachannel.dll was not staged"; exit 1; }
 	! ls "$(DIST)" | grep -iE 'x264|x265|xvid|postproc'  # (no GPL codec libraries in the release)
 	! ls "$(DIST)" | grep -i splash  # (no start screen picture: the player's own, never shipped)
 	python3 tools/make_update_manifest.py "$(DIST)" "$(VERSION)"  # (what SW Update checks and replaces: this list, nothing else)

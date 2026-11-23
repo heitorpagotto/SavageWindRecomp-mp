@@ -35,6 +35,7 @@ typedef struct {
 static Placeholder slots[SWMP_MAX_PEERS];
 static uint64_t storage, lobby_generation;
 static uint64_t local_context, local_actor;
+static uint32_t local_area;
 static int16_t local_yaw;
 static uint64_t local_motion_at;
 static float local_motion_x, local_motion_z;
@@ -43,6 +44,7 @@ static SwmpProxyAction local_motion_action;
 RT_ON_RESET(multiplayer_presence_reset) {
     storage = lobby_generation = 0;
     local_context = local_actor = 0;
+    local_area = 0;
     local_yaw = 0;
     local_motion_at = 0;
     memset(slots, 0, sizeof slots);
@@ -90,10 +92,11 @@ static uint64_t spawn_context(void) {
     return guest_range(context, 8) ? context : 0;
 }
 
-enum { MAIN_FIELD_AREA = 1 };
-static const float spawn_radius = 100.0f, retain_radius = 120.0f;
+// Native actors stayed active on both peers at 60 m and were culled at 92 m.
+// Spawn inside the observed range and leave room for movement before retiring.
+static const float spawn_radius = 50.0f, retain_radius = 60.0f;
 
-static bool main_field_position(const float pos[3]) {
+static bool valid_position(const float pos[3]) {
     return fabsf(pos[0]) <= 5000 && fabsf(pos[1]) <= 2000 && fabsf(pos[2]) <= 4000;
 }
 
@@ -162,8 +165,9 @@ static void sample_facing(uint64_t actor, uint64_t heap_size, const float pos[3]
 
 static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player) {
     SwmpPlayerSnapshot sample = {0};
-    if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui() ||
-        !game_place_is_main_field()) return sample;
+    if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui()) return sample;
+    uint32_t area = game_place_area_id();
+    if (!area) return sample;
     uint64_t info = LD64(g_site.player_info), heap_size = kernel_heap_size();
     if (!heap_object(info, heap_size, 0x94)) return sample;
     uint64_t actor = LD64(info + 0x60);
@@ -172,13 +176,11 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     // PlayerInfo publishes this copy every game update. The writable position chain can change during gameplay.
     float p[3];
     memcpy(p, (const void *)(uintptr_t)(info + 0x88), sizeof p);
-    if (!main_field_position(p)) return sample;
-    *player = actor;
-    if (local_actor != actor) {
+    if (!valid_position(p)) return sample;
+    if (local_actor != actor || local_area != area) {
         local_yaw = 0;
         local_motion_at = 0;
     }
-    sample.area_id = MAIN_FIELD_AREA;
     for (unsigned i = 0; i < 3; i++) sample.position_mm[i] = (int32_t)lround((double)p[i] * 1000);
     sample_facing(actor, heap_size, p);
     sample.rotation[1] = local_yaw;
@@ -192,26 +194,29 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
             if (!life) sample.flags |= SWMP_PLAYER_DEAD;
         }
     }
+    // A RomFS worker can observe a stage change while sampling the player.
+    if (game_place_area_id() != area) return (SwmpPlayerSnapshot){0};
+    *player = actor;
+    sample.area_id = area;
     return sample;
 }
 
-static bool remote_pose(const SwmpPosition *p, uint64_t now_ms, Pose *pose) {
-    if (p->snapshot.area_id != MAIN_FIELD_AREA || !swmp_position_fresh(p, now_ms)) return false;
+static bool remote_pose(const SwmpPosition *p, uint32_t area, uint64_t now_ms, Pose *pose) {
+    if (p->snapshot.area_id != area || !swmp_position_fresh(p, now_ms)) return false;
     float *pos = pose->position;
     for (unsigned i = 0; i < 3; i++) pos[i] = p->snapshot.position_mm[i] / 1000.0f;
     pose->yaw = p->snapshot.rotation[1] * (pi / 32768.0f);
     pose->action = p->snapshot.action < SWMP_PROXY_ACTION_COUNT ? p->snapshot.action : SWMP_PROXY_IDLE;
-    return main_field_position(pos);
+    return valid_position(pos);
 }
 
-static bool in_range(const SwmpPlayerSnapshot *local, const Pose *pose, bool retained) {
+static float distance_squared(const SwmpPlayerSnapshot *local, const Pose *pose) {
     float distance_sq = 0;
     for (unsigned i = 0; i < 3; i++) {
         float d = pose->position[i] - local->position_mm[i] / 1000.0f;
         distance_sq += d * d;
     }
-    float radius = retained ? retain_radius : spawn_radius;
-    return distance_sq <= radius * radius;
+    return distance_sq;
 }
 
 static void copy_transform(uint64_t dst, const Pose *pose) {
@@ -350,14 +355,19 @@ void rt_mp_presence_tick(Cpu *cpu) {
     uint64_t player = 0;
     SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu, now, &player) : (SwmpPlayerSnapshot){0};
     uint64_t context = local.area_id ? spawn_context() : 0;
-    swmp_m1_publish_position(roster.lobby_generation, context ? &local : &(SwmpPlayerSnapshot){0}, now_ms);
-    bool world_changed = local_context != context || local_actor != player;
+    if (!context) {
+        local = (SwmpPlayerSnapshot){0};
+        player = 0;
+    }
+    swmp_m1_publish_position(roster.lobby_generation, &local, now_ms);
+    bool world_changed = local_context != context || local_actor != player || local_area != local.area_id;
     bool changed = lobby_generation != roster.lobby_generation;
     if ((world_changed || changed) && roster.lobby_generation)
-        LOG("[multiplayer] local overworld %s\n", context ? "ready" : "unavailable");
+        LOG("[multiplayer] local area %u %s\n", local.area_id, context ? "ready" : "unavailable");
     if (world_changed) local_motion_at = 0;
     local_context = context;
     local_actor = player;
+    local_area = local.area_id;
     lobby_generation = roster.lobby_generation;
     if (!storage) {
         bool any = false;
@@ -374,9 +384,10 @@ void rt_mp_presence_tick(Cpu *cpu) {
         Placeholder *slot = &slots[peer];
         Pose pose;
         uint64_t generation = roster.remotes.generation[peer];
-        bool has_pose = generation && remote_pose(&roster.positions[peer], now_ms, &pose);
-        bool nearby = has_pose && in_range(&local, &pose, slot->generation == generation);
-        bool desired = context && nearby;
+        bool has_pose = generation && remote_pose(&roster.positions[peer], local.area_id, now_ms, &pose);
+        float distance_sq = has_pose ? distance_squared(&local, &pose) : INFINITY;
+        float radius = slot->generation == generation ? retain_radius : spawn_radius;
+        bool desired = context && distance_sq <= radius * radius;
         if (slot->generation && (changed || world_changed || slot->generation != generation || !desired)) {
             const char *reason = changed || slot->generation != generation ? "roster changed" :
                 !context ? "local world unavailable" : world_changed ? "local world changed" :
@@ -387,6 +398,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         } else if (desired && now >= slot->deadline) {
             uint64_t addr = storage + peer * SLOT_SIZE;
             bool proxy = fs_multiplayer_proxy_ready();
+            if (!proxy && local.area_id != GAME_PLACE_MAIN_FIELD_AREA) continue;
             if (!proxy) pose.yaw = 0;
             if (request_actor(cpu, addr, context, &pose, proxy)) {
                 *slot = (Placeholder){.generation = generation, .deadline = now + request_ns, .proxy = proxy,

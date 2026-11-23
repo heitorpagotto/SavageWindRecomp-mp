@@ -66,7 +66,12 @@ Acceptance criteria
 Status **in progress**. The main field supports nearby remote Link proxies driven by peer position,
 facing and native idle, walk, run, sprint and jump clips. The F1 multiplayer roster displays reported
 quarter-heart health. Windows Slate travel preserved the lobby and nearby presence recovered after reunion.
-Sustained visibility near the spawn radius, mixed-platform travel and visibility, and interiors are still open.
+Two Windows instances rendered proxies in the same shrine and withheld them across different shrines.
+Two native shrine round trips retired and restored both proxies while the original lobby stayed connected.
+The Windows range test verified 50 m spawn and 60 m retention. A single renderer kept seven fixture-driven
+proxies active through measured 30, 60, 90, and 120 FPS. Eight full game clients and the Linux AppImage
+build remain open. The owner will test mixed Windows/Linux sessions manually and
+report issues separately from M2 acceptance.
 
 Goal: every peer sees the other seven players as Links using existing game assets.
 
