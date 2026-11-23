@@ -12,6 +12,10 @@
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
 #define SWMP_PLAYER_SNAPSHOT_SIZE 44u
+#define SWMP_ENVIRONMENT_SIZE 8u
+#define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
+#define SWMP_WEATHER_TYPES 9u
+#define SWMP_WEATHER_UNAVAILABLE 255u
 #define SWMP_MAX_PAYLOAD_SIZE (64u * 1024u)
 
 typedef enum {
@@ -114,4 +118,13 @@ typedef struct {
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);
 bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *snapshot,
                                  const uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE]);
+
+// Optional prefix on a host position batch. Its area comes from the host's pose in the same batch.
+typedef struct {
+    uint32_t time_milli;
+    uint8_t weather;
+} SwmpEnvironment;
+
+bool swmp_environment_encode(uint8_t out[SWMP_ENVIRONMENT_SIZE], const SwmpEnvironment *environment);
+bool swmp_environment_decode(SwmpEnvironment *environment, const uint8_t data[SWMP_ENVIRONMENT_SIZE]);
 

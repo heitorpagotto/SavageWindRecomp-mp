@@ -8,17 +8,48 @@
 #include "control.h"
 #include "game_sites.h"
 #include "hle.h"
+#include "multiplayer.h"
 #include "settings.h"
+#include "world_environment.h"
 
 // The game's weather types: 0 clear, 1 cloudy, 2 rain, 3 heavy rain, 4 snow, 5 heavy snow, 6 thunderstorm,
 // 7 thunder rain, 8 rain in sunshine. The setting: 0 the game's, 1 no rain, 2 no thunderstorms, 3 + n: n held.
 static int logged;  // (changes written to the log this boot: the first few)
 
+static uint64_t weather_world(void) {
+    uint64_t wm = g_site.world_mgr ? *(uint64_t *)(uintptr_t)g_site.world_mgr : 0;
+    return wm && *(uint32_t *)(uintptr_t)(wm + 0x5c0) ? wm : 0;
+}
+
+static void set_weather(uint64_t wm, uint8_t type) {
+    *(volatile uint8_t *)(uintptr_t)(wm + 0x7d1) = type;
+    *(volatile int32_t *)(uintptr_t)(wm + 0x794) = 4;  // (as setWeatherType leaves it: the change is taken up)
+}
+
+uint8_t world_weather_read(const Cpu *source) {
+    uint64_t wm = weather_world();
+    if (!wm || !g_site.mp_weather_current || *(volatile uint8_t *)(uintptr_t)(wm + 0x7d6)) return UINT8_MAX;
+    Cpu cpu = *source;
+    cpu.x[0] = wm;
+    guest_call(&cpu, g_site.mp_weather_current);
+    uint32_t type = (uint32_t)cpu.x[0];
+    return type < WEATHER_COUNT - 3 ? (uint8_t)type : UINT8_MAX;
+}
+
+void world_weather_sync(uint8_t type) {
+    uint64_t wm = weather_world();
+    if (wm && type < WEATHER_COUNT - 3 && !*(volatile uint8_t *)(uintptr_t)(wm + 0x7d6))
+        set_weather(wm, type);
+}
+
 void weather_frame(void) {
     int w = g_settings.weather;
-    if (w <= 0 || w >= WEATHER_COUNT || !g_site.world_mgr) return;
-    uint64_t wm = *(uint64_t *)(uintptr_t)g_site.world_mgr;
-    if (!wm || !*(uint32_t *)(uintptr_t)(wm + 0x5c0)) return;  // (the world isn't up yet)
+    if (w <= 0 || w >= WEATHER_COUNT) return;
+#ifdef SW_MULTIPLAYER
+    if (swmp_m1_weather_active()) return;
+#endif
+    uint64_t wm = weather_world();
+    if (!wm) return;
     if (*(volatile uint8_t *)(uintptr_t)(wm + 0x7d6)) return;   // (a cutscene's weather)
     volatile uint8_t *now = (volatile uint8_t *)(uintptr_t)(wm + 0x7d1);
     uint8_t cur = *now;
@@ -31,8 +62,7 @@ void weather_frame(void) {
         LOG("[weather] %d -> %d (setting %d)\n", cur, want, w);
         logged++;
     }
-    *now = (uint8_t)want;
-    *(volatile int32_t *)(uintptr_t)(wm + 0x794) = 4;  // (as setWeatherType leaves it: the change is taken up)
+    set_weather(wm, (uint8_t)want);
 }
 
 // weather: show | <name>: game (the game's own again), no_rain, no_storms, or one weather held (settings.h names)
@@ -51,8 +81,8 @@ static void cmd_weather(int argc, char **argv, ControlReply *r) {
     int w = g_settings.weather >= 0 && g_settings.weather < WEATHER_COUNT ? g_settings.weather : 0;
     control_field_str(r, "weather", g_weather_keys[w]);
     control_text(r, "Weather: %s", w == 0 ? "the game's own" : g_weather_keys[w]);
-    uint64_t wm = g_site.world_mgr ? *(uint64_t *)(uintptr_t)g_site.world_mgr : 0;
-    if (wm && *(uint32_t *)(uintptr_t)(wm + 0x5c0)) {
+    uint64_t wm = weather_world();
+    if (wm) {
         uint8_t cur = *(volatile uint8_t *)(uintptr_t)(wm + 0x7d1);
         if (cur < 9) {  // (the game's types, as g_weather_keys from 3 on)
             control_field_str(r, "now", g_weather_keys[3 + cur]);

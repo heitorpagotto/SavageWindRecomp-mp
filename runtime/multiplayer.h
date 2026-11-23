@@ -34,7 +34,20 @@ typedef struct {
     uint64_t lobby_generation;  // zero when there is no admitted session
     SwmpRemoteRoster remotes;
     SwmpPosition positions[SWMP_MAX_PEERS];
+    SwmpHostEnvironment environment;
+    bool host;
 } SwmpM1Roster;
+
+typedef enum {
+    SWMP_NOTICE_JOINED,
+    SWMP_NOTICE_LEFT,
+    SWMP_NOTICE_LOCAL_LEFT,
+} SwmpNoticeType;
+
+typedef struct {
+    SwmpNoticeType type;
+    char name[SWMP_PLAYER_NAME_SIZE];
+} SwmpNotice;
 
 void swmp_m1_boot(const GameLibTables *game);
 void swmp_m1_update(void);
@@ -43,7 +56,11 @@ void swmp_m1_set_enabled(bool enabled);
 SwmpM1View swmp_m1_view(void);
 // Game-thread reader. No guest references or transport state cross this boundary.
 SwmpM1Roster swmp_m1_roster(void);
-void swmp_m1_publish_position(uint64_t generation, const SwmpPlayerSnapshot *position, uint64_t now_ms);
+void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *position,
+                           const SwmpEnvironment *environment, uint64_t now_ms);
+bool swmp_m1_weather_active(void);
+// A null output checks whether the overlay needs to render.
+size_t swmp_m1_notices(SwmpNotice notices[SWMP_MAX_PEERS]);
 bool swmp_m1_can(const SwmpM1View *view, SwmpM1Action action);
 void swmp_m1_submit(SwmpM1Action action, const char *name);
 

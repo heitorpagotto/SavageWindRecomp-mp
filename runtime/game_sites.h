@@ -79,6 +79,7 @@
     X(mp_anim_current) \
     X(mp_anim_string) \
     X(mp_health_current) \
+    X(mp_weather_current) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {

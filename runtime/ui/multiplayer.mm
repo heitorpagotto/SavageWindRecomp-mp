@@ -40,6 +40,11 @@ void multiplayer_tab_draw() {
     if (!view.enabled) return;
     ImGui::TextWrapped("%s", multiplayer_status(view));
     if (!view.supported) return;
+    bool sync_environment = settings_multiplayer_sync_environment();
+    if (ImGui::Checkbox(tr("Sync host time and weather"), &sync_environment)) {
+        settings_multiplayer_set_sync_environment(sync_environment);
+        settings_save();
+    }
     if (!view.pending && !view.joining && view.session.state == SWMP_SESSION_OFFLINE) {
         static char name[SWMP_PLAYER_NAME_SIZE] = "Link";  // i18n-skip (default player name)
         ui_input_text(tr("Player name"), name, sizeof name);
@@ -73,5 +78,27 @@ void multiplayer_tab_draw() {
     }
     const char *leave = view.joining || view.session.state == SWMP_SESSION_OFFLINE ? tr("Cancel") : tr("Leave lobby");
     if (ImGui::Button(leave)) swmp_m1_submit(SWMP_M1_LEAVE, nullptr);
+}
+
+void multiplayer_notices_draw(float scale) {
+    SwmpNotice notices[SWMP_MAX_PEERS];
+    size_t count = swmp_m1_notices(notices);
+    if (!count) return;
+    const ImVec2 size = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(size.x - 20 * scale, 20 * scale), ImGuiCond_Always, ImVec2(1, 0));
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    ImGui::Begin("##multiplayer_notifications", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
+                 ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings);
+    for (size_t i = 0; i < count; i++) {
+        const SwmpNotice &notice = notices[i];
+        if (notice.type == SWMP_NOTICE_LOCAL_LEFT)
+            ImGui::TextUnformatted(tr("You disconnected from multiplayer"));
+        else if (notice.type == SWMP_NOTICE_LEFT)
+            ImGui::Text(tr("[%s] disconnected from the game"), notice.name);
+        else
+            ImGui::Text(tr("[%s] connected to the game"), notice.name);
+    }
+    ImGui::End();
 }
 #endif

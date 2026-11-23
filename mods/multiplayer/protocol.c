@@ -174,6 +174,27 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
 }
 
 
+static bool environment_valid(const SwmpEnvironment *e) {
+    return e->time_milli < SWMP_DAY_MILLI &&
+           (e->weather < SWMP_WEATHER_TYPES || e->weather == SWMP_WEATHER_UNAVAILABLE);
+}
+
+bool swmp_environment_encode(uint8_t out[SWMP_ENVIRONMENT_SIZE], const SwmpEnvironment *e) {
+    if (!out || !e || !environment_valid(e)) return false;
+    put32(out, e->time_milli);
+    out[4] = e->weather;
+    memset(out + 5, 0, 3);
+    return true;
+}
+
+bool swmp_environment_decode(SwmpEnvironment *e, const uint8_t data[SWMP_ENVIRONMENT_SIZE]) {
+    if (!e || !data || data[5] || data[6] || data[7]) return false;
+    SwmpEnvironment decoded = {.time_milli = get32(data), .weather = data[4]};
+    if (!environment_valid(&decoded)) return false;
+    *e = decoded;
+    return true;
+}
+
 enum { HELLO_FIXED_SIZE = 90, WELCOME_FIXED_SIZE = 6 };
 
 // Reject malformed UTF-8, embedded NUL, and C0/C1 controls. Lengths count bytes, not glyphs.

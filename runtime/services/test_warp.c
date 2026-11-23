@@ -22,6 +22,7 @@
 #include "../control_mem.h"
 #include "../game_sites.h"
 #include "../hle.h"
+#include "../world_environment.h"
 
 typedef struct { const char *name; float x, y, z; const char *map_type, *map_name; } WarpPlace;
 // Positions are the game's own start positions near each place (Map/MainField/Static.smubin and
@@ -155,9 +156,12 @@ static float *time_of_day(void) {
 
 // The requested held hour (-2: SAVAGEWIND_TEST_TIME not read yet, -1: not held).
 static float held_tod = -2;
-static uint64_t sampled_manager, game_data_site;
 static uint64_t frozen_manager;
 static float saved_speed, pending_tod = -1;
+
+typedef struct { uint64_t manager, site; } TimeDataSite;
+// The developer commands run on the presenter. Multiplayer updates time on the guest thread.
+static TimeDataSite warp_time_data, sync_time_data;
 
 static uint64_t read_pointer(uint64_t addr) {
     uint64_t p = 0;
@@ -167,8 +171,8 @@ static uint64_t read_pointer(uint64_t addr) {
 // TimeMgr::calc reloads WM_Time from GameDataMgr each update. Its vtable's calc slot starts with an ADRP/ADD
 // reference to that singleton. Decode that reference rather than pinning a 1.9.0 address or changing the game
 // library's site table. Require the whole load/branch sequence and a singleton in main's data segment.
-static uint64_t time_data_site(uint64_t tm) {
-    if (tm == sampled_manager && game_data_site) return game_data_site;
+static uint64_t time_data_site(uint64_t tm, TimeDataSite *cache) {
+    if (tm == cache->manager && cache->site) return cache->site;
     uint64_t calc = read_pointer(read_pointer(tm) + 0x30);
     uint32_t code[32];
     if (calc < MAIN_BASE || calc >= g_site.main_data ||
@@ -181,16 +185,16 @@ static uint64_t time_data_site(uint64_t tm) {
         int64_t pages = (int64_t)(imm ^ 0x100000) - 0x100000;
         uint64_t site = ((calc + 4 * i) & ~0xfffull) + pages * 4096 + ((code[i + 1] >> 10) & 0xfff);
         if (site < g_site.main_data || site + 8 > g_site.main_end) continue;
-        sampled_manager = tm;
-        return game_data_site = site;
+        *cache = (TimeDataSite){tm, site};
+        return site;
     }
     return 0;
 }
 
 // The pending-write buffer uses proxy flags (value at +0x10, primary flag at +8); the current-read buffer uses
 // primary flags (value at +0x18, name hash at +0x1c). Verify each float getter and the primary's WM_Time hash.
-static bool time_flags(float *now, uint64_t flags[2]) {
-    uint64_t tm = (uintptr_t)now - 0xb8, site = time_data_site(tm);
+static bool time_flags(float *now, uint64_t flags[2], TimeDataSite *cache) {
+    uint64_t tm = (uintptr_t)now - 0xb8, site = time_data_site(tm, cache);
     uint64_t mgr = site ? read_pointer(site) : 0;
     uint32_t handle;
     if (!mgr || !control_mem_peek(tm + 0xd4, &handle, sizeof handle) || handle == UINT32_MAX) return false;
@@ -215,18 +219,30 @@ static bool time_flags(float *now, uint64_t flags[2]) {
     return true;
 }
 
-static bool write_time(float *now, float tod) {
+static bool write_time(float *now, float tod, bool override_gate) {
     uint64_t flags[2];
-    if (!time_flags(now, flags)) return false;
+    if (!time_flags(now, flags, override_gate ? &warp_time_data : &sync_time_data)) return false;
     // Updating just the display is lost on the next calc; updating only one buffer is lost on publication.
     if (!control_mem_poke(flags[0], &tod, sizeof tod) ||
         !control_mem_poke(flags[1], &tod, sizeof tod)) return false;
     // Before the paraglider, TimeMgr caps its clock at 11:00. Lift only that cached clock gate for this
     // explicit time override, so release can advance from any hour. The quest's game-data flag stays intact.
     uint8_t running = 1;
-    if (!control_mem_poke((uintptr_t)now - 0xb8 + 0x14e, &running, sizeof running)) return false;
+    if (override_gate && !control_mem_poke((uintptr_t)now - 0xb8 + 0x14e, &running, sizeof running)) return false;
     *now = tod;
     return true;
+}
+
+bool world_time_read(float *tod) {
+    float *now = time_of_day();
+    if (!now) return false;
+    *tod = *now;
+    return true;
+}
+
+bool world_time_sync(float tod) {
+    float *now = time_of_day();
+    return now && write_time(now, tod, false);
 }
 
 static void read_test_time(void) {
@@ -244,7 +260,7 @@ static void hold_time(float *now) {
         float speed, stopped = 0;
         if (!control_mem_peek(tm + 0xc4, &speed, sizeof speed) ||
             !control_mem_poke(tm + 0xc4, &stopped, sizeof stopped)) return;
-        if (!write_time(now, held_tod == 360 ? 0 : held_tod)) {
+        if (!write_time(now, held_tod == 360 ? 0 : held_tod, true)) {
             control_mem_poke(tm + 0xc4, &speed, sizeof speed);
             return;  // The world may expose its TimeMgr before the game-data handles are ready.
         }
@@ -262,7 +278,7 @@ void test_warp_set_hour(float hour) {
     pending_tod = now ? -1 : tod;
     if (!now) return;
     if (held_tod >= 0) hold_time(now);
-    if (!write_time(now, tod == 360 ? 0 : tod)) pending_tod = tod;
+    if (!write_time(now, tod == 360 ? 0 : tod, true)) pending_tod = tod;
 }
 
 // Explicit hold for freeze, goto and test fixtures; a negative hour releases it.
@@ -271,7 +287,7 @@ void test_warp_hold_hour(float hour) {
     float *now = time_of_day();
     if (hour < 0) {
         if (held_tod >= 0 && now) {
-            write_time(now, held_tod == 360 ? 0 : held_tod);
+            write_time(now, held_tod == 360 ? 0 : held_tod, true);
             uint64_t tm = (uintptr_t)now - 0xb8;
             if (frozen_manager == tm) control_mem_poke(tm + 0xc4, &saved_speed, sizeof saved_speed);
         }
@@ -282,7 +298,7 @@ void test_warp_hold_hour(float hour) {
         pending_tod = -1;
         if (now) {
             hold_time(now);
-            write_time(now, held_tod == 360 ? 0 : held_tod);
+            write_time(now, held_tod == 360 ? 0 : held_tod, true);
         }
     }
 }
@@ -305,12 +321,13 @@ void test_warp_frame(uint64_t frame) {
     float *now = time_of_day();
     if (!now) { frozen_manager = 0; return; }
     if (held_tod >= 0) hold_time(now);
-    else if (pending_tod >= 0 && !write_time(now, pending_tod == 360 ? 0 : pending_tod)) return;
+    else if (pending_tod >= 0 && !write_time(now, pending_tod == 360 ? 0 : pending_tod, true)) return;
     pending_tod = -1;
 }
 
 RT_ON_RESET(test_warp_reset) {
     held_tod = -2;
-    sampled_manager = game_data_site = frozen_manager = 0;
+    warp_time_data = sync_time_data = (TimeDataSite){0};
+    frozen_manager = 0;
     pending_tod = -1;
 }

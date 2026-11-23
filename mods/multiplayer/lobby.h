@@ -15,6 +15,12 @@ typedef struct {
 } SwmpPosition;
 
 typedef struct {
+    SwmpEnvironment state;
+    uint32_t area_id;  // zero when unavailable
+    uint64_t received_at;
+} SwmpHostEnvironment;
+
+typedef struct {
     SwmpConnection connection;
     uint64_t connected_at;
     uint8_t binding[SWMP_BINDING_SIZE];
@@ -31,6 +37,8 @@ typedef struct {
     uint64_t next_position_at;
     uint32_t roster_epoch;  // host version of the reliable membership list
     SwmpPosition positions[SWMP_MAX_PEERS];
+    SwmpHostEnvironment environment;
+    void (*peer_changed)(const char *name, bool joined, uint64_t now_ms);
     uint32_t features;  // client: negotiated features; host: supported features
     bool joining;       // session ID is unknown until WELCOME
     bool waiting_welcome;
@@ -45,7 +53,9 @@ bool swmp_lobby_host(SwmpLobby *lobby, const SwmpCompatibility *compatibility, c
                     const char *url, uint64_t session_id);
 bool swmp_lobby_join(SwmpLobby *lobby, const SwmpCompatibility *compatibility, const char *name,
                     const char *url, const char *invite, uint64_t now_ms);
-// A sample with area_id zero withdraws local presence. The caller supplies the latest local sample.
+// A sample with area_id zero withdraws local presence. Only the host can supply an environment.
+void swmp_lobby_send_state(SwmpLobby *lobby, const SwmpPlayerSnapshot *local,
+                           const SwmpEnvironment *environment, uint64_t now_ms);
 void swmp_lobby_send_position(SwmpLobby *lobby, const SwmpPlayerSnapshot *local, uint64_t now_ms);
 bool swmp_position_fresh(const SwmpPosition *position, uint64_t now_ms);
 // Consumes control, position and lifecycle events.

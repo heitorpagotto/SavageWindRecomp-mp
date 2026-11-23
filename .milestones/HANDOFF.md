@@ -1,9 +1,29 @@
 # Agent handoff
 
-Checkpoint 2026-11-23 on `multiplayer/windows-test`, based on `d7c98b9`.
+Checkpoint 2026-11-23 on `multiplayer/windows-test`, with M2.5 work based on `36301a1`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
+
+## M2.5 first slice
+
+- The default-on **Sync host time and weather** preference is shared by F1 and System > Options.
+  The host sends time and effective weather with position batches. Clients apply fresh samples within
+  the same area when gameplay is ready. The passive Link actor remains independent of this path.
+- Join and disconnect notices render above gameplay for five seconds. The host and existing clients see
+  a named notice when a peer joins or leaves. An admitted player also gets a local notice when their
+  session ends. Late joiners receive the current roster without a burst of notices.
+- The 1.9.0 `mp_weather_current` site resolves the world manager's effective-weather getter. The prior
+  cheat override field returns 255 during ordinary forecasts and cannot serve as the host's sole source.
+  The Windows launcher is `build/m25-build/Play-M25.cmd` with game library `13365c313591b27e` and
+  source ID `538ba47fbd6d1889fc1fff8728b9714a85a6cc8f`. Both peers need matching M2.5 builds.
+  See the [M2.5 test record](TESTING.md#m25-first-slice) for Windows validation and remaining cases.
+- Start appearance work with one installed piece on an owned proxy. Refer to the
+  [appearance probe](M2_POSITION_HANDOFF.md#resume) and `runtime/quick_drop_action.c` for the existing
+  read-only equipped-actor query. The failed multi-model hair experiment still constrains the approach.
+- For overhead name feasibility, `control_camera_view()` in `runtime/nvn/vulkan/device.c` currently follows
+  the motion-vector path. A default-on label needs a current world view and projection in other AA modes
+  too, and must use the world viewport and the active proxy's applied pose.
 
 ## M2 acceptance follow-up
 

@@ -139,6 +139,12 @@ int main(int argc, char **argv) {
     }
     expect(11, false);
     assert(!pokes && manager[0x14e] == 0 && speed() == initial_speed);
+    assert(world_time_sync(157.5f));
+    float sampled;
+    assert(world_time_read(&sampled) && sampled == 157.5f);
+    assert(manager[0x14e] == 0 && speed() == initial_speed);
+    tick(1);
+    expect(10.5f + 0.25f / 15, false);
     test_warp_set_hour(10);
     expect(10, false);
     tick(1);

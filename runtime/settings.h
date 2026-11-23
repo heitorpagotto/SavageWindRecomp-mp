@@ -284,6 +284,8 @@ void settings_load(void);
 void settings_save(void);
 bool settings_multiplayer_enabled(void);
 void settings_multiplayer_set(bool enabled);
+bool settings_multiplayer_sync_environment(void);
+void settings_multiplayer_set_sync_environment(bool enabled);
 int hdr_look_current(void);   // 0 Off, 1..3 the selected slot while its values still match, or 4 (Custom)
 void hdr_look_apply(int slot);  // 0 Off, 1..3 a saved slot, into the HDR settings
 void hdr_look_store(int slot);  // the HDR settings into slot 1..3

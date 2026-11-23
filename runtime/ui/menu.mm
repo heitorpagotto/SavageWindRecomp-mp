@@ -2207,6 +2207,9 @@ static bool menu_draws(bool *pointer_hover = NULL, float *pointer_box = NULL, bo
     bool gyro_on = pc_gyro_scene_view(gyro ? gyro : &gs);
     if (pointer_hover) *pointer_hover = hover;
     if (gyro_show) *gyro_show = gyro_on;
+#ifdef SW_MULTIPLAYER
+    if (swmp_m1_notices(nullptr)) return true;
+#endif
     return g_open.load() || g_kbd.load() == 1 || g_sizes.load() || console_is_open() || gyro_on || hover ||
            g_settings.perf_overlay != PERF_OFF || act_log_enabled() || quick_inventory_sort_hint() || quick_drop_hint_state();
 }
@@ -2344,6 +2347,9 @@ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
     if (kbd) keyboard_draw(io, scale);
     if (sizes) size_list_draw(io, scale);
     if (con) console_draw(io, scale, g_font_mono ? g_font_mono : g_font);
+#ifdef SW_MULTIPLAYER
+    multiplayer_notices_draw(scale);
+#endif
     ImGui::Render();
     g_text_busy = open && ui_text_busy();
 #ifdef __APPLE__

@@ -71,7 +71,8 @@ The encrypted transport identity and per-invite binding tie lobby admission to t
 | Chest opened | host | reliable shared transaction |
 | Chest loot | host creates one grant per player | reliable per-player transaction |
 | Inventory/rupees/durability | each player | private except explicit grant/cost |
-| Time/weather/world phase | host | snapshot on join plus reliable changes |
+| Time and weather | host | optional environment prefix on every host position batch |
+| World phase | host | planned reliable phase updates |
 
 ## Remote Links
 

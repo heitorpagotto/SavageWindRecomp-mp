@@ -21,6 +21,14 @@ static pthread_mutex_t view_lock = PTHREAD_MUTEX_INITIALIZER;
 static SwmpM1View view;
 static SwmpM1Roster roster;
 static SwmpPosition local_position;
+static SwmpEnvironment local_environment;
+static bool environment_valid;
+static struct {
+    SwmpNotice notice;
+    uint64_t expires_at;
+} notices[SWMP_MAX_PEERS];
+static size_t next_notice;
+static const uint64_t notice_duration_ms = UINT64_C(5000);
 static Command command;
 static bool stop_requested;
 
@@ -32,6 +40,35 @@ static SwmpLobby lobby;
 static uint64_t lobby_generation;
 static SwmpConnection reply_connection;
 static bool clipboard_error;
+
+// Call with view_lock held.
+static void add_notice(SwmpNoticeType type, const char *name, uint64_t now) {
+    notices[next_notice].notice = (SwmpNotice){.type = type};
+    if (name) strcpy(notices[next_notice].notice.name, name);
+    notices[next_notice].expires_at = now + notice_duration_ms;
+    next_notice = (next_notice + 1) % SWMP_MAX_PEERS;
+}
+
+static void peer_changed(const char *name, bool joined, uint64_t now) {
+    pthread_mutex_lock(&view_lock);
+    if (view.enabled && !stop_requested)
+        add_notice(joined ? SWMP_NOTICE_JOINED : SWMP_NOTICE_LEFT, name, now);
+    pthread_mutex_unlock(&view_lock);
+}
+
+size_t swmp_m1_notices(SwmpNotice out[SWMP_MAX_PEERS]) {
+    uint64_t now = plat_now_ns() / UINT64_C(1000000);
+    size_t count = 0;
+    pthread_mutex_lock(&view_lock);
+    for (size_t i = 0; i < SWMP_MAX_PEERS; i++) {
+        size_t index = (next_notice + i) % SWMP_MAX_PEERS;
+        if (notices[index].expires_at <= now) continue;
+        if (out) out[count] = notices[index].notice;
+        count++;
+    }
+    pthread_mutex_unlock(&view_lock);
+    return count;
+}
 
 static bool read_build_id(uint8_t *out, size_t size, const char *hex) {
     static const char digits[] = "0123456789abcdef";
@@ -86,6 +123,7 @@ static bool start_transport(void) {
         return false;
     }
     swmp_lobby_init(&lobby, swmp_webrtc_transport(rtc));
+    lobby.peer_changed = peer_changed;
     return true;
 }
 
@@ -108,6 +146,9 @@ void swmp_m1_shutdown(void) {
     view = (SwmpM1View){0};
     roster = (SwmpM1Roster){0};
     local_position = (SwmpPosition){0};
+    environment_valid = false;
+    memset(notices, 0, sizeof notices);
+    next_notice = 0;
     command = (Command){0};
     stop_requested = false;
     pthread_mutex_unlock(&view_lock);
@@ -122,9 +163,12 @@ void swmp_m1_set_enabled(bool enabled) {
     if (!enabled) {
         // Hide admitted peers immediately. The window thread closes the session before processing another action,
         // even if a menu turns multiplayer back on before the next poll.
+        if (roster.lobby_generation)
+            add_notice(SWMP_NOTICE_LOCAL_LEFT, NULL, plat_now_ns() / UINT64_C(1000000));
         view = (SwmpM1View){.supported = view.supported};
         roster = (SwmpM1Roster){0};
         local_position = (SwmpPosition){0};
+        environment_valid = false;
         command = (Command){0};
         stop_requested = true;
     }
@@ -145,11 +189,27 @@ SwmpM1Roster swmp_m1_roster(void) {
     return snapshot;
 }
 
-void swmp_m1_publish_position(uint64_t generation, const SwmpPlayerSnapshot *position, uint64_t now_ms) {
+void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *position,
+                           const SwmpEnvironment *environment, uint64_t now_ms) {
     pthread_mutex_lock(&view_lock);
-    if (generation && generation == roster.lobby_generation)
+    if (generation && generation == roster.lobby_generation) {
         local_position = (SwmpPosition){.snapshot = *position, .received_at = now_ms};
+        environment_valid = environment != NULL;
+        if (environment) local_environment = *environment;
+    }
     pthread_mutex_unlock(&view_lock);
+}
+
+bool swmp_m1_weather_active(void) {
+    if (!settings_multiplayer_sync_environment()) return false;
+    uint64_t now = plat_now_ns() / UINT64_C(1000000);
+    pthread_mutex_lock(&view_lock);
+    const SwmpHostEnvironment *e = &roster.environment;
+    bool active = e->area_id && e->area_id == local_position.snapshot.area_id &&
+        e->state.weather < SWMP_WEATHER_TYPES && now - e->received_at < SWMP_POSITION_TIMEOUT_MS &&
+        swmp_position_fresh(&local_position, now);
+    pthread_mutex_unlock(&view_lock);
+    return active;
 }
 
 bool swmp_m1_can(const SwmpM1View *v, SwmpM1Action action) {
@@ -188,6 +248,8 @@ void swmp_m1_update(void) {
     stop_requested = false;
     Command pending = command;
     SwmpPosition sample = local_position;
+    SwmpEnvironment environment = local_environment;
+    bool send_environment = environment_valid && settings_multiplayer_sync_environment();
     uint64_t sample_lobby = roster.lobby_generation;
     command = (Command){0};
     pthread_mutex_unlock(&view_lock);
@@ -249,7 +311,7 @@ void swmp_m1_update(void) {
         SwmpPlayerSnapshot position = {0};
         if (sample_lobby == lobby_generation && swmp_position_fresh(&sample, now))
             position = sample.snapshot;
-        swmp_lobby_send_position(&lobby, &position, now);
+        swmp_lobby_send_state(&lobby, &position, send_environment ? &environment : NULL, now);
         if (lobby.joining && lobby.waiting_welcome && !waiting_welcome)
             LOG("[multiplayer] lobby handshake sent, waiting for host\n");
         if (reply_connection && !swmp_webrtc_has_link(rtc, reply_connection)) {
@@ -267,6 +329,8 @@ void swmp_m1_update(void) {
     if (lobby.session.state == SWMP_SESSION_LOBBY || lobby.session.state == SWMP_SESSION_PLAYING) {
         admitted.lobby_generation = lobby_generation;
         admitted.remotes = swmp_session_remote_roster(&lobby.session);
+        admitted.environment = lobby.environment;
+        admitted.host = lobby.session.role == SWMP_ROLE_HOST;
         memcpy(admitted.positions, lobby.positions, sizeof admitted.positions);
     }
     pthread_mutex_lock(&view_lock);
@@ -294,8 +358,11 @@ void swmp_m1_update(void) {
             view.health_known |= 1u << peer;
         }
     }
-    if (roster.lobby_generation != admitted.lobby_generation)
+    if (roster.lobby_generation != admitted.lobby_generation) {
+        if (!admitted.lobby_generation) add_notice(SWMP_NOTICE_LOCAL_LEFT, NULL, now);
         local_position = (SwmpPosition){0};
+        environment_valid = false;
+    }
     roster = admitted;
     pthread_mutex_unlock(&view_lock);
     if (before != after) LOG("[multiplayer] lobby peers: %zu\n", after);

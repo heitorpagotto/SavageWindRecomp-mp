@@ -94,7 +94,8 @@ Acceptance criteria:
 
 ## M2.5 — Time, weather, and full Link synchronization
 
-Status **not started**. Begins after M2 is complete and before M3.
+Status **in progress**. The first slice implements host time and weather sync and admission notifications.
+Equipment, expanded animation, and overhead names are open. See the [handoff](HANDOFF.md#m25-first-slice).
 
 Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped
 gear and animations.
@@ -104,6 +105,7 @@ Planned deliverables:
 - Host-authoritative time of day and weather, including clock progression and weather transitions. Expose
   one multiplayer setting to enable or disable both, enabled by default.
 - Show `[UserName] connected to the game` to the host and existing peers when the host admits a player.
+- Show a named disconnect notice to other players and a local notice when the player's own session ends.
 - If feasible, display player names above their remote Links. Add a multiplayer setting to hide the names,
   with name display enabled by default.
 - Reliable appearance and equipment updates keyed by `equipment_revision`, covering every armor slot,

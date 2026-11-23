@@ -396,6 +396,9 @@ void build_items(void) {
     v.push_back(toggle(P_MULTIPLAYER, "Enable multiplayer", "",
                        [](const Item &) { return (int)settings_multiplayer_enabled(); },
                        [](const Item &, int on) { swmp_m1_set_enabled(on != 0); }, 0));
+    v.push_back(toggle(P_MULTIPLAYER, "Sync host time and weather", "",
+                       [](const Item &) { return (int)settings_multiplayer_sync_environment(); },
+                       [](const Item &, int on) { settings_multiplayer_set_sync_environment(on != 0); }, 0));
     v.push_back(button(P_MULTIPLAYER, "Multiplayer status", "", nullptr, A_NONE, 0));
     v.back().label = [](const Item &, int) { return multiplayer_status(g_mp_view); };
     v.back().desc_fn = [](const Item &) { return multiplayer_status(g_mp_view); };

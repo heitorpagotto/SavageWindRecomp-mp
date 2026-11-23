@@ -65,7 +65,8 @@ MP_PRESENCE_SITES = ('mp_presence_tick', 'mp_presence_context', 'mp_presence_cre
                      'mp_presence_take', 'mp_presence_delete', 'mp_presence_move')
 MP_ANIMATION_SITES = ('mp_anim_play', 'mp_anim_current', 'mp_anim_string')
 MP_HEALTH_SITES = ('mp_health_current',)
-STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_HEALTH_SITES)
+MP_WEATHER_SITES = ('mp_weather_current',)
+STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_HEALTH_SITES + MP_WEATHER_SITES)
 MP_ANIMATION_PLAY = ('90000008/9f00001f 1e3e1001 1e204100 f9400108/ffc003ff 910003e1 aa1503e0 '
                      '2a1403e2 2a1303e3 52800024 91004108 a9005be8 94000000/fc000000')
 
@@ -402,6 +403,9 @@ SITES = [
     # PlayerInfo's read-only getter returns Link's current life in quarter hearts.
     Site('mp_health_current', 'code', 'f9403000 b4000000/ff00001f a9bf7bfd 910003fd f9400008 f9415d08 '
          'd63f0100 b4000000/ff00001f b9400000 a8c17bfd d65f03c0 52800020', 0),
+    # World Manager's effective weather for its current climate, including the forecast when no override is set.
+    Site('mp_weather_current', 'code', '3943e100 d65f03c0 b9478001 14000000/fc000000 a9be7bfd '
+         'f9000bf3 910003fd aa0003f3 94000000/fc000000 2a0003e1', 2),
     # Add items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # Adding items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # play: the game thread's place for the item get), the pause menu data's item get, and where the pause menu data's
@@ -427,6 +431,7 @@ OPTIONAL_GROUPS = [
     MP_PRESENCE_SITES,
     MP_ANIMATION_SITES,
     MP_HEALTH_SITES,
+    MP_WEATHER_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
     ('quick_drop_tick', 'quick_drop_actor_call', 'player_drop_forbidden', 'actor_info_lookup',
      'actor_info_has_tag', 'pouch_discard', 'player_equipment', 'pouch_default_name',
@@ -512,6 +517,7 @@ KNOWN = {
         'mp_anim_current': 0x70014a0040,
         'mp_anim_string': 0x7001bc32b8,
         'mp_health_current': 0x7000cc7184,
+        'mp_weather_current': 0x7001431c3c,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,

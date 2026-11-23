@@ -39,6 +39,11 @@ Each invite is single-use and expires after five minutes. Send both messages onl
 they contain connection details. If chat truncates a message, send it as a text file and copy the full line.
 Leave lobby or turn multiplayer off to disconnect. Multiplayer defaults to off.
 
+The host and existing clients see a notice when someone joins or disconnects. A player also sees a
+notice when their own session ends. **Sync host time and weather** is on by default.
+Clients follow the host's clock and effective weather while in the same supported area. Turn it off to use
+local time and weather.
+
 Players can connect across different networks when ICE finds a direct route. The app uses the public STUN
 endpoint from the WebRTC documentation to discover addresses. Game traffic flows between peers. Restrictive
 routers or firewalls can prevent a direct connection. For development, `SAVAGEWIND_MP_STUN` overrides the
@@ -62,7 +67,8 @@ host migration: if the host leaves, the session ends without changing anyone's s
 | Main-story flags | Host | Reliable ordered allowlist, never blanket-copy all game flags |
 | Chests | Host | One shared open transaction plus one reward transaction per connected player |
 | Inventory, rupees, durability | Each player | Private unless a specific cooperative transaction grants an item |
-| Time, weather, world phase | Host | Snapshot on join and ordered changes while connected |
+| Time and weather | Host | Latest sample in the position batch |
+| World phase | Host | Planned reliable phase updates |
 
 The host's save is the campaign authority. Before joining, every client gets a temporary backup. Persistent shared
 progress is applied only at explicit safe points; disconnecting during a transaction must leave the local save valid.

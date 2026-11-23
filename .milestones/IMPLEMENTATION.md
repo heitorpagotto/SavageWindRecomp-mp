@@ -223,5 +223,25 @@ and writes for both menus. Disable clears the published roster and pending comma
 The window thread destroys the transport before processing another action, including after a rapid off/on toggle.
 Guest support checks are independent of the persisted preference.
 
-The wire version and fields are unchanged. The build normalizes line endings before hashing the source for the
-network identity. The platform-specific gamelib ID is used locally to validate the guest library.
+The build normalizes line endings before hashing the source for the network identity. The platform-specific
+gamelib ID is used locally to validate the guest library.
+
+## M2.5 environment and lobby notices
+
+The host can prefix a complete position batch with a TimeMgr clock sample and a weather type. The receiver
+validates both fields, requires a host pose and uses that pose's area ID. This shares sequencing and the
+reliable roster epoch with position, so a late join or packet loss recovers on the next full batch. Clients
+send plain position snapshots and accept environment samples only from the authenticated host link.
+
+On the guest update, a client with the default-on setting applies a fresh sample in the same area, outside
+loads and events. It updates both native WM_Time buffers as needed and lets TimeMgr advance between samples.
+The 1.9.0 weather getter returns the effective weather for the active climate. The client feeds that type
+into the existing world manager weather override and the local weather setting resumes when sync stops.
+Both F1 and System > Options use the persisted setting.
+
+The window thread queues the admitted name on successful WELCOME send or receipt of PEER_JOINED. The
+render thread shows the notice for five seconds, including with the menu closed. A joiner's initial roster
+populates through WELCOME without notices for the already present peers or for the joiner.
+The host and existing clients use the departed peer's roster name when a connection closes or PEER_LEFT
+arrives. A transition from an admitted session to offline also posts a local notice. Disabling multiplayer
+clears the session immediately and keeps the disconnect notice visible until it expires.

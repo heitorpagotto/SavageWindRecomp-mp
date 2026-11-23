@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-23T16:16:45-03:00",
+  "updated_at": "2026-11-23T16:45:30-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "d7c98b9",
+    "workspace_base_commit": "36301a1",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -67,8 +67,9 @@
     {
       "id": "M2.5",
       "name": "Time, weather, and full Link synchronization",
-      "status": "not_started",
-      "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible."
+      "status": "in_progress",
+      "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible.",
+      "implemented_slice": "Host time and weather in position batches, and overlay notices for admission and disconnect."
     },
     {
       "id": "M3",
@@ -124,7 +125,9 @@
     "main-field remote presence with 50 m spawn and 60 m retirement radii and local world transition cleanup",
     "separate run and sprint clips selected from native locomotion and horizontal speed",
     "independent multiplayer release version for runtime and package labels",
-    "stable area IDs for the main field and individual shrine scenes from RomFS stage tracking"
+    "stable area IDs for the main field and individual shrine scenes from RomFS stage tracking",
+    "host time and weather sync with a default-on preference shared by both settings surfaces",
+    "join notices shown to the host and existing clients on admission"
   ],
   "not_implemented": [
     "remote Link appearance pieces, extended action mapping and broader area support",
@@ -171,7 +174,8 @@
     "m2_linux_multiplayer_tests": "Core, eight-peer direct invite and eight-peer WebRTC loopback passed on Ubuntu 22.04 x86-64 under rootless Podman with Clang 21.1.8 and libdatachannel 0.24.6. The Make targets reported the same release label and multiplayer source ID as Windows.",
     "m2_shrine_roundtrips": "Two Windows 1.9.0 games at 30 FPS retained their lobby through two native shrine elevator round trips. Both proxies retired and reactivated each time.",
     "m2_package_acceptance": "Windows release ZIP built with LGPL FFmpeg. Manifest and archive integrity passed, including bundled libdatachannel. Packaged imports resolved from the archive staging directory. Linux Make target reported the identical version label. Native AppImage build pending.",
-    "m2_udp_impairment": "Two 30 FPS Windows games exchanged snapshots over direct WebRTC under test-only UDP loss every fifth datagram and 0?45 ms delays. They converged on position, facing and walk/jump/idle in both directions with the same actor and independently reflected a client health change 12 to 9 to 12."
+    "m2_udp_impairment": "Two 30 FPS Windows games exchanged snapshots over direct WebRTC under test-only UDP loss every fifth datagram and 0?45 ms delays. They converged on position, facing and walk/jump/idle in both directions with the same actor and independently reflected a client health change 12 to 9 to 12.",
+    "m25_windows_environment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e followed the host's native clear weather and a controlled rain transition. Clock progression, host and client opt-out, reconnection around midnight, and the host overlay on both admissions passed. A native shrine round trip verified clock resync without leaving the lobby. Synthetic coverage also checks notifications on existing clients."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -190,5 +194,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Begin M2.5. The owner can run the M7 manual validation separately."
+  "next_recommended_work": "Continue M2.5 by attaching one equipped piece to an owned proxy. Native Linux and mixed-platform environment sync remain open. The owner can run the M7 manual validation separately."
 }

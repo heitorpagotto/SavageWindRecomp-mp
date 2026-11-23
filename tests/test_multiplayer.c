@@ -243,6 +243,32 @@ static bool raw_control(SwmpTransport *t, SwmpConnection connection, SwmpMessage
            t->send(t->context, connection, SWMP_CHANNEL_CONTROL, packet, size);
 }
 
+static unsigned host_joins, observer_joins, host_leaves, observer_leaves;
+static char last_join[SWMP_PLAYER_NAME_SIZE];
+static char last_host_leave[SWMP_PLAYER_NAME_SIZE], last_observer_leave[SWMP_PLAYER_NAME_SIZE];
+
+static void host_peer_changed(const char *name, bool joined, uint64_t now) {
+    (void)now;
+    if (joined) {
+        host_joins++;
+        strcpy(last_join, name);
+    } else {
+        host_leaves++;
+        strcpy(last_host_leave, name);
+    }
+}
+
+static void observer_peer_changed(const char *name, bool joined, uint64_t now) {
+    (void)now;
+    CHECK(swmp_player_name_valid(name));
+    if (joined) {
+        observer_joins++;
+    } else {
+        observer_leaves++;
+        strcpy(last_observer_leave, name);
+    }
+}
+
 static void lobby_test(void) {
     SwmpMock *mock = swmp_mock_create();
     CHECK(mock);
@@ -251,6 +277,8 @@ static void lobby_test(void) {
     for (unsigned i = 0; i <= SWMP_MAX_PEERS; i++)
         swmp_lobby_init(&lobbies[i], swmp_mock_transport(mock, i));
     SwmpLobby *host = &lobbies[0], *extra = &lobbies[SWMP_MAX_PEERS];
+    host->peer_changed = host_peer_changed;
+    lobbies[2].peer_changed = observer_peer_changed;
     CHECK(swmp_lobby_host(host, &local_build, "Host", NULL, 0x9876));
     swmp_lobby_poll(host, 0);
     CHECK(host->invite[0]);
@@ -288,6 +316,7 @@ static void lobby_test(void) {
     }
     swmp_lobby_poll(extra, 1);
     CHECK(extra->rejection == SWMP_REJECT_FULL);
+    CHECK(host_joins == 7 && observer_joins == 5 && !strcmp(last_join, "Link 7"));
     // Position updates work in an open lobby, without START, and the host relays every peer in a batch.
     SwmpPlayerSnapshot position = {.area_id = 1};
     for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
@@ -296,8 +325,11 @@ static void lobby_test(void) {
     }
     swmp_lobby_poll(host, 1);
     position.position_mm[0] = 10;
-    swmp_lobby_send_position(host, &position, 1);
+    SwmpEnvironment environment = {.time_milli = 359999, .weather = 2};
+    swmp_lobby_send_state(host, &position, &environment, 1);
     swmp_lobby_poll(&lobbies[2], 1);
+    CHECK(lobbies[2].environment.area_id == 1 && lobbies[2].environment.received_at == 1);
+    CHECK(lobbies[2].environment.state.time_milli == 359999 && lobbies[2].environment.state.weather == 2);
     for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
         if (i == 2) continue;
         CHECK(swmp_position_fresh(&lobbies[2].positions[i], 1));
@@ -327,6 +359,9 @@ static void lobby_test(void) {
     swmp_lobby_poll(&lobbies[2], 2);
     CHECK(lobbies[2].session.state == SWMP_SESSION_PLAYING);
     CHECK(!strcmp(lobbies[2].session.peers[3].name, "Link 3"));
+    CHECK(host_joins == 8 && observer_joins == 6 && !strcmp(last_join, "Link 3"));
+    CHECK(host_leaves == 1 && observer_leaves == 1);
+    CHECK(!strcmp(last_host_leave, "Link 3") && !strcmp(last_observer_leave, "Link 3"));
     SwmpRemoteRoster host_after = swmp_session_remote_roster(&host->session);
     SwmpRemoteRoster client_after = swmp_session_remote_roster(&lobbies[2].session);
     CHECK(host_after.generation[3] > host_before.generation[3]);
@@ -336,28 +371,49 @@ static void lobby_test(void) {
     CHECK(!host->positions[3].snapshot.area_id && !lobbies[2].positions[3].snapshot.area_id);
 
     // A host state datagram from before the replacement cannot populate the reused slot.
-    uint8_t packet[SWMP_PACKET_HEADER_SIZE + SWMP_PLAYER_SNAPSHOT_SIZE];
+    uint8_t packet[SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE + 2 * SWMP_PLAYER_SNAPSHOT_SIZE];
     SwmpPacketHeader state = {
         .version = SWMP_PROTOCOL_VERSION, .type = SWMP_MSG_PLAYER_SNAPSHOT,
-        .payload_size = SWMP_PLAYER_SNAPSHOT_SIZE, .session_id = host->session.session_id,
+        .payload_size = SWMP_ENVIRONMENT_SIZE + 2 * SWMP_PLAYER_SNAPSHOT_SIZE, .session_id = host->session.session_id,
         .sender_peer = SWMP_HOST_PEER, .channel = SWMP_CHANNEL_STATE, .sequence = 2, .tick = old_epoch,
     };
+    position.peer_id = SWMP_HOST_PEER;
+    environment.weather = 6;
+    CHECK(swmp_environment_encode(packet + SWMP_PACKET_HEADER_SIZE, &environment));
+    CHECK(swmp_player_snapshot_encode(packet + SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE, &position));
     position.peer_id = 3;
-    CHECK(swmp_player_snapshot_encode(packet + SWMP_PACKET_HEADER_SIZE, &position));
+    CHECK(swmp_player_snapshot_encode(packet + SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE +
+                                      SWMP_PLAYER_SNAPSHOT_SIZE, &position));
     CHECK(swmp_packet_encode(packet, sizeof packet, &state) == SWMP_PACKET_OK);
     CHECK(host->transport.send(host->transport.context, lobbies[2].links[0].connection,
                               SWMP_CHANNEL_STATE, packet, sizeof packet));
     swmp_lobby_poll(&lobbies[2], 2);
     CHECK(!lobbies[2].positions[3].snapshot.area_id);
+    CHECK(lobbies[2].environment.state.weather == 2);
+
+    // A client cannot supply an environment even with an authenticated sender and valid payload.
+    state.sender_peer = 3;
+    state.tick = 0;
+    state.payload_size -= SWMP_PLAYER_SNAPSHOT_SIZE;
+    CHECK(swmp_player_snapshot_encode(packet + SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE, &position));
+    CHECK(swmp_packet_encode(packet, sizeof packet, &state) == SWMP_PACKET_OK);
+    CHECK(extra->transport.send(extra->transport.context, extra->links[0].connection,
+                                SWMP_CHANNEL_STATE, packet, SWMP_PACKET_HEADER_SIZE + state.payload_size));
+    swmp_lobby_poll(host, 2);
+    CHECK(!host->environment.area_id && !host->positions[3].snapshot.area_id);
 
     // A late join sees current players with the next batch, and expired entries drop out.
-    swmp_lobby_send_position(host, &position, 51);
+    environment.time_milli = 0;
+    swmp_lobby_send_state(host, &position, &environment, 51);
     swmp_lobby_poll(extra, 51);
+    CHECK(extra->environment.area_id == 1 && extra->environment.state.time_milli == 0);
+    CHECK(extra->environment.state.weather == 6);
     CHECK(extra->positions[2].snapshot.position_mm[0] == 2000);
     CHECK(!swmp_position_fresh(&extra->positions[2], 1051));
     swmp_lobby_send_position(host, &position, 1051);
     swmp_lobby_poll(extra, 1051);
     CHECK(!extra->positions[2].snapshot.area_id);
+    CHECK(!extra->environment.area_id);
 
     // A client snapshot can be lost or delayed. A newer action must survive both cases.
     position.area_id = 2;
@@ -400,6 +456,7 @@ static void lobby_test(void) {
         SwmpRemoteRoster offline = swmp_session_remote_roster(&lobbies[i].session);
         for (uint8_t j = 0; j < SWMP_MAX_PEERS; j++) CHECK(!offline.generation[j]);
     }
+    CHECK(host_leaves == 1 && observer_leaves == 2 && !strcmp(last_observer_leave, "Host"));
     swmp_mock_destroy(mock);
 }
 

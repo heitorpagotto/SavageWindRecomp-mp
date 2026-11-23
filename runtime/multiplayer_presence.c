@@ -8,6 +8,8 @@
 #include "kernel.h"
 #include "multiplayer.h"
 #include "multiplayer_assets.h"
+#include "settings.h"
+#include "world_environment.h"
 
 #include <math.h>
 
@@ -36,6 +38,7 @@ static Placeholder slots[SWMP_MAX_PEERS];
 static uint64_t storage, lobby_generation;
 static uint64_t local_context, local_actor;
 static uint32_t local_area;
+static uint64_t applied_clock_at;
 static int16_t local_yaw;
 static uint64_t local_motion_at;
 static float local_motion_x, local_motion_z;
@@ -45,6 +48,7 @@ RT_ON_RESET(multiplayer_presence_reset) {
     storage = lobby_generation = 0;
     local_context = local_actor = 0;
     local_area = 0;
+    applied_clock_at = 0;
     local_yaw = 0;
     local_motion_at = 0;
     memset(slots, 0, sizeof slots);
@@ -210,6 +214,32 @@ static bool remote_pose(const SwmpPosition *p, uint32_t area, uint64_t now_ms, P
     return valid_position(pos);
 }
 
+static bool update_environment(Cpu *cpu, const SwmpM1Roster *roster, uint32_t area, uint64_t now_ms,
+                               SwmpEnvironment *sample) {
+    if (!area || !settings_multiplayer_sync_environment() || framepace_in_event()) {
+        applied_clock_at = 0;
+        return false;
+    }
+    float tod;
+    if (roster->host) {
+        if (!world_time_read(&tod) || !(tod >= 0 && tod < 360)) return false;
+        *sample = (SwmpEnvironment){.time_milli = (uint32_t)(tod * 1000.0), .weather = world_weather_read(cpu)};
+        return true;
+    }
+
+    const SwmpHostEnvironment *host = &roster->environment;
+    if (host->area_id != area || now_ms - host->received_at >= SWMP_POSITION_TIMEOUT_MS) return false;
+    if (applied_clock_at != host->received_at && world_time_read(&tod)) {
+        float target = host->state.time_milli / 1000.0f;
+        float gap = fabsf(target - tod);
+        // Leave the native clock running between corrections. Time wraps at midnight.
+        if (gap <= 0.025f || (gap >= 359.975f && gap <= 360.0f) || world_time_sync(target))
+            applied_clock_at = host->received_at;
+    }
+    if (host->state.weather < SWMP_WEATHER_TYPES) world_weather_sync(host->state.weather);
+    return false;
+}
+
 static float distance_squared(const SwmpPlayerSnapshot *local, const Pose *pose) {
     float distance_sq = 0;
     for (unsigned i = 0; i < 3; i++) {
@@ -359,9 +389,12 @@ void rt_mp_presence_tick(Cpu *cpu) {
         local = (SwmpPlayerSnapshot){0};
         player = 0;
     }
-    swmp_m1_publish_position(roster.lobby_generation, &local, now_ms);
     bool world_changed = local_context != context || local_actor != player || local_area != local.area_id;
     bool changed = lobby_generation != roster.lobby_generation;
+    if (world_changed || changed) applied_clock_at = 0;
+    SwmpEnvironment environment;
+    bool sampled_environment = update_environment(cpu, &roster, local.area_id, now_ms, &environment);
+    swmp_m1_publish_state(roster.lobby_generation, &local, sampled_environment ? &environment : NULL, now_ms);
     if ((world_changed || changed) && roster.lobby_generation)
         LOG("[multiplayer] local area %u %s\n", local.area_id, context ? "ready" : "unavailable");
     if (world_changed) local_motion_at = 0;
