@@ -45,6 +45,16 @@ Reviewed 2026-11-22. The prototype and native build results below have separate 
   The mock lobby also checked the departed name on a surviving client after same-slot rejoin.
   The multiplayer, WebRTC, direct and UI-text checks passed, and the changed sources cross-compiled for Linux.
 
+## M2.5 equipment probe
+
+Two Windows scratch games in Tah Muhl Shrine used BOTW 1.9.0, gamelib `13365c313591b27e`, direct
+WebRTC loopback, 30 FPS target, 960x540, 50% render scale, 1400 MiB VRAM and Vulkan heap copy off.
+The GPUs and drivers match the environment test. Both native stock axe actors activated and both
+renderers applied equipment transforms from the other game. Only the host drew their axe and only
+the client's remote visual moved from the stowed to drawn placement. The client still showed its
+own axe stowed. The stock actor exposed Take, and the fixture does not cover equip changes or actor
+retirement. See the [equipment handoff](HANDOFF.md#m25-equipment-probe) for scripts and evidence.
+
 ## M1 developer build
 
 Use MSYS2 UCRT64 on Windows or the project Linux/Vulkan environment. Install Git, CMake, Ninja, and OpenSSL

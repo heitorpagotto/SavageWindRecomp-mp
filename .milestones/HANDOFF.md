@@ -25,6 +25,30 @@ separate scratch settings and saves for game tests. Keep generated code and game
   the motion-vector path. A default-on label needs a current world view and projection in other AA modes
   too, and must use the world viewport and the active proxy's applied pose.
 
+## M2.5 equipment probe
+
+- The 1.9.0 `g_site.player_equipment` getter exposed the equipped Woodcutter's Axe in category 0 in both
+  Windows games. The equipped actor's matrix at `+0x398` follows its placement. At the same idle
+  position, the host's sampled height above Link changed from about 1.43 m stowed to 0.83 m drawn and
+  its basis changed as well. The scope is a rigid weapon. Hair and armor still need a skinned-model path.
+- A separate local actor created through the existing presence request, taken into an owned actor index
+  and moved through the matrix setter rendered beside the remote Link. This was a stock weapon actor
+  in scratch only. The drawn capture shows a Take prompt, so production needs a passive visual actor
+  with its own indexed lifecycle.
+- The ignored `build/m25_equipment_probe.py`, `build/m25_build_probe.py --equipment`, and
+  `build/m25_run_equipment.py` build and run the scratch probe. It uses one known installed weapon
+  and expresses its transform in Link's yaw frame. Its temporary encoding borrows unused position
+  fields. Keep that experiment out of the production wire format. The local placement run is in
+  `build/m25-equipment-md8xh7xs/`. The direct WebRTC run is in `build/m25-equipment-wire-e2yv1mv9/`.
+  Only the host drew their axe. The client applied the remote change from 1.43 m to 0.83 m while
+  its own axe stayed stowed. The client captures `build/equipment-stowed.png` and
+  `build/equipment-drawn.png` show the pose change. The scratch actor also lacks per-slot cleanup.
+- For production, first give one validated rigid gear model a passive alias and verify equip, unequip,
+  travel, leave, and that neither local inventory changes. Then send a reliable revisioned equipment
+  record and carry the visual transform in transient state. Resolve identities against locally installed
+  gear and ensure a late join receives the current revision. Keep world gear and the native local player
+  equip path outside remote ownership.
+
 ## M2 acceptance follow-up
 
 - The owner accepted M2. [M7](MILESTONES.md#m7--deferred-manual-validation) tracks the eight-game soak,
