@@ -59,9 +59,14 @@ void multiplayer_tab_draw() {
     if (swmp_m1_can(&view, SWMP_M1_NEW_INVITE)) {
         if (ImGui::Button(tr("New invite"))) swmp_m1_submit(SWMP_M1_NEW_INVITE, nullptr);
     }
-    for (unsigned i = 0; i < SWMP_MAX_PEERS; i++)
-        if (view.session.peers[i].state == SWMP_PEER_READY)
-            ImGui::BulletText("%s", view.session.peers[i].name);
+    for (unsigned i = 0; i < SWMP_MAX_PEERS; i++) {
+        if (view.session.peers[i].state != SWMP_PEER_READY) continue;
+        const char *name = view.session.peers[i].name;
+        if (view.health_known & (1u << i))
+            ImGui::BulletText("%s | %s %g", name, tr("Hearts"), view.health_q4[i] / 4.0);
+        else
+            ImGui::BulletText("%s", name);
+    }
     if (swmp_m1_can(&view, SWMP_M1_START)) {
         if (ImGui::Button(tr("Start lobby"))) swmp_m1_submit(SWMP_M1_START, nullptr);
         ImGui::SameLine();

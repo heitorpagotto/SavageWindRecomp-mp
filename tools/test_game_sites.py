@@ -177,6 +177,14 @@ def main():
         check(not gs.resolve(b, known), 'a mismatched native helper disables the entire presence group')
         gs.SITES[-1] = gs.Site(gs.MP_PRESENCE_SITES[-1], 'code', 'd503201f 12345678', 0)
         check(not gs.resolve(b, known), 'a missing signature has no presence address fallback')
+
+        # An animation mismatch must leave the existing position proxy available.
+        gs.SITES = [gs.Site(n, 'code', pat, i) for i, n in enumerate(gs.MP_PRESENCE_SITES + gs.MP_ANIMATION_SITES)]
+        known = {s.name: BASE + 0x800 + s.at * 4 for s in gs.SITES}
+        check(gs.resolve(b, known) == known, 'the complete animation group is accepted')
+        known['mp_anim_string'] += 4
+        check(gs.resolve(b, known) == {n: known[n] for n in gs.MP_PRESENCE_SITES},
+              'a mismatched animation site leaves position support available')
     finally:
         gs.SITES = saved
 

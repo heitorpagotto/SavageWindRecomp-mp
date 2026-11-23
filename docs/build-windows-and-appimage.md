@@ -29,6 +29,16 @@ and build headers for **Set up game files**. To play with game files stored else
 
 The manual steps below give the individual build commands and include the optional Windows ZIP workflow.
 
+## Multiplayer build compatibility
+
+Compare the `[multiplayer] source ID: …, game build: …` startup line from the running app on each system.
+Both values must match. The source ID identifies the multiplayer sources baked into the executable.
+The game build identifies the loaded BOTW main module. Each platform has its own local game-library ID.
+
+Run `make -s print-multiplayer-id` from a Linux or UCRT64 source checkout to see the source ID a fresh
+build would use. If it differs from the running app's source ID, rebuild and launch that output. Share
+the same multiplayer source edits between the two checkouts before rebuilding.
+
 ## Windows x86-64 local build
 
 1. Open PowerShell in the repository root. Run the one-time setup if you need MSYS2 UCRT64, Clang, Vulkan

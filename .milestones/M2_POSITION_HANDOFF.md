@@ -1,8 +1,9 @@
-# M2 position and remote Link handoff
+# M2 Plateau position, animation and health handoff
 
 M1 was accepted on 2026-11-22 after Windows and Linux clients joined a Linux host. Hosting from the
 owner's network still fails and remains a separate investigation. START stays available. The Plateau
-position slice of M2 works in the open lobby and after START. M2 remains partial.
+position slice of M2 works in the open lobby and after START. The Plateau proxy now maps the local
+player's idle, movement and jump states to native clips. M2 remains partial.
 
 ## Implementation
 
@@ -20,9 +21,19 @@ position slice of M2 works in the open lobby and after START. M2 remains partial
 - The 1.9.0 `mp_presence_move` site resolves the native actor matrix setter. Call it on the game thread
   while holding the validated link for an owned proxy index. The proxy interpolates over one 20 Hz send
   interval and snaps large corrections. Generation changes, leave and reboot clear owned references.
-- The proxy renders in the base model's bind pose. Default hair and other appearance pieces,
-  native animation, health and equipment are later steps. Keep local Link's singleton, camera,
-  input and inventory independent of remote actors.
+- The virtual actor pack adds its own AS list and three single-clip definitions from the installed
+  Player_Animation archive. The proxy has no AI or physics resource. The guest update reads layer
+  zero, slot zero of local Link's native animation controller and sends a stable action ID in the
+  existing snapshot field. The receiver bounds that ID and selects a local state name. It calls
+  the native playback function on the retained proxy's controller when the state changes. Movement
+  and facing still use the matrix setter. The optional animation sites resolve as a group and a
+  signature failure leaves the position path available.
+- The supported actions cover idle, locomotion with a walk clip and jumping. Facing turns use the
+  existing interpolation. Default hair, armor and weapons remain open. Keep local Link's
+  singleton, camera, input and inventory independent of remote actors.
+- Read-only health uses PlayerInfo's native quarter-heart getter. Fresh values travel with the
+  snapshots and appear beside peer names in the F1 multiplayer tab. An unknown value omits the
+  count. Peer snapshots never change either player's native life.
 
 ## Verification
 
@@ -45,14 +56,31 @@ position slice of M2 works in the open lobby and after START. M2 remains partial
   independent inventory opening, and leaving and returning to the test bounds. The two-instance
   hardware reached about 65 and 83 FPS at 90 and 120 FPS targets, respectively. Native Linux gameplay
   and sustained 90/120 FPS verification are open.
+- `build/m2-probe/build_anim_live.py` and `build/m2-probe/run_anim_matrix.py` checked native animation
+  in both directions and repeated the inventory, area and lifecycle checks with regenerated gamelib
+  `34aa482dae306a0d`. A separate `run_anim_capacity.py` fixture rendered all seven remote Link actors
+  in one game through START and disconnect. Both used the actual direct WebRTC flow. See the
+  [animation test record](TESTING.md#m2-plateau-animation-check) for settings and results.
+- `build/m2-probe/build_health_live.py` and `build/m2-probe/run_health_live.py` tested health
+  observation with gamelib `e640fd858dc0d033`. The installed-data regeneration is in ignored
+  `build/m2-health-generated/`, and the linked app and library are in `build/m2-health-build/`.
+  The Windows link used a Clang response file for the generated objects because the expanded command
+  exceeded the process command-line limit. The Makefile wrote the ID after linking.
 
 ## Resume
 
-1. Work out the default idle pose and animated turns, walks and jumps using the installed resources
-   and a separately owned model. The local PauseMenuPlayer pack shows an animation list that selects
-   Player_Animation and its normal wait clip. It is a reference for the native animation data path.
-2. Keep the transform and creation path stable while adding appearance pieces, animation, health and
-   reliable equipment revisions. Verify individual inventory and local control.
-3. Complete the extended session and frame-rate matrix, eight visible world peers, interiors, travel,
-   loss/jitter and native Windows/Linux gameplay. Review the [milestone ledger](MILESTONES.md) and
+1. Add default appearance pieces and reliable equipment revisions. Use
+   the existing read-only equipped-actor query in `runtime/quick_drop_action.c` as a reference for
+   equipped weapons. Resolve appearance resources from installed data and apply them to an owned
+   proxy. `Armor_Default_Head` selects its head unit from the `Armor_Default` model archive in
+   TitleBG. The scratch `build/m2-probe/build_hair_probe.py` experiment added a second model
+   entry to the proxy pack. The proxy failed to activate. The 8 MiB instance-heap retry also
+   submitted creation requests that failed before activation. Its log is under ignored
+   `build/m2-hair-budget-a5ndp610/`. Start by isolating the native model load and attachment path
+   with one equipped piece. Verify individual inventory and local control.
+2. Extend the action map when a supported movement or area needs another native pose. Preserve the
+   indexed actor lifecycle, transform and snapshot rate.
+3. Complete extended sessions with eight independently controlled game clients, sustained 90 and
+   120 FPS, interiors, travel, live loss/jitter and native Windows/Linux gameplay. Review the
+   [milestone ledger](MILESTONES.md) and
    [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) before marking M2 accepted.

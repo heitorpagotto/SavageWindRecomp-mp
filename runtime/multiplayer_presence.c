@@ -19,12 +19,14 @@ static const float pi = 3.14159265358979323846f;
 
 typedef struct {
     float position[3], yaw;
+    SwmpProxyAction action;
 } Pose;
 
 typedef struct {
     uint64_t generation, deadline;
     uint64_t move_started;
     Pose applied, from, target;
+    SwmpProxyAction animation;
     bool retained, visible, proxy;
 } Placeholder;
 
@@ -91,6 +93,31 @@ static bool heap_object(uint64_t addr, uint64_t heap_size, size_t size) {
     return !(addr & 7) && addr >= HEAP_BASE && heap_size >= size && addr - HEAP_BASE <= heap_size - size;
 }
 
+static uint64_t animation_controller(uint64_t actor, uint64_t heap_size) {
+    // The generic actor owns its AS controller. It becomes available after the model is loaded.
+    if (!heap_object(actor, heap_size, 0x568)) return 0;
+    uint64_t controller = LD64(actor + 0x560);
+    return heap_object(controller, heap_size, 0xe0) ? controller : 0;
+}
+
+static bool action_named(uint64_t name, const char *expected) {
+    size_t size = strlen(expected) + 1;
+    return guest_range(name, size) && !memcmp((const void *)(uintptr_t)name, expected, size);
+}
+
+static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size) {
+    if (!g_site.mp_anim_current) return SWMP_PROXY_IDLE;
+    uint64_t controller = animation_controller(actor, heap_size);
+    if (!controller) return SWMP_PROXY_IDLE;
+    // Layer zero, slot zero holds the local actor's full-body state.
+    uint64_t string = call(cpu, g_site.mp_anim_current, controller, 0, 0);
+    if (!guest_range(string, 16)) return SWMP_PROXY_IDLE;
+    uint64_t name = LD64(string + 8);
+    if (action_named(name, "Jump")) return SWMP_PROXY_JUMP;
+    if (action_named(name, "Move") || action_named(name, "Dash")) return SWMP_PROXY_WALK;
+    return SWMP_PROXY_IDLE;
+}
+
 static void sample_facing(uint64_t actor, uint64_t heap_size, const float pos[3]) {
     if (!heap_object(actor, heap_size, 0x3c8)) return;
     float matrix[12];
@@ -104,7 +131,7 @@ static void sample_facing(uint64_t actor, uint64_t heap_size, const float pos[3]
     local_yaw = (int16_t)(turn == 32768 ? -32768 : turn);
 }
 
-static SwmpPlayerSnapshot sample_player(void) {
+static SwmpPlayerSnapshot sample_player(Cpu *cpu) {
     SwmpPlayerSnapshot sample = {0};
     if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui()) return sample;
     uint64_t info = LD64(g_site.player_info), heap_size = kernel_heap_size();
@@ -115,8 +142,18 @@ static SwmpPlayerSnapshot sample_player(void) {
     if (in_test_area(p[0], p[1], p[2])) {
         sample.area_id = PLATEAU_TEST_AREA;
         for (unsigned i = 0; i < 3; i++) sample.position_mm[i] = (int32_t)lround((double)p[i] * 1000);
-        sample_facing(LD64(info + 0x60), heap_size, p);
+        uint64_t actor = LD64(info + 0x60);
+        sample_facing(actor, heap_size, p);
         sample.rotation[1] = local_yaw;
+        sample.action = sample_action(cpu, actor, heap_size);
+        if (g_site.mp_health_current && heap_object(actor, heap_size, 0x7c) &&
+            LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1)) {
+            uint32_t life = (uint32_t)call(cpu, g_site.mp_health_current, info, 0, 0);
+            if (life <= UINT16_MAX) {
+                sample.health_q4 = (uint16_t)life;
+                if (!life) sample.flags |= SWMP_PLAYER_DEAD;
+            }
+        }
     }
     return sample;
 }
@@ -126,6 +163,7 @@ static bool remote_pose(const SwmpPosition *p, uint64_t now_ms, Pose *pose) {
     float *pos = pose->position;
     for (unsigned i = 0; i < 3; i++) pos[i] = p->snapshot.position_mm[i] / 1000.0f;
     pose->yaw = p->snapshot.rotation[1] * (pi / 32768.0f);
+    pose->action = p->snapshot.action < SWMP_PROXY_ACTION_COUNT ? p->snapshot.action : SWMP_PROXY_IDLE;
     return in_test_area(pos[0], pos[1], pos[2]);
 }
 
@@ -167,6 +205,27 @@ static void move_actor(Cpu *source, uint64_t actor, const Pose *pose) {
     guest_call(&cpu, g_site.mp_presence_move);
 }
 
+static void animate_proxy(Cpu *source, uint64_t actor, Placeholder *slot, SwmpProxyAction action) {
+    if (!g_site.mp_anim_play || !g_site.mp_anim_string || slot->animation == action) return;
+    uint64_t controller = animation_controller(actor, kernel_heap_size());
+    if (!controller) return;
+
+    Cpu cpu = *source;
+    cpu.sp -= 0x40;
+    uint64_t name = cpu.sp + 0x20;
+    const char *state = swmp_proxy_action_name(action);
+    memcpy((void *)(uintptr_t)name, state, strlen(state) + 1);
+    ST64(cpu.sp, g_site.mp_anim_string + 0x10);  // SafeString vtable address point
+    ST64(cpu.sp + 8, name);
+    cpu.x[0] = controller;
+    cpu.x[1] = cpu.sp;
+    cpu.x[2] = cpu.x[3] = 0;  // layer and slot
+    cpu.x[4] = 1;
+    cpu.v[0] = cpu.v[1] = UINT32_C(0xbf800000);  // default transition and rate
+    guest_call(&cpu, g_site.mp_anim_play);
+    slot->animation = action;
+}
+
 static bool same_pose(const Pose *a, const Pose *b) {
     return a->yaw == b->yaw && !memcmp(a->position, b->position, sizeof a->position);
 }
@@ -206,7 +265,10 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose) {
     if (slot->retained) {
         uint64_t actor = resolve(cpu, addr);
         bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
-        if (active && slot->proxy) update_proxy(cpu, actor, slot, now, pose);
+        if (active && slot->proxy) {
+            update_proxy(cpu, actor, slot, now, pose);
+            animate_proxy(cpu, actor, slot, pose->action);
+        }
         call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
         if (active && !slot->visible) {
             slot->visible = true;
@@ -238,7 +300,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         (cpu->sp & 15) || !guest_range(cpu->sp - 0x80, 0xe0)) return;
 
     uint64_t now = plat_now_ns(), now_ms = now / UINT64_C(1000000);
-    SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player() : (SwmpPlayerSnapshot){0};
+    SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu) : (SwmpPlayerSnapshot){0};
     swmp_m1_publish_position(roster.lobby_generation, &local, now_ms);
     uint64_t context = local.area_id ? spawn_context() : 0;
     if (!storage) {
@@ -271,7 +333,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
             if (!proxy) pose.yaw = 0;
             if (request_actor(cpu, addr, context, &pose, proxy)) {
                 *slot = (Placeholder){.generation = desired, .deadline = now + request_ns, .proxy = proxy,
-                    .applied = pose, .target = pose};
+                    .applied = pose, .target = pose, .animation = SWMP_PROXY_ACTION_COUNT};
             } else {
                 retire(cpu, peer, now, "creation rejected");
             }

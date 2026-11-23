@@ -25,6 +25,9 @@ typedef struct {
     SwmpDirectState direct;
     SwmpSession session;
     SwmpRejectCode rejection;
+    // Present only while the peer's snapshot is fresh.
+    uint16_t health_q4[SWMP_MAX_PEERS];
+    uint8_t health_known;
 } SwmpM1View;
 
 typedef struct {

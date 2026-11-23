@@ -63,7 +63,11 @@ OPT_TWO_SITES = ('opt_two_redraw', 'opt_two_select', 'opt_two_state', 'opt_two_d
 MP_PRESENCE_SITES = ('mp_presence_tick', 'mp_presence_context', 'mp_presence_create',
                      'mp_presence_ready', 'mp_presence_failed', 'mp_presence_release',
                      'mp_presence_take', 'mp_presence_delete', 'mp_presence_move')
-STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES)
+MP_ANIMATION_SITES = ('mp_anim_play', 'mp_anim_current', 'mp_anim_string')
+MP_HEALTH_SITES = ('mp_health_current',)
+STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_HEALTH_SITES)
+MP_ANIMATION_PLAY = ('90000008/9f00001f 1e3e1001 1e204100 f9400108/ffc003ff 910003e1 aa1503e0 '
+                     '2a1403e2 2a1303e3 52800024 91004108 a9005be8 94000000/fc000000')
 
 SITES = [
     # Experimental dual binding cells. Every pattern must match; no KNOWN fallback.
@@ -390,6 +394,14 @@ SITES = [
     # The actor's native matrix setter also publishes the transform to its model.
     Site('mp_presence_move', 'code', 'a9bd7bfd a90157f6 a9024ff4 910003fd 2a0303f3 aa0103f4 aa0003f5 '
          '36000002/fff8001f 3dc00280 910e62a8 3d800100 3dc00680', 0),
+    # The generic animation controller call and SafeString vtable used by the pause-menu actor.
+    Site('mp_anim_play', 'call', MP_ANIMATION_PLAY, 11),
+    Site('mp_anim_string', 'got', MP_ANIMATION_PLAY, 3),
+    Site('mp_anim_current', 'call', 'f9400408 f942b115 b4000015/ff00001f 1e204008 2a0403f3 2a0303f4 aa0103f6 '
+         '36000002/fff8001f aa1503e0 2a1403e1 2a1303e2 94000000/fc000000 f9400008 aa0003f7 f9400d08', 11),
+    # PlayerInfo's read-only getter returns Link's current life in quarter hearts.
+    Site('mp_health_current', 'code', 'f9403000 b4000000/ff00001f a9bf7bfd 910003fd f9400008 f9415d08 '
+         'd63f0100 b4000000/ff00001f b9400000 a8c17bfd d65f03c0 52800020', 0),
     # Add items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # Adding items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # play: the game thread's place for the item get), the pause menu data's item get, and where the pause menu data's
@@ -413,6 +425,8 @@ SITES = [
 # second group it turns it without the game's camera inversion options.
 OPTIONAL_GROUPS = [
     MP_PRESENCE_SITES,
+    MP_ANIMATION_SITES,
+    MP_HEALTH_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
     ('quick_drop_tick', 'quick_drop_actor_call', 'player_drop_forbidden', 'actor_info_lookup',
      'actor_info_has_tag', 'pouch_discard', 'player_equipment', 'pouch_default_name',
@@ -494,6 +508,10 @@ KNOWN = {
         'mp_presence_take': 0x7001516b74,
         'mp_presence_delete': 0x7001514bac,
         'mp_presence_move': 0x70015337ac,
+        'mp_anim_play': 0x700149f24c,
+        'mp_anim_current': 0x70014a0040,
+        'mp_anim_string': 0x7001bc32b8,
+        'mp_health_current': 0x7000cc7184,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,

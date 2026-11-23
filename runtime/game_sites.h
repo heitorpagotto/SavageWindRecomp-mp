@@ -75,6 +75,10 @@
     X(mp_presence_take) \
     X(mp_presence_delete) \
     X(mp_presence_move) \
+    X(mp_anim_play) \
+    X(mp_anim_current) \
+    X(mp_anim_string) \
+    X(mp_health_current) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {

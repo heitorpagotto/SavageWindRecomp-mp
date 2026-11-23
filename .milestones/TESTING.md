@@ -174,6 +174,37 @@ during the loading screen.
   checks, 59 layout checks, multiplayer core and eight-peer WebRTC/direct tests passed. Linux
   x86-64 runtime, presence, asset and RomFS objects cross-compiled.
 
+## M2 Plateau animation check
+
+- Regenerated the 1.9.0 x86-64-v3 library `34aa482dae306a0d` and built the Windows runtime.
+  The 52 game-site checks, 59 layout checks and Linux x86-64 cross-compilation of the proxy
+  sources passed. The eight-peer direct test relayed action IDs. The synthetic lobby test dropped
+  one update and reordered two more, then checked that the newest action reached the observer.
+- Two Windows Vulkan games at a 30 FPS target, 960x540 at 50% render scale, and a 1400 MiB VRAM
+  budget played idle, walk and jump on both receivers using direct WebRTC. Each proxy kept its
+  active actor through the action changes. Inventory was independent. Changing to a 60 FPS target
+  and crossing the test boundary removed and restored the proxies. Leave, late same-slot rejoin
+  after START, and in-place host reboot cleanup passed. The GPUs were the RTX 4050 Laptop GPU
+  (616.92) and AMD Radeon Graphics (25.10.30.02). The 90 and 120 FPS target runs exercised action
+  changes below the requested rates. Evidence is under `build/m2-anim-live-m1saptwh/`.
+- A single Windows renderer showed all seven remote Links for 30 seconds after START. The seven
+  senders were headless WebRTC fixtures. The RTX 4050 renderer kept the same seven proxies
+  through 60, 90 and 120 FPS targets, measuring about 53, 71 and 68 FPS during those checks.
+  All proxies retired when the fixtures disconnected. Evidence is under
+  `build/m2-anim-capacity-uzyz5rty/`.
+
+## M2 Plateau health check
+
+- The Windows app and regenerated BOTW 1.9.0 x86-64-v3 gamelib `e640fd858dc0d033` built.
+  The multiplayer core, eight-peer WebRTC and snapshot relay tests passed. The affected sources
+  cross-compiled for Linux x86-64. The UI text check found zero missing and zero unused entries.
+- Two 30 FPS Windows scratch games exchanged fresh health samples over direct WebRTC. A controlled
+  write to the client's native life in its scratch process changed the host's roster from 12 to
+  9 quarter-hearts and then back to 12. The host's native life stayed at 12. The run also repeated
+  the live walk and jump checks. Evidence is under `build/m2-health-live-rq7bfy54/`.
+- An F1 window capture shows 3 hearts for the local Link and 2.25 for the headless WebRTC sender.
+  The capture is `build/m2-health-menu-g9g2yn3l/host/build/frames/window_01780.png`.
+
 ## Synthetic checks
 
 The core historically printed `multiplayer core: ok` under GCC 16.2.1 and passed Clang's undefined-behavior

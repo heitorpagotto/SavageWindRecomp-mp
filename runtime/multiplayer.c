@@ -286,6 +286,14 @@ void swmp_m1_update(void) {
     view.failed = failed;
     view.direct = lobby.joining && lobby.waiting_welcome ? SWMP_DIRECT_IDLE : swmp_direct_state(direct);
     view.clipboard_error = clipboard_error;
+    view.health_known = 0;
+    for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++) {
+        const SwmpPosition *p = &admitted.positions[peer];
+        if (swmp_position_fresh(p, now) && (p->snapshot.health_q4 || (p->snapshot.flags & SWMP_PLAYER_DEAD))) {
+            view.health_q4[peer] = p->snapshot.health_q4;
+            view.health_known |= 1u << peer;
+        }
+    }
     if (roster.lobby_generation != admitted.lobby_generation)
         local_position = (SwmpPosition){0};
     roster = admitted;

@@ -122,6 +122,21 @@ The slot gives creation and activation up to ten seconds. Retirement puts the sl
 another request can reuse that placement. The `placeholder removed` log marks retirement on the runtime side.
 Native deletion finishes asynchronously, so use a rendered frame to confirm the actor disappeared.
 
+## M2 Plateau proxy
+
+The receiver combines the admitted roster and 20 Hz position batches to drive a passive Link actor.
+The virtual RomFS builds an alias using the installed model and supplies an animation list with
+idle, walk and jump clips from Player_Animation. The action field uses 0 for idle, 1 for jump and
+2 for locomotion. Unknown action IDs use idle. The guest thread samples local Link's native
+full-body state and selects a clip on each proxy's own animation controller while it holds the
+actor link. Playback starts on activation and on action changes. The native clock advances the
+clip while the interpolator applies position and facing. A new slot generation starts with a
+fresh controller and the latest snapshot.
+
+The separate native life observation reads current quarter-hearts from PlayerInfo. The window
+thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish
+it from missing health. Damage authority and death handling belong to M3.
+
 ## Control payloads
 
 `lobby_protocol.h` declares the payload types. Integers use network byte order. Text is a one-byte length followed

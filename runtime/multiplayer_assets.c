@@ -218,7 +218,7 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, size_t *out_size
 
 typedef struct {
     const char *name;
-    uint8_t *data;
+    const uint8_t *data;
     size_t size;
 } PackFile;
 
@@ -228,15 +228,21 @@ static uint32_t sarc_hash(const char *name) {
     return hash;
 }
 
-static uint8_t *pack_files(PackFile a, PackFile b, size_t *size) {
-    if (sarc_hash(a.name) > sarc_hash(b.name)) {
-        PackFile swap = a;
-        a = b;
-        b = swap;
+static int compare_pack_files(const void *a, const void *b) {
+    uint32_t first = sarc_hash(((const PackFile *)a)->name);
+    uint32_t second = sarc_hash(((const PackFile *)b)->name);
+    return (first > second) - (first < second);
+}
+
+static uint8_t *pack_files(PackFile *files, unsigned count, size_t *size) {
+    qsort(files, count, sizeof *files, compare_pack_files);
+    size_t names = 0x28 + 16 * count, names_size = 0, data_size = 0;
+    for (unsigned i = 0; i < count; i++) {
+        names_size += align4(strlen(files[i].name) + 1);
+        data_size += align4(files[i].size);
     }
-    size_t names = 0x48, names_size = align4(strlen(a.name) + 1) + align4(strlen(b.name) + 1);
     size_t data = (names + names_size + 63) & ~(size_t)63;
-    *size = data + align4(a.size) + b.size;
+    *size = data + data_size;
     uint8_t *out = calloc(1, *size);
     if (!out) return NULL;
 
@@ -244,11 +250,11 @@ static uint8_t *pack_files(PackFile a, PackFile b, size_t *size) {
     write32(out + 8, (uint32_t)*size);
     write32(out + 12, (uint32_t)data);
     write32(out + 16, 0x100);
-    memcpy(out + 20, "SFAT\x0c\0\x02\0", 8);
+    memcpy(out + 20, "SFAT\x0c\0", 6);
+    out[26] = (uint8_t)count;
     write32(out + 28, 0x65);
-    memcpy(out + 0x40, "SFNT\x08\0\0\0", 8);
-    PackFile files[] = {a, b};
-    for (unsigned i = 0, name_offset = 0, data_offset = 0; i < 2; i++) {
+    memcpy(out + names - 8, "SFNT\x08\0\0\0", 8);
+    for (unsigned i = 0, name_offset = 0, data_offset = 0; i < count; i++) {
         PackFile f = files[i];
         uint8_t *entry = out + 0x20 + 16 * i;
         write32(entry, sarc_hash(f.name));
@@ -295,6 +301,115 @@ static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
     return found;
 }
 
+// Keep state names sorted for native lookup. Only references to installed clips go into the alias.
+static const struct {
+    const char *state, *file, *path, *clip;
+} proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
+    [SWMP_PROXY_IDLE] = {"Idle", "SwmpProxyIdle", "Actor/AS/SwmpProxyIdle.bas", "Nml_Wait"},
+    [SWMP_PROXY_JUMP] = {"Jump", "SwmpProxyJump", "Actor/AS/SwmpProxyJump.bas", "Nml_Wait_Jump"},
+    [SWMP_PROXY_WALK] = {"Walk", "SwmpProxyWalk", "Actor/AS/SwmpProxyWalk.bas", "Nml_Move_Walk"},
+};
+
+const char *swmp_proxy_action_name(SwmpProxyAction action) {
+    return proxy_actions[(unsigned)action < SWMP_PROXY_ACTION_COUNT ? action : SWMP_PROXY_IDLE].state;
+}
+
+static void aamp_header(uint8_t *out, size_t end, unsigned lists, unsigned objects, unsigned params,
+                        unsigned data_size, unsigned string_size) {
+    memcpy(out, "AAMP", 4);
+    write32(out + 4, 2);
+    write32(out + 8, 3);  // little-endian, UTF-8
+    write32(out + 12, (uint32_t)end);
+    write32(out + 20, 4);  // four-byte "xml" type
+    write32(out + 24, lists);
+    write32(out + 28, objects);
+    write32(out + 32, params);
+    write32(out + 36, data_size);
+    write32(out + 40, string_size);
+    memcpy(out + 48, "xml", 4);
+}
+
+static uint32_t aamp_children(unsigned at, unsigned first, unsigned count) {
+    return count ? (count << 16) | ((first - at) / 4) : 0;
+}
+
+static void aamp_list(uint8_t *out, unsigned at, const char *name, unsigned child, unsigned nchild,
+                      unsigned object, unsigned nobject) {
+    write32(out + at, crc(name));
+    write32(out + at + 4, aamp_children(at, child, nchild));
+    write32(out + at + 8, aamp_children(at, object, nobject));
+}
+
+static void aamp_object(uint8_t *out, unsigned at, const char *name, unsigned param, unsigned count) {
+    write32(out + at, crc(name));
+    write32(out + at + 4, aamp_children(at, param, count));
+}
+
+static void aamp_value(uint8_t *out, unsigned at, const char *key, unsigned type, unsigned value) {
+    write32(out + at, crc(key));
+    write32(out + at + 4, (type << 24) | ((value - at) / 4));
+}
+
+static unsigned aamp_string(uint8_t *out, unsigned at, const char *key, unsigned value, const char *text) {
+    size_t length = strlen(text) + 1;
+    aamp_value(out, at, key, 8, value);  // String64
+    memcpy(out + value, text, length);
+    return value + (unsigned)align4(length);
+}
+
+static size_t proxy_anim_list(uint8_t out[288]) {
+    enum { ROOT = 52, ADD_RES = ROOT + 12, DEFINES = ADD_RES + 12,
+           RES_OBJECT = DEFINES + 12, FIRST_STATE = RES_OBJECT + 8,
+           PARAMS = FIRST_STATE + 8 * SWMP_PROXY_ACTION_COUNT,
+           STRINGS_AT = PARAMS + 8 * (1 + 2 * SWMP_PROXY_ACTION_COUNT) };
+    aamp_list(out, ROOT, "param_root", ADD_RES, 2, 0, 0);
+    aamp_list(out, ADD_RES, "AddReses", 0, 0, RES_OBJECT, 1);
+    aamp_list(out, DEFINES, "ASDefines", 0, 0, FIRST_STATE, SWMP_PROXY_ACTION_COUNT);
+    aamp_object(out, RES_OBJECT, "AddRes_0", PARAMS, 1);
+    unsigned end = aamp_string(out, PARAMS, "Anim", STRINGS_AT, "Player_Animation");
+    static const char *const entries[] = {"ASDefine_0", "ASDefine_1", "ASDefine_2"};
+    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
+        unsigned param = PARAMS + 8 + 16 * i;
+        aamp_object(out, FIRST_STATE + 8 * i, entries[i], param, 2);
+        end = aamp_string(out, param, "Name", end, proxy_actions[i].state);
+        end = aamp_string(out, param + 8, "Filename", end, proxy_actions[i].file);
+    }
+    aamp_header(out, end, 3, 1 + SWMP_PROXY_ACTION_COUNT, 1 + 2 * SWMP_PROXY_ACTION_COUNT,
+                0, end - STRINGS_AT);
+    return end;
+}
+
+static size_t proxy_anim_state(uint8_t out[144], const char *clip) {
+    enum { ROOT = 52, ELEMENTS = ROOT + 12, CLIP = ELEMENTS + 12,
+           PARAM_OBJECT = CLIP + 12, PARAMS = PARAM_OBJECT + 8, TYPE = PARAMS + 16,
+           STRINGS_AT = TYPE + 4 };
+    aamp_list(out, ROOT, "param_root", ELEMENTS, 1, 0, 0);
+    aamp_list(out, ELEMENTS, "Elements", CLIP, 1, 0, 0);
+    aamp_list(out, CLIP, "Element0", 0, 0, PARAM_OBJECT, 1);
+    aamp_object(out, PARAM_OBJECT, "Parameters", PARAMS, 2);
+    aamp_value(out, PARAMS, "TypeIndex", 2, TYPE);
+    write32(out + TYPE, 67);  // skeletal clip
+    unsigned end = aamp_string(out, PARAMS + 8, "FileName", STRINGS_AT, clip);
+    aamp_header(out, end, 3, 1, 2, 4, end - STRINGS_AT);
+    return end;
+}
+
+static uint8_t *proxy_actor_link(uint8_t *src, size_t size, size_t *out_size) {
+    if (size < 52 || size > 4096 || (size & 3) || read32(src + 12) != size ||
+        read32(src + 44) || !set_dummy_physics(src, size)) return NULL;
+    uint8_t *as = aamp_param(src, size, "ASUser");
+    if (!as) return NULL;
+    *out_size = size + align4(sizeof SWMP_PROXY_ACTOR);
+    uint8_t *out = calloc(1, *out_size);
+    if (!out) return NULL;
+    memcpy(out, src, size);
+    memcpy(out + size, SWMP_PROXY_ACTOR, sizeof SWMP_PROXY_ACTOR);
+    aamp_value(out, (unsigned)(as - src), "ASUser", 20, (unsigned)size);
+    write32(out + 12, (uint32_t)*out_size);
+    write32(out + 40, read32(src + 40) + (uint32_t)(*out_size - size));
+    return out;
+}
+
 uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
     static const char stock_link[] = "Actor/ActorLink/Obj_RockGray_A_M_01.bxml";
     static const char proxy_link[] = "Actor/ActorLink/" SWMP_PROXY_ACTOR ".bxml";
@@ -306,12 +421,22 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
     uint8_t *out = NULL;
     if (sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
         sarc_find(raw, n, model_list, &data, &ms, &me) >= 0 &&
-        set_dummy_physics(raw + data + ls, le - ls) &&
         replace_model_name(raw + data + ms, me - ms, model_archive) &&
         replace_model_name(raw + data + ms, me - ms, template_actor)) {
-        PackFile link = {proxy_link, raw + data + ls, le - ls};
-        PackFile model = {model_list, raw + data + ms, me - ms};
-        out = pack_files(link, model, out_size);
+        size_t link_size;
+        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, &link_size);
+        if (link) {
+            uint8_t list[288] = {0}, clips[SWMP_PROXY_ACTION_COUNT][144] = {{0}};
+            PackFile files[3 + SWMP_PROXY_ACTION_COUNT] = {
+                {proxy_link, link, link_size},
+                {model_list, raw + data + ms, me - ms},
+                {"Actor/ASList/" SWMP_PROXY_ACTOR ".baslist", list, proxy_anim_list(list)},
+            };
+            for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++)
+                files[3 + i] = (PackFile){proxy_actions[i].path, clips[i], proxy_anim_state(clips[i], proxy_actions[i].clip)};
+            out = pack_files(files, sizeof files / sizeof files[0], out_size);
+            free(link);
+        }
     }
     free(raw);
     return out;
