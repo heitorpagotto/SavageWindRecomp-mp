@@ -29,7 +29,8 @@ who hosts the lobby remains authoritative. M1 uses direct paths and requires no 
 
 Status: accepted and implemented in protocol v1.
 
-- Control: reliable and ordered for handshake/lobby messages.
+- Control: reliable and ordered for handshake, membership and equipment identity. Equipment follows admission and
+  membership on the same stream so late joins and slot reuse have an unambiguous order.
 - State: unreliable and unordered for frequent Link snapshots; newest sequence wins.
 - Event: reliable and ordered for gameplay transactions.
 

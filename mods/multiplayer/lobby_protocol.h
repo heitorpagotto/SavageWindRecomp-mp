@@ -46,6 +46,10 @@ typedef union {
         uint8_t id;
         char name[SWMP_PLAYER_NAME_SIZE];
     } peer;
+    struct {
+        uint8_t peer;
+        SwmpEquipment state;
+    } equipment;
     uint64_t ping_token;
 } SwmpControl;
 

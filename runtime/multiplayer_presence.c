@@ -33,9 +33,16 @@ typedef struct {
     bool retained, visible, proxy;
 } Placeholder;
 
+typedef struct {
+    uint64_t deadline;
+    SwmpGear gear;
+    bool retained, visible;
+} GearActor;
+
 // Owned by the guest menu update thread. The request address must stay fixed while the game owns it.
 static Placeholder slots[SWMP_MAX_PEERS];
-static uint64_t storage, lobby_generation;
+static GearActor gear_slots[SWMP_GEAR_SLOTS][SWMP_MAX_PEERS];
+static uint64_t storage, gear_storage[SWMP_GEAR_SLOTS], lobby_generation;
 static uint64_t local_context, local_actor;
 static uint32_t local_area;
 static uint64_t applied_clock_at;
@@ -52,6 +59,8 @@ RT_ON_RESET(multiplayer_presence_reset) {
     local_yaw = 0;
     local_motion_at = 0;
     memset(slots, 0, sizeof slots);
+    memset(gear_slots, 0, sizeof gear_slots);
+    memset(gear_storage, 0, sizeof gear_storage);
 }
 
 static bool guest_range(uint64_t addr, size_t size) {
@@ -72,16 +81,38 @@ static uint64_t resolve(Cpu *cpu, uint64_t addr) {
     return guest_range(actor, 0x7c) && LD64(addr + LINK_OFFSET + 8) == actor ? actor : 0;
 }
 
-static void retire(Cpu *cpu, uint8_t peer, uint64_t now, const char *reason) {
-    Placeholder *slot = &slots[peer];
-    uint64_t addr = storage + peer * SLOT_SIZE;
-    if (slot->retained) {
+static void release_actor(Cpu *cpu, uint64_t addr, bool retained) {
+    if (retained) {
         uint64_t actor = resolve(cpu, addr);
         if (actor) call(cpu, g_site.mp_presence_delete, actor, 2, 0);
         call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
         call(cpu, g_site.actor_index_release, addr + INDEX_OFFSET, 0, 0);
     }
     call(cpu, g_site.mp_presence_release, addr, 0, 0);
+}
+
+static uint64_t actor_slots_alloc(void) {
+    uint64_t addr = (uintptr_t)hle_alloc(SWMP_MAX_PEERS * SLOT_SIZE);
+    if (!addr) return 0;
+    memset((void *)(uintptr_t)addr, 0, SWMP_MAX_PEERS * SLOT_SIZE);
+    for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++)
+        ST32(addr + peer * SLOT_SIZE + INDEX_OFFSET + 8, UINT32_MAX);
+    return addr;
+}
+
+static void retire_gear(Cpu *cpu, uint8_t peer, SwmpGearSlot kind, uint64_t now) {
+    GearActor *slot = &gear_slots[kind][peer];
+    release_actor(cpu, gear_storage[kind] + peer * SLOT_SIZE, slot->retained);
+    LOG("[multiplayer] remote %s %s for peer %u\n", swmp_gear_assets[slot->gear].label,
+        slot->visible ? "removed" : "request retired", peer);
+    *slot = (GearActor){.deadline = now + retry_ns};
+}
+
+static void retire(Cpu *cpu, uint8_t peer, uint64_t now, const char *reason) {
+    Placeholder *slot = &slots[peer];
+    for (unsigned kind = 0; kind < SWMP_GEAR_SLOTS; kind++)
+        if (gear_slots[kind][peer].gear) retire_gear(cpu, peer, kind, now);
+    release_actor(cpu, storage + peer * SLOT_SIZE, slot->retained);
     LOG("[multiplayer] %s %s for peer %u (%s)\n", slot->proxy ? "remote Link" : "placeholder",
         slot->visible ? "removed" : "request retired", peer, reason);
     // Native deletion runs asynchronously. Give its job time before using this placement again.
@@ -120,7 +151,8 @@ static bool action_named(uint64_t name, const char *expected) {
     return guest_range(name, size) && !memcmp((const void *)(uintptr_t)name, expected, size);
 }
 
-static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size) {
+static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, SwmpGear weapon,
+                                     bool drawn, bool shield_raised) {
     if (!g_site.mp_anim_current) return SWMP_PROXY_IDLE;
     uint64_t controller = animation_controller(actor, heap_size);
     if (!controller) return SWMP_PROXY_IDLE;
@@ -128,10 +160,9 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     uint64_t string = call(cpu, g_site.mp_anim_current, controller, 0, 0);
     if (!guest_range(string, 16)) return SWMP_PROXY_IDLE;
     uint64_t name = LD64(string + 8);
-    if (action_named(name, "Jump")) return SWMP_PROXY_JUMP;
-    if (action_named(name, "Dash")) return SWMP_PROXY_DASH;
-    if (action_named(name, "Move")) return SWMP_PROXY_WALK;
-    return SWMP_PROXY_IDLE;
+    if (!guest_range(name, 64)) return SWMP_PROXY_IDLE;
+    const char *state = (const char *)(uintptr_t)name;
+    return memchr(state, 0, 64) ? swmp_proxy_sample_action(state, weapon, drawn, shield_raised) : SWMP_PROXY_IDLE;
 }
 
 static SwmpProxyAction sample_locomotion(const float pos[3], uint64_t now) {
@@ -167,7 +198,56 @@ static void sample_facing(uint64_t actor, uint64_t heap_size, const float pos[3]
     local_yaw = (int16_t)(turn == 32768 ? -32768 : turn);
 }
 
-static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player) {
+static int16_t quantize_turn(float angle) {
+    long turn = lroundf(remainderf(angle, 2 * pi) * (32768.0f / pi));
+    return (int16_t)(turn == 32768 ? -32768 : turn);
+}
+
+static bool sample_gear_pose(uint64_t item, const float pos[3], int16_t facing, SwmpGearPose *pose) {
+    float a[12];
+    memcpy(a, (const void *)(uintptr_t)(item + 0x398), sizeof a);
+    for (unsigned i = 0; i < 12; i++)
+        if (!isfinite(a[i])) return false;
+    float forward = a[2] * a[2] + a[6] * a[6] + a[10] * a[10];
+    if (!(forward > 0.5f && forward < 1.5f)) return false;
+
+    float yaw = facing * (pi / 32768.0f), c = cosf(yaw), s = sinf(yaw);
+    float dx = a[3] - pos[0], dy = a[7] - pos[1], dz = a[11] - pos[2];
+    float offset[3] = {c * dx - s * dz, dy, s * dx + c * dz};
+    for (unsigned i = 0; i < 3; i++)
+        if (fabsf(offset[i]) > SWMP_GEAR_OFFSET_LIMIT_MM / 1000.0f) return false;
+    for (unsigned i = 0; i < 3; i++) pose->offset_mm[i] = (int16_t)lroundf(1000 * offset[i]);
+    // The same Y-X-Z convention is used to reconstruct the native matrix on the receiver.
+    float horizontal = hypotf(a[2], a[10]);
+    pose->rotation[0] = quantize_turn(atan2f(-a[6], horizontal));
+    pose->rotation[1] = quantize_turn((horizontal > 1e-4f ? atan2f(a[2], a[10]) : atan2f(-a[8], a[0])) - yaw);
+    pose->rotation[2] = horizontal > 1e-4f ? quantize_turn(atan2f(a[4], a[5])) : 0;
+    return true;
+}
+
+static SwmpGearSet sample_gear(Cpu *cpu, uint64_t actor, uint64_t heap_size, const float pos[3],
+                               SwmpPlayerSnapshot *sample) {
+    SwmpGearSet gear = {0};
+    if (!g_site.player_equipment) return gear;
+    // The equipment getter uses the same category ordering as the equipped-item drop path.
+    static const uint8_t categories[SWMP_GEAR_SLOTS] = {[SWMP_GEAR_WEAPON] = 0, [SWMP_GEAR_SHIELD] = 1};
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
+        uint64_t item = call(cpu, g_site.player_equipment, actor, categories[slot], 0);
+        if (!heap_object(item, heap_size, 0x3c8) || LD8(item + 0x64) != 1 || (LD32(item + 0x78) & 1)) continue;
+        uint64_t name = LD64(item + 0x10);
+        for (unsigned id = 1; id < SWMP_GEAR_COUNT; id++) {
+            const SwmpGearAsset *asset = &swmp_gear_assets[id];
+            if (asset->slot != slot || !action_named(name, asset->model)) continue;
+            gear.id[slot] = id;
+            if (sample_gear_pose(item, pos, sample->rotation[1], &sample->gear_pose[slot]))
+                sample->flags |= swmp_gear_pose_flag(slot);
+            break;
+        }
+    }
+    return gear;
+}
+
+static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player, SwmpGearSet *gear) {
     SwmpPlayerSnapshot sample = {0};
     if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui()) return sample;
     uint32_t area = game_place_area_id();
@@ -188,7 +268,18 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     for (unsigned i = 0; i < 3; i++) sample.position_mm[i] = (int32_t)lround((double)p[i] * 1000);
     sample_facing(actor, heap_size, p);
     sample.rotation[1] = local_yaw;
-    sample.action = sample_action(cpu, actor, heap_size);
+    *gear = sample_gear(cpu, actor, heap_size, p, &sample);
+    // Native Wait covers both grips. For the axe, distinguish its hand and back attachments
+    // using their measured height bands. The action mapper applies this only to idle states.
+    int weapon_height = sample.gear_pose[SWMP_GEAR_WEAPON].offset_mm[1];
+    bool drawn = (sample.flags & SWMP_PLAYER_WEAPON_POSE) && weapon_height >= 550 && weapon_height <= 1050;
+    // WaitAttention also covers lock-on. A raised shield is in front of Link in his yaw frame.
+    bool shield_raised = (sample.flags & SWMP_PLAYER_SHIELD_POSE) &&
+        sample.gear_pose[SWMP_GEAR_SHIELD].offset_mm[2] >= 175;
+    sample.action = sample_action(cpu, actor, heap_size, gear->id[SWMP_GEAR_WEAPON], drawn, shield_raised);
+    if (sample.action == SWMP_PROXY_CROUCH_IDLE || sample.action == SWMP_PROXY_CROUCH_MOVE)
+        sample.flags |= SWMP_PLAYER_CROUCHING;
+    if (sample.action == SWMP_PROXY_SHIELD_GUARD) sample.flags |= SWMP_PLAYER_GUARDING;
     if (sample.action == SWMP_PROXY_WALK) sample.action = sample_locomotion(p, now);
     else local_motion_at = 0;
     if (g_site.mp_health_current) {
@@ -256,11 +347,10 @@ static void copy_transform(uint64_t dst, const Pose *pose) {
     memcpy((void *)(uintptr_t)dst, matrix, sizeof matrix);
 }
 
-static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Pose *pose, bool proxy) {
+static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Pose *pose, const char *actor_name) {
     Cpu cpu = *source;
     cpu.sp -= 0x80;
     uint64_t name = cpu.sp + 0x10, transform = cpu.sp + 0x30;
-    const char *actor_name = proxy ? SWMP_PROXY_ACTOR : placeholder_name;
     memcpy((void *)(uintptr_t)name, actor_name, strlen(actor_name) + 1);
     copy_transform(transform, pose);
     cpu.x[0] = name;
@@ -275,16 +365,95 @@ static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Po
     return (cpu.x[0] & 1) != 0;
 }
 
+static void publish_matrix(Cpu *cpu, uint64_t actor) {
+    cpu->x[0] = actor;
+    cpu->x[1] = cpu->sp + 0x10;
+    cpu->x[2] = 1; // Publish the matrix immediately to the native model.
+    cpu->x[3] = 0;
+    guest_call(cpu, g_site.mp_presence_move);
+}
+
 static void move_actor(Cpu *source, uint64_t actor, const Pose *pose) {
     Cpu cpu = *source;
     cpu.sp -= 0x40;
-    uint64_t transform = cpu.sp + 0x10;
-    copy_transform(transform, pose);
-    cpu.x[0] = actor;
-    cpu.x[1] = transform;
-    cpu.x[2] = 1; // Publish the matrix immediately to the native model.
-    cpu.x[3] = 0;
-    guest_call(&cpu, g_site.mp_presence_move);
+    copy_transform(cpu.sp + 0x10, pose);
+    publish_matrix(&cpu, actor);
+}
+
+static void move_gear(Cpu *source, uint64_t actor, const Pose *pose, const SwmpGearPose *gear) {
+    const float unit = pi / 32768.0f;
+    float c = cosf(pose->yaw), s = sinf(pose->yaw);
+    float x = (c * gear->offset_mm[0] + s * gear->offset_mm[2]) / 1000.0f + pose->position[0];
+    float y = gear->offset_mm[1] / 1000.0f + pose->position[1];
+    float z = (-s * gear->offset_mm[0] + c * gear->offset_mm[2]) / 1000.0f + pose->position[2];
+    float pitch = gear->rotation[0] * unit, yaw = pose->yaw + gear->rotation[1] * unit;
+    float roll = gear->rotation[2] * unit;
+    float cp = cosf(pitch), sp = sinf(pitch), cy = cosf(yaw), sy = sinf(yaw), cr = cosf(roll), sr = sinf(roll);
+    float matrix[12] = {
+        cy*cr + sy*sp*sr, -cy*sr + sy*sp*cr, sy*cp, x,
+        cp*sr, cp*cr, -sp, y,
+        -sy*cr + cy*sp*sr, sy*sr + cy*sp*cr, cy*cp, z,
+    };
+    Cpu cpu = *source;
+    cpu.sp -= 0x40;
+    memcpy((void *)(uintptr_t)(cpu.sp + 0x10), matrix, sizeof matrix);
+    publish_matrix(&cpu, actor);
+}
+
+static bool retain_actor(Cpu *cpu, uint64_t addr) {
+    // Taking the completed actor clears its creation suspension.
+    uint64_t actor = call(cpu, g_site.mp_presence_take, addr, 0, 0);
+    if (!guest_range(actor, 0x7c)) return false;
+    if (call(cpu, g_site.actor_index_assign, addr + INDEX_OFFSET, actor, 1)) return true;
+    call(cpu, g_site.mp_presence_delete, actor, 2, 0);
+    return false;
+}
+
+static void update_gear(Cpu *cpu, uint8_t peer, SwmpGearSlot kind, uint64_t now, uint64_t context,
+                        const SwmpM1Roster *roster) {
+    const Placeholder *link = &slots[peer];
+    GearActor *slot = &gear_slots[kind][peer];
+    const SwmpPlayerSnapshot *sample = &roster->positions[peer].snapshot;
+    const SwmpEquipment *gear = &roster->equipment[peer];
+    SwmpGear id = gear->gear.id[kind];
+    if (slot->gear && slot->gear != id) {
+        retire_gear(cpu, peer, kind, now);
+        return;
+    }
+    if (!link->visible || !link->proxy || !fs_multiplayer_gear_ready(id) ||
+        gear->revision != sample->equipment_revision) return;
+    if (!(sample->flags & swmp_gear_pose_flag(kind))) {
+        if (slot->gear) retire_gear(cpu, peer, kind, now);
+        return;
+    }
+    if (!gear_storage[kind]) {
+        gear_storage[kind] = actor_slots_alloc();
+        if (!gear_storage[kind]) return;
+    }
+    uint64_t addr = gear_storage[kind] + peer * SLOT_SIZE;
+    const SwmpGearAsset *asset = &swmp_gear_assets[id];
+    if (!slot->gear) {
+        if (now < slot->deadline) return;
+        slot->gear = id;
+        slot->deadline = now + request_ns;
+        if (!request_actor(cpu, addr, context, &link->applied, asset->actor))
+            retire_gear(cpu, peer, kind, now);
+    } else if (slot->retained) {
+        uint64_t actor = resolve(cpu, addr);
+        bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
+        if (active) {
+            move_gear(cpu, actor, &link->applied, &sample->gear_pose[kind]);
+            if (!slot->visible) LOG("[multiplayer] remote %s ready for peer %u\n", asset->label, peer);
+            slot->visible = true;
+        }
+        call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
+        if (!active && (slot->visible || now >= slot->deadline)) retire_gear(cpu, peer, kind, now);
+    } else if (call(cpu, g_site.mp_presence_ready, addr, 0, 0) & 1) {
+        slot->retained = retain_actor(cpu, addr);
+        if (!slot->retained) retire_gear(cpu, peer, kind, now);
+    } else if (now >= slot->deadline || (call(cpu, g_site.mp_presence_failed, addr, 0, 0) & 1)) {
+        retire_gear(cpu, peer, kind, now);
+    }
 }
 
 static void animate_proxy(Cpu *source, uint64_t actor, Placeholder *slot, SwmpProxyAction action) {
@@ -359,14 +528,8 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose) {
             retire(cpu, peer, now, "native actor inactive");
         }
     } else if (call(cpu, g_site.mp_presence_ready, addr, 0, 0) & 1) {
-        // Taking the completed actor clears its creation suspension. Keep an indexed reference for deletion.
-        uint64_t actor = call(cpu, g_site.mp_presence_take, addr, 0, 0);
-        if (guest_range(actor, 0x7c) && call(cpu, g_site.actor_index_assign, addr + INDEX_OFFSET, actor, 1)) {
-            slot->retained = true;
-        } else {
-            if (guest_range(actor, 0x7c)) call(cpu, g_site.mp_presence_delete, actor, 2, 0);
-            retire(cpu, peer, now, "actor index unavailable");
-        }
+        slot->retained = retain_actor(cpu, addr);
+        if (!slot->retained) retire(cpu, peer, now, "actor index unavailable");
     } else if (now >= slot->deadline || (call(cpu, g_site.mp_presence_failed, addr, 0, 0) & 1)) {
         retire(cpu, peer, now, "creation failed or timed out");
     }
@@ -383,7 +546,8 @@ void rt_mp_presence_tick(Cpu *cpu) {
 
     uint64_t now = plat_now_ns(), now_ms = now / UINT64_C(1000000);
     uint64_t player = 0;
-    SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu, now, &player) : (SwmpPlayerSnapshot){0};
+    SwmpGearSet gear = {0};
+    SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu, now, &player, &gear) : (SwmpPlayerSnapshot){0};
     uint64_t context = local.area_id ? spawn_context() : 0;
     if (!context) {
         local = (SwmpPlayerSnapshot){0};
@@ -394,7 +558,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
     if (world_changed || changed) applied_clock_at = 0;
     SwmpEnvironment environment;
     bool sampled_environment = update_environment(cpu, &roster, local.area_id, now_ms, &environment);
-    swmp_m1_publish_state(roster.lobby_generation, &local, sampled_environment ? &environment : NULL, now_ms);
+    swmp_m1_publish_state(roster.lobby_generation, &local, gear, sampled_environment ? &environment : NULL, now_ms);
     if ((world_changed || changed) && roster.lobby_generation)
         LOG("[multiplayer] local area %u %s\n", local.area_id, context ? "ready" : "unavailable");
     if (world_changed) local_motion_at = 0;
@@ -406,11 +570,8 @@ void rt_mp_presence_tick(Cpu *cpu) {
         bool any = false;
         for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++) any |= roster.remotes.generation[peer] != 0;
         if (!any || !context) return;
-        storage = (uint64_t)(uintptr_t)hle_alloc(SWMP_MAX_PEERS * SLOT_SIZE);
+        storage = actor_slots_alloc();
         if (!storage) return;
-        memset((void *)(uintptr_t)storage, 0, SWMP_MAX_PEERS * SLOT_SIZE);
-        for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++)
-            ST32(storage + peer * SLOT_SIZE + INDEX_OFFSET + 8, UINT32_MAX);
     }
 
     for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++) {
@@ -428,12 +589,14 @@ void rt_mp_presence_tick(Cpu *cpu) {
             retire(cpu, peer, now, reason);
         } else if (slot->generation) {
             poll_actor(cpu, peer, now, &pose);
+            for (unsigned kind = 0; kind < SWMP_GEAR_SLOTS; kind++)
+                update_gear(cpu, peer, kind, now, context, &roster);
         } else if (desired && now >= slot->deadline) {
             uint64_t addr = storage + peer * SLOT_SIZE;
             bool proxy = fs_multiplayer_proxy_ready();
             if (!proxy && local.area_id != GAME_PLACE_MAIN_FIELD_AREA) continue;
             if (!proxy) pose.yaw = 0;
-            if (request_actor(cpu, addr, context, &pose, proxy)) {
+            if (request_actor(cpu, addr, context, &pose, proxy ? SWMP_PROXY_ACTOR : placeholder_name)) {
                 *slot = (Placeholder){.generation = generation, .deadline = now + request_ns, .proxy = proxy,
                     .applied = pose, .target = pose, .animation = SWMP_PROXY_ACTION_COUNT};
             } else {

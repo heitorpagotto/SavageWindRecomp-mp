@@ -21,6 +21,7 @@ static pthread_mutex_t view_lock = PTHREAD_MUTEX_INITIALIZER;
 static SwmpM1View view;
 static SwmpM1Roster roster;
 static SwmpPosition local_position;
+static SwmpGearSet local_gear;
 static SwmpEnvironment local_environment;
 static bool environment_valid;
 static struct {
@@ -146,6 +147,7 @@ void swmp_m1_shutdown(void) {
     view = (SwmpM1View){0};
     roster = (SwmpM1Roster){0};
     local_position = (SwmpPosition){0};
+    local_gear = (SwmpGearSet){0};
     environment_valid = false;
     memset(notices, 0, sizeof notices);
     next_notice = 0;
@@ -168,6 +170,7 @@ void swmp_m1_set_enabled(bool enabled) {
         view = (SwmpM1View){.supported = view.supported};
         roster = (SwmpM1Roster){0};
         local_position = (SwmpPosition){0};
+        local_gear = (SwmpGearSet){0};
         environment_valid = false;
         command = (Command){0};
         stop_requested = true;
@@ -190,10 +193,11 @@ SwmpM1Roster swmp_m1_roster(void) {
 }
 
 void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *position,
-                           const SwmpEnvironment *environment, uint64_t now_ms) {
+                           SwmpGearSet gear, const SwmpEnvironment *environment, uint64_t now_ms) {
     pthread_mutex_lock(&view_lock);
     if (generation && generation == roster.lobby_generation) {
         local_position = (SwmpPosition){.snapshot = *position, .received_at = now_ms};
+        local_gear = gear;
         environment_valid = environment != NULL;
         if (environment) local_environment = *environment;
     }
@@ -248,6 +252,7 @@ void swmp_m1_update(void) {
     stop_requested = false;
     Command pending = command;
     SwmpPosition sample = local_position;
+    SwmpGearSet gear = local_gear;
     SwmpEnvironment environment = local_environment;
     bool send_environment = environment_valid && settings_multiplayer_sync_environment();
     uint64_t sample_lobby = roster.lobby_generation;
@@ -309,8 +314,10 @@ void swmp_m1_update(void) {
         bool waiting_welcome = lobby.waiting_welcome;
         swmp_lobby_poll(&lobby, now);
         SwmpPlayerSnapshot position = {0};
-        if (sample_lobby == lobby_generation && swmp_position_fresh(&sample, now))
+        if (sample_lobby == lobby_generation && swmp_position_fresh(&sample, now)) {
             position = sample.snapshot;
+            swmp_lobby_set_equipment(&lobby, gear);
+        }
         swmp_lobby_send_state(&lobby, &position, send_environment ? &environment : NULL, now);
         if (lobby.joining && lobby.waiting_welcome && !waiting_welcome)
             LOG("[multiplayer] lobby handshake sent, waiting for host\n");
@@ -332,6 +339,7 @@ void swmp_m1_update(void) {
         admitted.environment = lobby.environment;
         admitted.host = lobby.session.role == SWMP_ROLE_HOST;
         memcpy(admitted.positions, lobby.positions, sizeof admitted.positions);
+        memcpy(admitted.equipment, lobby.equipment, sizeof admitted.equipment);
     }
     pthread_mutex_lock(&view_lock);
     if (stop_requested) {
@@ -361,6 +369,7 @@ void swmp_m1_update(void) {
     if (roster.lobby_generation != admitted.lobby_generation) {
         if (!admitted.lobby_generation) add_notice(SWMP_NOTICE_LOCAL_LEFT, NULL, now);
         local_position = (SwmpPosition){0};
+        local_gear = (SwmpGearSet){0};
         environment_valid = false;
     }
     roster = admitted;

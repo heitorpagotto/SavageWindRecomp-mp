@@ -3,6 +3,7 @@
 #ifdef SW_MULTIPLAYER
 #include "services/archive.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -10,6 +11,15 @@
 static const char template_actor[] = "Obj_RockGray_A_M_01";
 static const char model_archive[] = "Obj_RockGray_A";
 static const char link_model[] = "Link";
+
+#define GEAR(slot, model, actor, label) {slot, model, actor, label, \
+    "Actor/Pack/" model ".sbactorpack", "Actor/Pack/" actor ".sbactorpack", \
+    "Actor/ActorLink/" actor ".bxml", "Actor/ModelList/" model ".bmodellist"}
+const SwmpGearAsset swmp_gear_assets[SWMP_GEAR_COUNT] = {
+    [SWMP_GEAR_WOODCUTTERS_AXE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_032", "SwmpRemoteAxe", "axe"),
+    [SWMP_GEAR_WOODEN_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_001", "SwmpRemoteShield", "shield"),
+};
+#undef GEAR
 
 static uint32_t read32(const uint8_t *at) {
     uint32_t value;
@@ -93,10 +103,10 @@ static uint8_t *append(Byml *b, size_t size) {
     return b->data + offset;
 }
 
-static uint8_t *insert_string(Byml *b, BymlNode strings, uint32_t index) {
+static uint8_t *insert_string(Byml *b, BymlNode strings, uint32_t index, const char *alias) {
     uint32_t start = read32(strings.values + 4 * index);
     uint32_t end = read32(strings.values + 4 * strings.count);
-    size_t extra = sizeof SWMP_PROXY_ACTOR;
+    size_t extra = strlen(alias) + 1;
     uint8_t *out = append(b, end + 4 + extra);
     if (!out) return NULL;
     write32(out, ((strings.count + 1) << 8) | STRINGS);
@@ -107,7 +117,7 @@ static uint8_t *insert_string(Byml *b, BymlNode strings, uint32_t index) {
     uint32_t first = read32(strings.values);
     write32(out + 4 + 4 * index, start + 4);
     memcpy(out + first + 4, strings.head + first, start - first);
-    memcpy(out + start + 4, SWMP_PROXY_ACTOR, extra);
+    memcpy(out + start + 4, alias, extra);
     memcpy(out + start + 4 + extra, strings.head + start, end - start);
     return out;
 }
@@ -127,7 +137,7 @@ static uint8_t *insert_array(Byml *b, BymlNode original, uint32_t index, uint8_t
     return out;
 }
 
-static bool add_actor(Byml *b) {
+static bool add_actor(Byml *b, const char *alias, const char *model_name, uint32_t heap_size) {
     if (memcmp(b->data, "YB\x02\0", 4)) return false;
     BymlNode keys = node(b, read32(b->data + 4), STRINGS);
     BymlNode strings = node(b, read32(b->data + 8), STRINGS);
@@ -139,19 +149,19 @@ static bool add_actor(Byml *b) {
     BymlNode actors = node(b, read32(actors_ref), ARRAY), hashes = node(b, read32(hashes_ref), ARRAY);
     if (!actors.count || actors.count != hashes.count) return false;
 
-    uint32_t name_index = 0, link_index = strings.count;
+    uint32_t name_index = 0, model_index = strings.count;
     for (uint32_t i = 0; i < strings.count; i++) {
         const char *s = string_at(b, strings, i);
         if (!s) return false;
-        int order = strcmp(s, SWMP_PROXY_ACTOR);
+        int order = strcmp(s, alias);
         if (!order) return false;
         if (order < 0) name_index++;
-        if (!strcmp(s, link_model)) link_index = i;
+        if (!strcmp(s, model_name)) model_index = i;
     }
-    if (link_index == strings.count) return false;
-    link_index += link_index >= name_index;
+    if (model_index == strings.count) return false;
+    model_index += model_index >= name_index;
 
-    uint32_t insert = 0, alias_crc = crc(SWMP_PROXY_ACTOR), stock_crc = crc(template_actor);
+    uint32_t insert = 0, alias_crc = crc(alias), stock_crc = crc(template_actor);
     BymlNode stock = {0};
     for (uint32_t i = 0; i < hashes.count; i++) {
         uint32_t hash = read32(hashes.values + 4 * i);
@@ -174,16 +184,15 @@ static bool add_actor(Byml *b) {
     free(visited);
     if (!ok) return false;
 
-    uint8_t *new_strings = insert_string(b, strings, name_index);
+    uint8_t *new_strings = insert_string(b, strings, name_index, alias);
     size_t actor_size = 4 + 8 * stock.count, root_size = 4 + 8 * root.count;
     uint8_t *actor = append(b, actor_size);
     if (!actor || !new_strings) return false;
     memcpy(actor, stock.head, actor_size);
     write32(actor + (name - stock.head), name_index);
-    write32(actor + (bfres - stock.head), link_index);
-    write32(actor + (model - stock.head), link_index);
-    // The static prop template has a much smaller instance heap than the skinned model.
-    write32(actor + (heap - stock.head), 2 * 1024 * 1024);
+    write32(actor + (bfres - stock.head), model_index);
+    write32(actor + (model - stock.head), model_index);
+    write32(actor + (heap - stock.head), heap_size);
 
     uint8_t *new_actors = insert_array(b, actors, insert, DICT, (uint32_t)(actor - b->data));
     uint8_t *new_hashes = insert_array(b, hashes, insert, alias_crc > INT32_MAX ? UINT : INT, alias_crc);
@@ -197,7 +206,7 @@ static bool add_actor(Byml *b) {
     return true;
 }
 
-uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, size_t *out_size) {
+uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_mask, size_t *out_size) {
     size_t n;
     uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
     if (!raw || n < 16 || n > 16 * 1024 * 1024) {
@@ -208,9 +217,18 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, size_t *out_size
     b.data = calloc(1, b.capacity);
     if (b.data) memcpy(b.data, raw, n);
     free(raw);
-    if (!b.data || !add_actor(&b)) {
+    if (!b.data || !add_actor(&b, SWMP_PROXY_ACTOR, link_model, 2 * 1024 * 1024)) {
         free(b.data);
         return NULL;
+    }
+    for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+        if (!(gear_mask & (1u << i))) continue;
+        b.original_size = b.length;
+        const SwmpGearAsset *gear = &swmp_gear_assets[i];
+        if (!add_actor(&b, gear->actor, gear->model, 256 * 1024)) {
+            free(b.data);
+            return NULL;
+        }
     }
     *out_size = b.length;
     return b.data;
@@ -301,19 +319,50 @@ static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
     return found;
 }
 
-// Keep state names sorted for native lookup. Only references to installed clips go into the alias.
-static const struct {
-    const char *state, *file, *path, *clip;
-} proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
-    [SWMP_PROXY_DASH] = {"Dash", "SwmpProxyDash", "Actor/AS/SwmpProxyDash.bas", "Nml_Move_Dash"},
-    [SWMP_PROXY_IDLE] = {"Idle", "SwmpProxyIdle", "Actor/AS/SwmpProxyIdle.bas", "Nml_Wait"},
-    [SWMP_PROXY_JUMP] = {"Jump", "SwmpProxyJump", "Actor/AS/SwmpProxyJump.bas", "Nml_Wait_Jump"},
-    [SWMP_PROXY_RUN] = {"Run", "SwmpProxyRun", "Actor/AS/SwmpProxyRun.bas", "Nml_Move_Run"},
-    [SWMP_PROXY_WALK] = {"Walk", "SwmpProxyWalk", "Actor/AS/SwmpProxyWalk.bas", "Nml_Move_Walk"},
+typedef struct {
+    const char *state, *file, *path, *clip, *native;
+    SwmpGear gear;
+} ProxyAction;
+
+// Only references to installed clips go into the alias.
+#define ACTION(state, clip, native, gear) {#state, "SwmpProxy" #state, "Actor/AS/SwmpProxy" #state ".bas", clip, native, gear}
+static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
+    [SWMP_PROXY_IDLE] = ACTION(Idle, "Nml_Wait", NULL, SWMP_GEAR_NONE),
+    [SWMP_PROXY_JUMP] = ACTION(Jump, "Nml_Wait_Jump", "Jump", SWMP_GEAR_NONE),
+    [SWMP_PROXY_WALK] = ACTION(Walk, "Nml_Move_Walk", "Move", SWMP_GEAR_NONE),
+    [SWMP_PROXY_DASH] = ACTION(Dash, "Nml_Move_Dash", "Dash", SWMP_GEAR_NONE),
+    [SWMP_PROXY_RUN] = ACTION(Run, "Nml_Move_Run", NULL, SWMP_GEAR_NONE),
+    [SWMP_PROXY_LAND] = ACTION(Land, "Nml_Wait_Land", "Land", SWMP_GEAR_NONE),
+    [SWMP_PROXY_AXE_DRAW] = ACTION(AxeDraw, "Equip_Lsword_On_Natural", "WeaponEquipOn", SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_AXE_SWING] = ACTION(AxeSwing, "Lsword_Attack_S1", "CutS1", SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_AXE_FINISH] = ACTION(AxeFinish, "Lsword_Attack_SF", "CutSF", SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_AXE_SPIN] = ACTION(AxeSpin, "Lsword_Attack_Charge", "CutChargeLswordSpin", SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_AXE_READY] = ACTION(AxeReady, "A_Pose_Lsword_Wait", NULL, SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_AXE_STOW] = ACTION(AxeStow, "Equip_Lsword_Off_Natural", "WeaponEquipOff", SWMP_GEAR_WOODCUTTERS_AXE),
+    [SWMP_PROXY_CROUCH_IDLE] = ACTION(CrouchIdle, "Squat_Wait_FootL", "SquatWait", SWMP_GEAR_NONE),
+    [SWMP_PROXY_CROUCH_MOVE] = ACTION(CrouchMove, "Squat_Move_Walk", "SquatMove", SWMP_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_GUARD] = ACTION(ShieldGuard, "Shield_Guard_Wait", NULL, SWMP_GEAR_NONE),
 };
+#undef ACTION
 
 const char *swmp_proxy_action_name(SwmpProxyAction action) {
     return proxy_actions[(unsigned)action < SWMP_PROXY_ACTION_COUNT ? action : SWMP_PROXY_IDLE].state;
+}
+
+SwmpProxyAction swmp_proxy_sample_action(const char *state, SwmpGear weapon, bool drawn, bool shield_raised) {
+    if (shield_raised && !strcmp(state, "WaitAttention")) return SWMP_PROXY_SHIELD_GUARD;
+    if (weapon == SWMP_GEAR_WOODCUTTERS_AXE && drawn &&
+        (!strcmp(state, "Wait") || !strcmp(state, "WaitAttention"))) return SWMP_PROXY_AXE_READY;
+    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
+        const ProxyAction *action = &proxy_actions[i];
+        if (action->native && (!action->gear || action->gear == weapon) && !strcmp(state, action->native))
+            return (SwmpProxyAction)i;
+    }
+    return SWMP_PROXY_IDLE;
+}
+
+static int compare_actions(const void *a, const void *b) {
+    return strcmp((*(const ProxyAction *const *)a)->state, (*(const ProxyAction *const *)b)->state);
 }
 
 static void aamp_header(uint8_t *out, size_t end, unsigned lists, unsigned objects, unsigned params,
@@ -359,7 +408,10 @@ static unsigned aamp_string(uint8_t *out, unsigned at, const char *key, unsigned
     return value + (unsigned)align4(length);
 }
 
-enum { PROXY_ANIM_LIST_SIZE = 400 };
+enum {
+    PROXY_ANIM_LIST_SIZE = 124 + SWMP_PROXY_ACTION_COUNT * (24 + 2 * 64),
+    PROXY_ANIM_STATE_SIZE = 120 + 64,
+};
 
 static size_t proxy_anim_list(uint8_t out[PROXY_ANIM_LIST_SIZE]) {
     enum { ROOT = 52, ADD_RES = ROOT + 12, DEFINES = ADD_RES + 12,
@@ -371,22 +423,23 @@ static size_t proxy_anim_list(uint8_t out[PROXY_ANIM_LIST_SIZE]) {
     aamp_list(out, DEFINES, "ASDefines", 0, 0, FIRST_STATE, SWMP_PROXY_ACTION_COUNT);
     aamp_object(out, RES_OBJECT, "AddRes_0", PARAMS, 1);
     unsigned end = aamp_string(out, PARAMS, "Anim", STRINGS_AT, "Player_Animation");
-    static const SwmpProxyAction order[] = {
-        SWMP_PROXY_DASH, SWMP_PROXY_IDLE, SWMP_PROXY_JUMP, SWMP_PROXY_RUN, SWMP_PROXY_WALK,
-    };
-    static const char *const entries[] = {"ASDefine_0", "ASDefine_1", "ASDefine_2", "ASDefine_3", "ASDefine_4"};
+    const ProxyAction *order[SWMP_PROXY_ACTION_COUNT];
+    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) order[i] = &proxy_actions[i];
+    qsort(order, SWMP_PROXY_ACTION_COUNT, sizeof *order, compare_actions);
     for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
+        char entry[24];
+        snprintf(entry, sizeof entry, "ASDefine_%u", i);
         unsigned param = PARAMS + 8 + 16 * i;
-        aamp_object(out, FIRST_STATE + 8 * i, entries[i], param, 2);
-        end = aamp_string(out, param, "Name", end, proxy_actions[order[i]].state);
-        end = aamp_string(out, param + 8, "Filename", end, proxy_actions[order[i]].file);
+        aamp_object(out, FIRST_STATE + 8 * i, entry, param, 2);
+        end = aamp_string(out, param, "Name", end, order[i]->state);
+        end = aamp_string(out, param + 8, "Filename", end, order[i]->file);
     }
     aamp_header(out, end, 3, 1 + SWMP_PROXY_ACTION_COUNT, 1 + 2 * SWMP_PROXY_ACTION_COUNT,
                 0, end - STRINGS_AT);
     return end;
 }
 
-static size_t proxy_anim_state(uint8_t out[144], const char *clip) {
+static size_t proxy_anim_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *clip) {
     enum { ROOT = 52, ELEMENTS = ROOT + 12, CLIP = ELEMENTS + 12,
            PARAM_OBJECT = CLIP + 12, PARAMS = PARAM_OBJECT + 8, TYPE = PARAMS + 16,
            STRINGS_AT = TYPE + 4 };
@@ -401,17 +454,18 @@ static size_t proxy_anim_state(uint8_t out[144], const char *clip) {
     return end;
 }
 
-static uint8_t *proxy_actor_link(uint8_t *src, size_t size, size_t *out_size) {
+static uint8_t *proxy_actor_link(uint8_t *src, size_t size, const char *key, const char *value, size_t *out_size) {
     if (size < 52 || size > 4096 || (size & 3) || read32(src + 12) != size ||
         read32(src + 44) || !set_dummy_physics(src, size)) return NULL;
-    uint8_t *as = aamp_param(src, size, "ASUser");
-    if (!as) return NULL;
-    *out_size = size + align4(sizeof SWMP_PROXY_ACTOR);
+    uint8_t *param = aamp_param(src, size, key);
+    if (!param) return NULL;
+    size_t text_size = strlen(value) + 1;
+    *out_size = size + align4(text_size);
     uint8_t *out = calloc(1, *out_size);
     if (!out) return NULL;
     memcpy(out, src, size);
-    memcpy(out + size, SWMP_PROXY_ACTOR, sizeof SWMP_PROXY_ACTOR);
-    aamp_value(out, (unsigned)(as - src), "ASUser", 20, (unsigned)size);
+    memcpy(out + size, value, text_size);
+    aamp_value(out, (unsigned)(param - src), key, 20, (unsigned)size);
     write32(out + 12, (uint32_t)*out_size);
     write32(out + 40, read32(src + 40) + (uint32_t)(*out_size - size));
     return out;
@@ -431,9 +485,9 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
         replace_model_name(raw + data + ms, me - ms, model_archive) &&
         replace_model_name(raw + data + ms, me - ms, template_actor)) {
         size_t link_size;
-        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, &link_size);
+        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ASUser", SWMP_PROXY_ACTOR, &link_size);
         if (link) {
-            uint8_t list[PROXY_ANIM_LIST_SIZE] = {0}, clips[SWMP_PROXY_ACTION_COUNT][144] = {{0}};
+            uint8_t list[PROXY_ANIM_LIST_SIZE] = {0}, clips[SWMP_PROXY_ACTION_COUNT][PROXY_ANIM_STATE_SIZE] = {{0}};
             PackFile files[3 + SWMP_PROXY_ACTION_COUNT] = {
                 {proxy_link, link, link_size},
                 {model_list, raw + data + ms, me - ms},
@@ -445,6 +499,32 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
             free(link);
         }
     }
+    free(raw);
+    return out;
+}
+
+uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
+                        const uint8_t *gear, size_t gear_size, size_t *out_size) {
+    static const char stock_link[] = "Actor/ActorLink/Obj_RockGray_A_M_01.bxml";
+    size_t n, gn;
+    uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
+    uint8_t *model = gear ? yaz0_unpack(gear, gear_size, &gn) : NULL;
+    uint8_t *out = NULL;
+    uint32_t data, ls, le, model_data, ms, me;
+    // Use only the rigid model list from the weapon pack. The prop profile and dummy physics
+    // keep this visual out of native pickup, inventory and weapon hit processing.
+    if (raw && model && sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
+        sarc_find(model, gn, asset->model_list, &model_data, &ms, &me) >= 0) {
+        size_t link_size;
+        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", asset->model, &link_size);
+        if (link) {
+            PackFile files[] = {{asset->actor_link, link, link_size},
+                                {asset->model_list, model + model_data + ms, me - ms}};
+            out = pack_files(files, sizeof files / sizeof files[0], out_size);
+            free(link);
+        }
+    }
+    free(model);
     free(raw);
     return out;
 }

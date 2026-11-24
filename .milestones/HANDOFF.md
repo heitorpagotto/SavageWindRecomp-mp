@@ -1,9 +1,31 @@
 # Agent handoff
 
-Checkpoint 2026-11-23 on `multiplayer/windows-test`, with M2.5 work based on `36301a1`.
+Checkpoint 2026-11-23 on `multiplayer/windows-test`, with M2.5 work based on `a4f9c7b`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
+
+## M2.5 shield, axe idle and crouch
+
+- The current Windows launcher is `build/m25-build/Play-M25.cmd`. Match multiplayer source ID
+  `5b6399a29f68162f952aff5316c44ad03ed9216d` on both peers. The 1.9.0 gamelib remains
+  `13365c313591b27e`.
+- Weapon and shield identities now share a reliable equipment revision and each slot has a separate
+  pose and native actor index. The Wooden Shield samples equipment getter category one, as confirmed
+  in the [test record](TESTING.md#m25-shield-axe-idle-and-crouch). Updates to one slot preserve the
+  other slot's actor. The two virtual gear packs use the same passive profile.
+- The native `Wait` state can cover both stowed and drawn idle. The axe hand-height band gates
+  `A_Pose_Lsword_Wait`, the native large-sword upper-body clip. The new map also covers
+  `WeaponEquipOff`, `SquatWait` and `SquatMove`. A forward shield pose during `WaitAttention`
+  selects `Shield_Guard_Wait`. Drawn idle and guarding approximate native blends.
+- The ignored `build/m25_shield_probe.py` builds a fixture with an isolated clipboard and action
+  traces. `build/m25_run_shield.py` drives both scratch games, including native inventory equip,
+  shrine travel, same-slot rejoin, and changes from 30 through 120 FPS. The fixture stages the
+  Wooden Shield in the host's scratch inventory using the app's item command.
+- Next, add a validated bow slot. The equipped-item drop path suggests
+  getter category two for the bow. Further traversal states, exact clip progress and skinned equipment
+  still need separate checks. The [appearance probe](M2_POSITION_HANDOFF.md#resume) describes the
+  failed multi-model attempt.
 
 ## M2.5 first slice
 
@@ -15,15 +37,30 @@ separate scratch settings and saves for game tests. Keep generated code and game
   session ends. Late joiners receive the current roster without a burst of notices.
 - The 1.9.0 `mp_weather_current` site resolves the world manager's effective-weather getter. The prior
   cheat override field returns 255 during ordinary forecasts and cannot serve as the host's sole source.
-  The Windows launcher is `build/m25-build/Play-M25.cmd` with game library `13365c313591b27e` and
-  source ID `538ba47fbd6d1889fc1fff8728b9714a85a6cc8f`. Both peers need matching M2.5 builds.
+  The environment and disconnect checks used game library `13365c313591b27e`. See the shield
+  checkpoint above for the current Windows launcher and multiplayer source ID.
   See the [M2.5 test record](TESTING.md#m25-first-slice) for Windows validation and remaining cases.
-- Start appearance work with one installed piece on an owned proxy. Refer to the
-  [appearance probe](M2_POSITION_HANDOFF.md#resume) and `runtime/quick_drop_action.c` for the existing
-  read-only equipped-actor query. The failed multi-model hair experiment still constrains the approach.
 - For overhead name feasibility, `control_camera_view()` in `runtime/nvn/vulkan/device.c` currently follows
   the motion-vector path. A default-on label needs a current world view and projection in other AA modes
   too, and must use the world viewport and the active proxy's applied pose.
+
+## M2.5 passive axe and animation
+
+- The initial axe checks used the local 1.9.0 gamelib `13365c313591b27e` and source ID
+  `76b08c288fd4ca87a334826f624e3a5b03ed711e`.
+- The Woodcutter's Axe uses a passive local alias and its own actor index for each remote Link. A
+  reliable equipment revision on the control channel gates the relative transform in 20 Hz snapshots.
+  The native weapon getter only samples the local player. The host replays current records to newcomers
+  after WELCOME and clears the record on departure before the slot can be reused.
+- The proxy plays landing, axe draw, first swing, finishing swing and spin from installed clips. The native
+  `Wait` state can cover both stowed and drawn idle. This first slice used generic idle for it, so the
+  drawn axe can render beside a hand in a neutral pose. Find a native draw-state signal before adding a
+  drawn idle animation. Clip phase and layered native blends are also open.
+- The [test record](TESTING.md#m25-passive-axe-and-animation) lists the native unequip, re-equip, travel,
+  Leave and same-slot rejoin checks. The ignored `build/m25_revision_probe.py` builds the isolated clipboard
+  and animation trace fixture. `build/m25_run_revision.py` drives the game over local control using scratch
+  saves. At the inventory pause the runner reads `inventory-input` inside the new scratch directory.
+  Each line starts with `host` or `client` followed by a control command, or `sleep` with seconds.
 
 ## M2.5 equipment probe
 
@@ -43,11 +80,8 @@ separate scratch settings and saves for game tests. Keep generated code and game
   Only the host drew their axe. The client applied the remote change from 1.43 m to 0.83 m while
   its own axe stayed stowed. The client captures `build/equipment-stowed.png` and
   `build/equipment-drawn.png` show the pose change. The scratch actor also lacks per-slot cleanup.
-- For production, first give one validated rigid gear model a passive alias and verify equip, unequip,
-  travel, leave, and that neither local inventory changes. Then send a reliable revisioned equipment
-  record and carry the visual transform in transient state. Resolve identities against locally installed
-  gear and ensure a late join receives the current revision. Keep world gear and the native local player
-  equip path outside remote ownership.
+- The probe informed the passive alias, independent actor index and separate identity and transform
+  messages in the current slice.
 
 ## M2 acceptance follow-up
 

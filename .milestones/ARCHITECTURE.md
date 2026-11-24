@@ -64,7 +64,7 @@ The encrypted transport identity and per-invite binding tie lobby admission to t
 | Local Link input/prediction | that player | local, with snapshots to host |
 | Link position/action | originating player; host relays | frequent state channel |
 | Current hearts for display | originating player; host relays | fresh player snapshots |
-| Armour/weapons/shield/bow | originating player | reliable event on revision change |
+| Armour/weapons/shield/bow | originating player | reliable control update on revision change, with rigid gear poses in state |
 | Player health/PvP result | host | request then authoritative event |
 | Enemy health/death | host | request then authoritative event |
 | Story quest progress | host | reliable allowlisted transaction |

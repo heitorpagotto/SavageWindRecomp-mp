@@ -71,7 +71,7 @@ static void packet_test(void) {
 static void snapshot_test(void) {
     SwmpPlayerSnapshot in = {
         .peer_id = 7,
-        .flags = SWMP_PLAYER_GROUNDED | SWMP_PLAYER_GUARDING,
+        .flags = SWMP_PLAYER_GROUNDED | SWMP_PLAYER_GUARDING | SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE,
         .action = 0x1234,
         .area_id = 0x89abcdef,
         .phase_id = 42,
@@ -81,6 +81,10 @@ static void snapshot_test(void) {
         .health_q4 = 120,
         .stamina_q4 = 400,
         .equipment_revision = 0xfedcba98,
+        .gear_pose = {
+            [SWMP_GEAR_WEAPON] = {.offset_mm = {-750, 1400, 900}, .rotation = {INT16_MIN, 26728, INT16_MAX}},
+            [SWMP_GEAR_SHIELD] = {.offset_mm = {130, 1030, -650}, .rotation = {-1000, 0, 1000}},
+        },
     };
     uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE];
     CHECK(swmp_player_snapshot_encode(data, &in));
@@ -93,6 +97,12 @@ static void snapshot_test(void) {
     CHECK(!memcmp(out.velocity_cm_s, in.velocity_cm_s, sizeof in.velocity_cm_s));
     CHECK(out.health_q4 == in.health_q4 && out.stamina_q4 == in.stamina_q4);
     CHECK(out.equipment_revision == in.equipment_revision);
+    for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++) {
+        CHECK(!memcmp(out.gear_pose[i].offset_mm, in.gear_pose[i].offset_mm, sizeof in.gear_pose[i].offset_mm));
+        CHECK(!memcmp(out.gear_pose[i].rotation, in.gear_pose[i].rotation, sizeof in.gear_pose[i].rotation));
+    }
+    data[56] = 0x7f;
+    CHECK(!swmp_player_snapshot_decode(&out, data));
     data[1] = 0x80;
     CHECK(!swmp_player_snapshot_decode(&out, data));
 }
@@ -226,6 +236,14 @@ static void control_test(void) {
     CHECK(size == 1 && swmp_control_decode(&out, SWMP_MSG_PEER_LEFT, data, size) && out.peer.id == 4);
     data[0] = SWMP_HOST_PEER;
     CHECK(!swmp_control_decode(&out, SWMP_MSG_PEER_LEFT, data, size));
+    in = (SwmpControl){.equipment = {.peer = 3, .state = {
+        .gear.id = {SWMP_GEAR_WOODCUTTERS_AXE, SWMP_GEAR_WOODEN_SHIELD}, .revision = 8}}};
+    CHECK(swmp_control_encode(data, sizeof data, &size, SWMP_MSG_EQUIPMENT, &in));
+    CHECK(swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
+    CHECK(size == 7 && out.equipment.peer == 3 && out.equipment.state.revision == 8);
+    CHECK(!memcmp(out.equipment.state.gear.id, in.equipment.state.gear.id, SWMP_GEAR_SLOTS));
+    data[6] = SWMP_GEAR_WOODCUTTERS_AXE;
+    CHECK(!swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
 }
 
 static bool raw_control(SwmpTransport *t, SwmpConnection connection, SwmpMessageType type, uint8_t sender,
@@ -317,9 +335,22 @@ static void lobby_test(void) {
     swmp_lobby_poll(extra, 1);
     CHECK(extra->rejection == SWMP_REJECT_FULL);
     CHECK(host_joins == 7 && observer_joins == 5 && !strcmp(last_join, "Link 7"));
+    SwmpGearSet both = {.id = {SWMP_GEAR_WOODCUTTERS_AXE, SWMP_GEAR_WOODEN_SHIELD}};
+    SwmpGearSet axe = {.id = {SWMP_GEAR_WOODCUTTERS_AXE}};
+    swmp_lobby_set_equipment(&lobbies[1], both);
+    swmp_lobby_set_equipment(&lobbies[1], both);
+    swmp_lobby_set_equipment(&lobbies[3], axe);
+    SwmpControl forged = {.equipment = {.peer = 3, .state = {.revision = 99}}};
+    CHECK(raw_control(&lobbies[1].transport, lobbies[1].links[0].connection, SWMP_MSG_EQUIPMENT, 1,
+                      host->session.session_id, 100, &forged));
     // Position updates work in an open lobby, without START, and the host relays every peer in a batch.
-    SwmpPlayerSnapshot position = {.area_id = 1};
+    SwmpPlayerSnapshot position = {.area_id = 1, .gear_pose = {
+        [SWMP_GEAR_WEAPON].offset_mm = {250, 1420},
+        [SWMP_GEAR_SHIELD].offset_mm = {0, 1300, -350},
+    }};
     for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
+        position.flags = i == 1 ? SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE :
+            i == 3 ? SWMP_PLAYER_WEAPON_POSE : 0;
         position.position_mm[0] = i * 1000;
         swmp_lobby_send_position(&lobbies[i], &position, 1);
     }
@@ -330,6 +361,11 @@ static void lobby_test(void) {
     swmp_lobby_poll(&lobbies[2], 1);
     CHECK(lobbies[2].environment.area_id == 1 && lobbies[2].environment.received_at == 1);
     CHECK(lobbies[2].environment.state.time_milli == 359999 && lobbies[2].environment.state.weather == 2);
+    CHECK(lobbies[2].equipment[1].revision == 1 && lobbies[2].equipment[3].revision == 1);
+    CHECK(lobbies[2].equipment[3].gear.id[SWMP_GEAR_WEAPON] == SWMP_GEAR_WOODCUTTERS_AXE);
+    CHECK(lobbies[2].positions[1].snapshot.equipment_revision == lobbies[2].equipment[1].revision);
+    CHECK(lobbies[2].positions[1].snapshot.gear_pose[SWMP_GEAR_WEAPON].offset_mm[1] == 1420);
+    CHECK(lobbies[2].positions[1].snapshot.gear_pose[SWMP_GEAR_SHIELD].offset_mm[2] == -350);
     for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
         if (i == 2) continue;
         CHECK(swmp_position_fresh(&lobbies[2].positions[i], 1));
@@ -369,6 +405,13 @@ static void lobby_test(void) {
     CHECK(host_after.generation[1] == host_before.generation[1]);
     CHECK(client_after.generation[0] == client_before.generation[0]);
     CHECK(!host->positions[3].snapshot.area_id && !lobbies[2].positions[3].snapshot.area_id);
+    CHECK(!host->equipment[3].revision && !lobbies[2].equipment[3].revision && !extra->equipment[3].revision);
+    CHECK(extra->equipment[1].revision == 1 && extra->equipment[1].gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_WOODEN_SHIELD);
+    swmp_lobby_set_equipment(&lobbies[1], axe);
+    swmp_lobby_poll(host, 2);
+    swmp_lobby_poll(extra, 2);
+    CHECK(extra->equipment[1].revision == 2 && extra->equipment[1].gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_NONE);
+    CHECK(extra->equipment[1].gear.id[SWMP_GEAR_WEAPON] == SWMP_GEAR_WOODCUTTERS_AXE);
 
     // A host state datagram from before the replacement cannot populate the reused slot.
     uint8_t packet[SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE + 2 * SWMP_PLAYER_SNAPSHOT_SIZE];

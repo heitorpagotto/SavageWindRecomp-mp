@@ -1,6 +1,59 @@
 # Test record and verification plan
 
-Reviewed 2026-11-22. The prototype and native build results below have separate verification scopes.
+Reviewed 2026-11-23. The prototype and native build results below have separate verification scopes.
+
+## M2.5 shield, axe idle and crouch
+
+- Windows UCRT64 runtime objects and app linked. The core, eight-peer WebRTC loopback and eight-peer
+  direct invite tests passed with the two-slot wire layout. The mock lobby covered two poses in one
+  revision, removal of a single slot, late join, and rejection of an identity in the wrong slot.
+  Local resource checks preserved every stock actor record with Link alone, with either gear alias,
+  and with both. The changed sources cross-compiled for Linux x86-64.
+- Two Windows games on BOTW 1.9.0 used gamelib `13365c313591b27e`, direct WebRTC and scratch saves
+  in Tah Muhl Shrine. The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon
+  Graphics (25.10.30.02). Both ran at 960×540, 50% render scale, 1400 MiB VRAM budget and Vulkan
+  heap copy off. The main run measured 30 FPS.
+- The host added a Wooden Shield to its scratch inventory using the existing item command, then equipped
+  it from the native inventory. The native getter reported the shield in category one. The client saw
+  the shield on the remote Link's back and in front when raised. Native Remove and Equip retired and
+  restored that shield while both axes remained active. The client had no shield equipped.
+- Both visuals retired during a native shrine exit and returned after re-entry in the same lobby.
+  Client Leave and same-slot rejoin repeated cleanup and restored the host's equipment.
+- Two draw/stow cycles selected AxeDraw, AxeReady, AxeStow and Idle on the receiving controller.
+  The client also selected CrouchIdle and CrouchMove.
+  Crouch and return to idle repeated at 60, 90 and 120 FPS targets. Measured rates were approximately
+  60.0, 90.0 and 120.0 FPS on both games.
+- The lifecycle and frame-rate run used source ID `0a537a8acd76d9e9aa33cdc22a4656d2bf2c7d1e`.
+  Captures and traces are under ignored `build/m25-shield-5ohv11y3/`.
+- The guard follow-up used current source ID `5b6399a29f68162f952aff5316c44ad03ed9216d`. The client
+  selected ShieldGuard while the host held guard and returned to Idle after release. The raised
+  stance is visible in `build/m25-shield-6ort3715/client/build/shield-raised.png`.
+- A separate 30 FPS run on the same source ID confirmed both crouch clips. The crouched proxy is
+  visible in `build/m25-shield-y216z_hl/client/build/remote-crouch.png`.
+
+## M2.5 passive axe and animation
+
+- Windows UCRT64 runtime objects and app linked. Multiplayer core, eight-peer WebRTC loopback, and
+  eight-peer direct invite tests passed. The mock lobby checked forged equipment ownership, revised
+  identity and pose relay, late join, unequip, and equipment cleanup on slot reuse. The changed C
+  sources cross-compiled for Linux x86-64. A local resource check verified both alias configurations
+  preserve the stock actor records, the axe uses the passive profile and dummy physics, and the Link pack
+  contains all ten animation entries.
+- Two Windows games used BOTW 1.9.0, gamelib `13365c313591b27e`, and direct WebRTC loopback in Tah Muhl
+  Shrine. Settings were 960×540 at 50% render scale, 1400 MiB VRAM budget, Vulkan heap copy off, and
+  30 FPS target and measured. The host ran on the NVIDIA RTX 4050 Laptop GPU (610.88) and the client
+  on AMD Radeon Graphics (25.10.30.02). Both games used scratch saves and settings.
+- The client saw the host's axe move from about 1.43 m stowed to 0.87 m drawn on revision 1.
+  Client captures show both placements with the client's own axe still stowed. The passive axe
+  capture had no Take prompt. The remote animation controller reported AxeDraw, AxeSwing, AxeFinish,
+  AxeSpin, Jump and Land. This checks the selected states. Exact clip timing and drawn idle pose remain open.
+- The host used the native inventory to remove and equip the axe. The client capture shows the remote
+  axe gone with the remote Link and the client's own axe still present. Re-equip restored the remote
+  visual on revision 3. A native shrine exit retired both remote axes. Re-entry restored both in the
+  same lobby. Client Leave and same-slot rejoin retired and restored both visuals again.
+- Scratch evidence is in `build/m25-revision-wire-eqcu56sr/`, with client captures in `client/build/`
+  and the controller and lifecycle traces in each `run.log`. Linux gameplay, a second rigid slot, and
+  skinned equipment remain open.
 
 ## M2.5 first slice
 

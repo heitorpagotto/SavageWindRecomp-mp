@@ -56,7 +56,8 @@ static bool type_valid(uint8_t type) {
 }
 
 static bool type_channel_valid(uint8_t type, uint8_t channel) {
-    if (type >= SWMP_MSG_HELLO && type <= SWMP_MSG_PONG) return channel == SWMP_CHANNEL_CONTROL;
+    if ((type >= SWMP_MSG_HELLO && type <= SWMP_MSG_PONG) || type == SWMP_MSG_EQUIPMENT)
+        return channel == SWMP_CHANNEL_CONTROL;
     if (type == SWMP_MSG_PLAYER_SNAPSHOT) return channel == SWMP_CHANNEL_STATE;
     return channel == SWMP_CHANNEL_EVENT;
 }
@@ -137,8 +138,26 @@ const char *swmp_packet_error_string(SwmpPacketError error) {
     return "unknown packet error";
 }
 
+bool swmp_gear_set_valid(SwmpGearSet gear) {
+    return (!gear.id[SWMP_GEAR_WEAPON] || gear.id[SWMP_GEAR_WEAPON] == SWMP_GEAR_WOODCUTTERS_AXE) &&
+           (!gear.id[SWMP_GEAR_SHIELD] || gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_WOODEN_SHIELD);
+}
+
+static bool gear_pose_valid(const SwmpPlayerSnapshot *s) {
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
+        if (!(s->flags & swmp_gear_pose_flag(slot))) continue;
+        if (!s->equipment_revision) return false;
+        for (unsigned i = 0; i < 3; i++) {
+            int offset = s->gear_pose[slot].offset_mm[i];
+            if (offset < -SWMP_GEAR_OFFSET_LIMIT_MM || offset > SWMP_GEAR_OFFSET_LIMIT_MM) return false;
+        }
+    }
+    return true;
+}
+
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *s) {
     if (!out || !s || s->peer_id >= SWMP_MAX_PEERS || (s->flags & ~SWMP_PLAYER_STATE_KNOWN)) return false;
+    if (!gear_pose_valid(s)) return false;
     out[0] = s->peer_id;
     out[1] = s->flags;
     put16(out + 2, s->action);
@@ -150,6 +169,14 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     put16(out + 36, s->health_q4);
     put16(out + 38, s->stamina_q4);
     put32(out + 40, s->equipment_revision);
+    memset(out + 44, 0, 12 * SWMP_GEAR_SLOTS);
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
+        if (!(s->flags & swmp_gear_pose_flag(slot))) continue;
+        uint8_t *data = out + 44 + 12 * slot;
+        const SwmpGearPose *pose = &s->gear_pose[slot];
+        for (unsigned i = 0; i < 3; i++) put16(data + 2 * i, (uint16_t)pose->offset_mm[i]);
+        for (unsigned i = 0; i < 3; i++) put16(data + 6 + 2 * i, (uint16_t)pose->rotation[i]);
+    }
     return true;
 }
 
@@ -169,6 +196,13 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);
     for (int i = 0; i < 3; i++) decoded.velocity_cm_s[i] = (int16_t)get16(data + 30 + i * 2);
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
+        if (!(decoded.flags & swmp_gear_pose_flag(slot))) continue;
+        const uint8_t *pose = data + 44 + 12 * slot;
+        for (unsigned i = 0; i < 3; i++) decoded.gear_pose[slot].offset_mm[i] = (int16_t)get16(pose + 2 * i);
+        for (unsigned i = 0; i < 3; i++) decoded.gear_pose[slot].rotation[i] = (int16_t)get16(pose + 6 + 2 * i);
+    }
+    if (!gear_pose_valid(&decoded)) return false;
     *s = decoded;
     return true;
 }
@@ -305,6 +339,14 @@ bool swmp_control_encode(uint8_t *out, size_t capacity, size_t *size, SwmpMessag
         break;
     case SWMP_MSG_START:
         break;
+    case SWMP_MSG_EQUIPMENT:
+        if (capacity < 5 + SWMP_GEAR_SLOTS || m->equipment.peer >= SWMP_MAX_PEERS ||
+            !swmp_gear_set_valid(m->equipment.state.gear) || !m->equipment.state.revision) return false;
+        out[0] = m->equipment.peer;
+        put32(out + 1, m->equipment.state.revision);
+        memcpy(out + 5, m->equipment.state.gear.id, SWMP_GEAR_SLOTS);
+        pos = 5 + SWMP_GEAR_SLOTS;
+        break;
     case SWMP_MSG_PING:
     case SWMP_MSG_PONG:
         if (capacity < 8) return false;
@@ -367,6 +409,14 @@ bool swmp_control_decode(SwmpControl *msg, SwmpMessageType type, const uint8_t *
             !get_text(m.peer.name, SWMP_PLAYER_NAME_SIZE, data, size, &pos)) return false;
         break;
     case SWMP_MSG_START:
+        break;
+    case SWMP_MSG_EQUIPMENT:
+        if (size != 5 + SWMP_GEAR_SLOTS || data[0] >= SWMP_MAX_PEERS) return false;
+        m.equipment.peer = data[0];
+        m.equipment.state.revision = get32(data + 1);
+        memcpy(m.equipment.state.gear.id, data + 5, SWMP_GEAR_SLOTS);
+        if (!m.equipment.state.revision || !swmp_gear_set_valid(m.equipment.state.gear)) return false;
+        pos = size;
         break;
     case SWMP_MSG_PING:
     case SWMP_MSG_PONG:

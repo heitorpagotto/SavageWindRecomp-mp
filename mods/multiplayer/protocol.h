@@ -11,7 +11,8 @@
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
-#define SWMP_PLAYER_SNAPSHOT_SIZE 44u
+#define SWMP_PLAYER_SNAPSHOT_SIZE 68u
+#define SWMP_GEAR_OFFSET_LIMIT_MM 3000
 #define SWMP_ENVIRONMENT_SIZE 8u
 #define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
 #define SWMP_WEATHER_TYPES 9u
@@ -95,9 +96,45 @@ enum {
     SWMP_PLAYER_CROUCHING = 1u << 2,
     SWMP_PLAYER_GUARDING = 1u << 3,
     SWMP_PLAYER_DEAD = 1u << 4,
+    SWMP_PLAYER_WEAPON_POSE = 1u << 5,
+    SWMP_PLAYER_SHIELD_POSE = 1u << 6,
     SWMP_PLAYER_STATE_KNOWN = SWMP_PLAYER_GROUNDED | SWMP_PLAYER_GLIDING | SWMP_PLAYER_CROUCHING |
-                              SWMP_PLAYER_GUARDING | SWMP_PLAYER_DEAD
+                              SWMP_PLAYER_GUARDING | SWMP_PLAYER_DEAD |
+                              SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE
 };
+
+typedef enum {
+    SWMP_GEAR_WEAPON,
+    SWMP_GEAR_SHIELD,
+    SWMP_GEAR_SLOTS
+} SwmpGearSlot;
+
+typedef enum {
+    SWMP_GEAR_NONE,
+    SWMP_GEAR_WOODCUTTERS_AXE,
+    SWMP_GEAR_WOODEN_SHIELD,
+    SWMP_GEAR_COUNT
+} SwmpGear;
+
+typedef struct {
+    uint8_t id[SWMP_GEAR_SLOTS];  // SwmpGear identities, resolved against installed resources
+} SwmpGearSet;
+
+typedef struct {
+    uint32_t revision;  // zero until the owner advertises its first equipment change
+    SwmpGearSet gear;
+} SwmpEquipment;
+
+typedef struct {
+    int16_t offset_mm[3];  // relative to Link's yaw frame
+    int16_t rotation[3];  // relative pitch, yaw, roll as signed turn fractions
+} SwmpGearPose;
+
+static inline unsigned swmp_gear_pose_flag(SwmpGearSlot slot) {
+    return SWMP_PLAYER_WEAPON_POSE << slot;
+}
+
+bool swmp_gear_set_valid(SwmpGearSet gear);
 
 // A compact, renderer-independent state sample. Area and phase identify which world instance can see the sample.
 // Equipment is sent separately and referenced by a monotonically increasing revision.
@@ -113,6 +150,7 @@ typedef struct {
     uint16_t health_q4;
     uint16_t stamina_q4;
     uint32_t equipment_revision;
+    SwmpGearPose gear_pose[SWMP_GEAR_SLOTS];
 } SwmpPlayerSnapshot;
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);

@@ -141,6 +141,7 @@ static bool remove_peer(SwmpLobby *l, uint8_t id, uint64_t now) {
     SwmpPeer departed = *peer;
     if (!swmp_session_remove_peer(&l->session, id)) return false;
     l->positions[id] = (SwmpPosition){0};
+    l->equipment[id] = (SwmpEquipment){0};
     if (l->peer_changed) l->peer_changed(departed.name, false, now);
     return true;
 }
@@ -218,6 +219,15 @@ static void hello(SwmpLobby *l, SwmpLobbyLink *link, const SwmpControl *m, uint6
     }
     link->peer = (uint8_t)peer;
 
+    // Use the membership channel so equipment cannot arrive ahead of WELCOME or PEER_JOINED.
+    for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
+        if (!l->equipment[i].revision || !swmp_session_peer(s, i)) continue;
+        SwmpControl equipment = {.equipment = {.peer = i, .state = l->equipment[i]}};
+        if (!send_control(l, link, SWMP_MSG_EQUIPMENT, &equipment)) {
+            close_link(l, link);
+            break;
+        }
+    }
     SwmpControl joined = {.peer.id = (uint8_t)peer};
     strcpy(joined.peer.name, m->hello.name);
     broadcast(l, SWMP_MSG_PEER_JOINED, &joined, (uint8_t)peer);
@@ -252,6 +262,18 @@ bool swmp_position_fresh(const SwmpPosition *position, uint64_t now) {
     return position->snapshot.area_id && now - position->received_at < SWMP_POSITION_TIMEOUT_MS;
 }
 
+void swmp_lobby_set_equipment(SwmpLobby *l, SwmpGearSet gear) {
+    SwmpSession *s = &l->session;
+    if (!s->session_id || l->joining || s->local_peer >= SWMP_MAX_PEERS || !swmp_gear_set_valid(gear))
+        return;
+    SwmpEquipment *local = &l->equipment[s->local_peer];
+    if (!memcmp(local->gear.id, gear.id, sizeof gear.id)) return;
+    local->gear = gear;
+    if (!++local->revision) ++local->revision;
+    SwmpControl msg = {.equipment = {.peer = s->local_peer, .state = *local}};
+    broadcast(l, SWMP_MSG_EQUIPMENT, &msg, SWMP_UNASSIGNED_PEER);
+}
+
 void swmp_lobby_send_position(SwmpLobby *l, const SwmpPlayerSnapshot *local, uint64_t now) {
     swmp_lobby_send_state(l, local, NULL, now);
 }
@@ -263,7 +285,12 @@ void swmp_lobby_send_state(SwmpLobby *l, const SwmpPlayerSnapshot *local,
         swmp_session_peer_count(s) < 2) return;
     l->next_position_at = now + SWMP_POSITION_INTERVAL_MS;
     l->positions[s->local_peer] = (SwmpPosition){.snapshot = *local, .received_at = now};
-    l->positions[s->local_peer].snapshot.peer_id = s->local_peer;
+    SwmpPlayerSnapshot *sample = &l->positions[s->local_peer].snapshot;
+    sample->peer_id = s->local_peer;
+    const SwmpEquipment *equipment = &l->equipment[s->local_peer];
+    sample->equipment_revision = equipment->revision;
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++)
+        if (!equipment->gear.id[slot]) sample->flags &= ~swmp_gear_pose_flag(slot);
 
     uint8_t data[SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE + SWMP_MAX_PEERS * SWMP_PLAYER_SNAPSHOT_SIZE];
     size_t size = 0;
@@ -356,10 +383,20 @@ static void packet(SwmpLobby *l, const SwmpTransportEvent *event, SwmpLobbyLink 
         return;
     }
     if (h.sender_peer != link->peer) return;
-    if (host && h.type != SWMP_MSG_PING && h.type != SWMP_MSG_PONG) return;
+    if (host && h.type != SWMP_MSG_PING && h.type != SWMP_MSG_PONG && h.type != SWMP_MSG_EQUIPMENT) return;
     SwmpSession *s = &l->session;
     if (swmp_session_accept(s, &h) != SWMP_RECEIVE_ACCEPT) return;
     switch (h.type) {
+    case SWMP_MSG_EQUIPMENT: {
+        uint8_t peer = m.equipment.peer;
+        if ((host && peer != h.sender_peer) || peer == s->local_peer || !swmp_session_peer(s, peer)) return;
+        SwmpEquipment *state = &l->equipment[peer];
+        uint32_t revision = m.equipment.state.revision;
+        if (state->revision && (int32_t)(revision - state->revision) <= 0) return;
+        *state = m.equipment.state;
+        if (host) broadcast(l, SWMP_MSG_EQUIPMENT, &m, peer);
+        break;
+    }
     case SWMP_MSG_PEER_JOINED:
         if (!swmp_session_add_remote_peer(s, m.peer.id, m.peer.name)) return;
         l->roster_epoch = h.tick;

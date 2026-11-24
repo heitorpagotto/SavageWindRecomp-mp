@@ -75,6 +75,10 @@ typedef struct {
 #ifdef SW_MULTIPLAYER
     uint8_t *proxy_pack, *proxy_actor_info;
     size_t proxy_pack_size;
+    struct {
+        uint8_t *pack;
+        size_t size;
+    } gear[SWMP_GEAR_COUNT];
 #endif
 } RomImage;
 #define AOC_MAX 8
@@ -84,7 +88,11 @@ static FsInventoryClipLayout inventory_clip_layout;
 static _Atomic bool inventory_clip_layout_valid;
 #ifdef SW_MULTIPLAYER
 static _Atomic bool multiplayer_proxy_ready;
+static _Atomic unsigned multiplayer_gear_ready;
 bool fs_multiplayer_proxy_ready(void) { return atomic_load(&multiplayer_proxy_ready); }
+bool fs_multiplayer_gear_ready(SwmpGear gear) {
+    return (unsigned)gear < SWMP_GEAR_COUNT && (atomic_load(&multiplayer_gear_ready) & (1u << gear));
+}
 uint8_t *fs_game_file(const char *path, size_t *out_n);
 #endif
 
@@ -101,6 +109,7 @@ RT_ON_RESET(fs_reset) {
         free(m->ov_extended_meta);
 #ifdef SW_MULTIPLAYER
         free(m->proxy_pack);
+        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) free(m->gear[i].pack);
         free(m->proxy_actor_info);
 #endif
         for (int i = 0; i < m->rom_nfiles; i++) free(m->rom_files[i].path);
@@ -112,6 +121,7 @@ RT_ON_RESET(fs_reset) {
     atomic_store_explicit(&inventory_clip_layout_valid, false, memory_order_release);
 #ifdef SW_MULTIPLAYER
     atomic_store(&multiplayer_proxy_ready, false);
+    atomic_store(&multiplayer_gear_ready, 0);
 #endif
     g_save_dir = "save";
 }
@@ -229,8 +239,14 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     }
 #ifdef SW_MULTIPLAYER
     if (R->proxy_pack) {
-        if (n == cap) nf = realloc(nf, sizeof *nf * (n + 1));
+        if (cap - n < SWMP_GEAR_COUNT) nf = realloc(nf, sizeof *nf * (n + SWMP_GEAR_COUNT));
         nf[n++] = (NewFile){.rel = SWMP_PROXY_PACK, .size = R->proxy_pack_size, .mem = R->proxy_pack};
+        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+            if (!R->gear[i].pack) continue;
+            nf[n] = (NewFile){.size = R->gear[i].size, .mem = R->gear[i].pack};
+            strlcpy(nf[n].rel, swmp_gear_assets[i].pack, sizeof nf[n].rel);
+            n++;
+        }
     }
 #endif
     if (!n) return;
@@ -264,6 +280,7 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     int added = 0;
 #ifdef SW_MULTIPLAYER
     bool proxy_added = false;
+    unsigned gear_added = 0;
 #endif
     for (int i = 0; i < n; i++) {
         char dirp[1024];
@@ -291,7 +308,9 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
         if (R->ov_n == R->ov_cap) { R->ov_cap = R->ov_cap ? R->ov_cap * 2 : 256; R->ov = realloc(R->ov, sizeof *R->ov * R->ov_cap); }
         R->ov[R->ov_n++] = (Overlay){data_at, size, nf[i].mem ? NULL : strdup(nf[i].host), -1, nf[i].mem};
 #ifdef SW_MULTIPLAYER
-        proxy_added |= nf[i].mem != NULL;
+        proxy_added |= nf[i].mem && nf[i].mem == R->proxy_pack;
+        for (unsigned j = 1; nf[i].mem && j < SWMP_GEAR_COUNT; j++)
+            if (nf[i].mem == R->gear[j].pack) gear_added |= 1u << j;
 #endif
         R->rom_files[R->rom_nfiles++] = (RomFile){data_at, size, strdup(nf[i].rel), entry};
         data_at = (data_at + size + 0xF) & ~0xFull;
@@ -312,6 +331,7 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     R->patches[R->npatches++] = (Patch){hoff, hsz, hcopy};
 #ifdef SW_MULTIPLAYER
     if (proxy_added) atomic_store(&multiplayer_proxy_ready, true);
+    if (proxy_added) atomic_store(&multiplayer_gear_ready, gear_added);
 #endif
     free(nf);
     LOG("[fs] overlay: %d new romfs files\n", added);
@@ -502,11 +522,7 @@ static uint8_t *yaz0_pack_literal(const uint8_t *d, size_t n, size_t *out_n) {
 }
 
 #ifdef SW_MULTIPLAYER
-static uint8_t *proxy_resource(const char *path, uint8_t *(*build)(const uint8_t *, size_t, size_t *), size_t *size) {
-    size_t input_size = 0, raw_size = 0;
-    uint8_t *input = fs_game_file(path, &input_size);
-    uint8_t *raw = build(input, input_size, &raw_size);
-    free(input);
+static uint8_t *pack_proxy_resource(uint8_t *raw, size_t raw_size, size_t *size) {
     if (!raw) return NULL;
     uint8_t *packed = yaz0_pack_literal(raw, raw_size, size);
     free(raw);
@@ -520,16 +536,46 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
         overlay_file(SWMP_PROXY_TEMPLATE, host, sizeof host) ||
         overlay_file(SWMP_PROXY_PACK, host, sizeof host)) return;
 
+    unsigned gear_mask = 0;
+    for (unsigned i = 1; g_site.player_equipment && i < SWMP_GEAR_COUNT; i++)
+        if (!overlay_file(swmp_gear_assets[i].pack, host, sizeof host) &&
+            !overlay_file(swmp_gear_assets[i].template_pack, host, sizeof host)) gear_mask |= 1u << i;
     const RomFile *info = NULL;
     for (int i = 0; i < R->rom_nfiles; i++) {
         if (!strcmp(R->rom_files[i].path, SWMP_PROXY_PACK)) return;
+        for (unsigned j = 1; j < SWMP_GEAR_COUNT; j++)
+            if (!strcmp(R->rom_files[i].path, swmp_gear_assets[j].pack)) gear_mask &= ~(1u << j);
         if (!strcmp(R->rom_files[i].path, SWMP_ACTOR_INFO)) info = &R->rom_files[i];
     }
     if (!info) return;
 
-    size_t pack_size = 0, info_size = 0;
-    uint8_t *pack = proxy_resource(SWMP_PROXY_TEMPLATE, swmp_proxy_pack, &pack_size);
-    uint8_t *actor_info = pack ? proxy_resource(SWMP_ACTOR_INFO, swmp_proxy_actor_info, &info_size) : NULL;
+    size_t template_size = 0, raw_size = 0;
+    size_t pack_size = 0, info_size = 0, stock_info_size = 0;
+    uint8_t *stock = fs_game_file(SWMP_PROXY_TEMPLATE, &template_size);
+    uint8_t *raw = swmp_proxy_pack(stock, template_size, &raw_size);
+    uint8_t *pack = pack_proxy_resource(raw, raw_size, &pack_size);
+    for (unsigned i = 1; pack && i < SWMP_GEAR_COUNT; i++) {
+        if (!(gear_mask & (1u << i))) continue;
+        const SwmpGearAsset *asset = &swmp_gear_assets[i];
+        size_t size = 0;
+        uint8_t *gear = fs_game_file(asset->template_pack, &size);
+        raw = swmp_gear_pack(asset, stock, template_size, gear, size, &raw_size);
+        R->gear[i].pack = pack_proxy_resource(raw, raw_size, &R->gear[i].size);
+        if (!R->gear[i].pack) gear_mask &= ~(1u << i);
+        free(gear);
+    }
+    free(stock);
+    uint8_t *stock_info = pack ? fs_game_file(SWMP_ACTOR_INFO, &stock_info_size) : NULL;
+    raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, &raw_size);
+    if (!raw && gear_mask) {
+        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+            free(R->gear[i].pack);
+            R->gear[i].pack = NULL;
+        }
+        raw = swmp_proxy_actor_info(stock_info, stock_info_size, 0, &raw_size);
+    }
+    free(stock_info);
+    uint8_t *actor_info = pack_proxy_resource(raw, raw_size, &info_size);
     if (!actor_info) {
         free(pack);
         LOG("[multiplayer] remote Link resources unavailable, using NPC placeholders\n");

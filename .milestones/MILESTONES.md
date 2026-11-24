@@ -95,7 +95,10 @@ Acceptance criteria:
 ## M2.5 — Time, weather, and full Link synchronization
 
 Status **in progress**. The first slice implements host time and weather sync and admission notifications.
-Equipment, expanded animation, and overhead names are open. See the [handoff](HANDOFF.md#m25-first-slice).
+The equipment slices add passive axe and shield slots and reliable identities. New native clips cover
+landing, axe draw, attacks, drawn idle, stow, shield guard and crouch.
+The rest of the equipment and animation catalog and overhead names are open. See the
+[handoff](HANDOFF.md#m25-shield-axe-idle-and-crouch).
 
 Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped
 gear and animations.

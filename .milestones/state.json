@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-23T16:45:30-03:00",
+  "updated_at": "2026-11-23T21:02:00-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
     "protocol_version": 1,
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "36301a1",
+    "workspace_base_commit": "a4f9c7b",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -69,7 +69,7 @@
       "name": "Time, weather, and full Link synchronization",
       "status": "in_progress",
       "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible.",
-      "implemented_slice": "Host time and weather in position batches, and overlay notices for admission and disconnect."
+      "implemented_slice": "Host time and weather in position batches, overlay notices for admission and disconnect, independent revisioned Woodcutter's Axe and Wooden Shield slots, and native landing, axe draw, drawn idle, stow, axe attacks, shield guard and crouch clips."
     },
     {
       "id": "M3",
@@ -127,11 +127,15 @@
     "independent multiplayer release version for runtime and package labels",
     "stable area IDs for the main field and individual shrine scenes from RomFS stage tracking",
     "host time and weather sync with a default-on preference shared by both settings surfaces",
-    "join notices shown to the host and existing clients on admission"
+    "join notices shown to the host and existing clients on admission",
+    "reliable Woodcutter's Axe and Wooden Shield identities, late-join replay and bounded relative poses in transient snapshots",
+    "per-peer passive axe and shield actors with independent indexed placement and retirement",
+    "native landing, axe draw, drawn idle, stow, first swing, finishing swing, spin, shield guard and crouch proxy clips"
   ],
   "not_implemented": [
-    "remote Link appearance pieces, extended action mapping and broader area support",
-    "equipment replication payload",
+    "skinned appearance, other rigid equipment slots and variants",
+    "broader action mapping, exact animation timing and layered blends",
+    "broader area support",
     "combat and shared enemy health",
     "PvP",
     "shared quests and story",
@@ -175,7 +179,8 @@
     "m2_shrine_roundtrips": "Two Windows 1.9.0 games at 30 FPS retained their lobby through two native shrine elevator round trips. Both proxies retired and reactivated each time.",
     "m2_package_acceptance": "Windows release ZIP built with LGPL FFmpeg. Manifest and archive integrity passed, including bundled libdatachannel. Packaged imports resolved from the archive staging directory. Linux Make target reported the identical version label. Native AppImage build pending.",
     "m2_udp_impairment": "Two 30 FPS Windows games exchanged snapshots over direct WebRTC under test-only UDP loss every fifth datagram and 0?45 ms delays. They converged on position, facing and walk/jump/idle in both directions with the same actor and independently reflected a client health change 12 to 9 to 12.",
-    "m25_windows_environment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e followed the host's native clear weather and a controlled rain transition. Clock progression, host and client opt-out, reconnection around midnight, and the host overlay on both admissions passed. A native shrine round trip verified clock resync without leaving the lobby. Synthetic coverage also checks notifications on existing clients."
+    "m25_windows_environment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e followed the host's native clear weather and a controlled rain transition. Clock progression, host and client opt-out, reconnection around midnight, and the host overlay on both admissions passed. A native shrine round trip verified clock resync without leaving the lobby. Synthetic coverage also checks notifications on existing clients.",
+    "m25_windows_equipment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e rendered passive axes and the host's shield over direct WebRTC. Native shield removal and re-equip preserved the axe actor. Shrine exit and re-entry, Leave and same-slot rejoin passed. The client selected axe idle, stow, crouch idle and crouch move. Crouch also passed at 60, 90 and 120 FPS. The guard follow-up on source ID 5b6399a29f68162f952aff5316c44ad03ed9216d selected ShieldGuard and returned to idle. Linux x86-64 cross-compilation passed. Evidence is in build/m25-shield-5ohv11y3/ and build/m25-shield-6ort3715/."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -194,5 +199,5 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Continue M2.5 by attaching one equipped piece to an owned proxy. Native Linux and mixed-platform environment sync remain open. The owner can run the M7 manual validation separately."
+  "next_recommended_work": "Validate a bow slot and broaden the verified traversal and equipment animation map. Investigate native blend and clip progress and the skinned equipment path. Native Linux and mixed-platform gameplay remain open."
 }

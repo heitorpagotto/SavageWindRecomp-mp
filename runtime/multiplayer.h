@@ -34,6 +34,7 @@ typedef struct {
     uint64_t lobby_generation;  // zero when there is no admitted session
     SwmpRemoteRoster remotes;
     SwmpPosition positions[SWMP_MAX_PEERS];
+    SwmpEquipment equipment[SWMP_MAX_PEERS];
     SwmpHostEnvironment environment;
     bool host;
 } SwmpM1Roster;
@@ -57,7 +58,7 @@ SwmpM1View swmp_m1_view(void);
 // Game-thread reader. No guest references or transport state cross this boundary.
 SwmpM1Roster swmp_m1_roster(void);
 void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *position,
-                           const SwmpEnvironment *environment, uint64_t now_ms);
+                           SwmpGearSet gear, const SwmpEnvironment *environment, uint64_t now_ms);
 bool swmp_m1_weather_active(void);
 // A null output checks whether the overlay needs to render.
 size_t swmp_m1_notices(SwmpNotice notices[SWMP_MAX_PEERS]);

@@ -15,7 +15,7 @@ Defined in `mods/multiplayer/protocol.h`:
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
 - `SWMP_PACKET_HEADER_SIZE = 32`
-- `SWMP_PLAYER_SNAPSHOT_SIZE = 44`
+- `SWMP_PLAYER_SNAPSHOT_SIZE = 68`
 - `SWMP_MAX_PAYLOAD_SIZE = 65536`
 
 Wire integers are big-endian/network byte order.
@@ -43,9 +43,9 @@ are rejected.
 
 | Channel | Value | Required messages |
 |---|---:|---|
-| Control | 0 | HELLO 1, WELCOME 2, REJECT 3, PEER_JOINED 4, PEER_LEFT 5, START 6, PING 7, PONG 8 |
+| Control | 0 | HELLO 1, WELCOME 2, REJECT 3, PEER_JOINED 4, PEER_LEFT 5, START 6, PING 7, PONG 8, EQUIPMENT 17 |
 | State | 1 | PLAYER_SNAPSHOT 16 |
-| Event | 2 | EQUIPMENT 17, DAMAGE_REQUEST 32, DAMAGE_APPLIED 33, ACTOR_HEALTH 34, FLAG_TRANSACTION 48, CHEST_REWARD 49, WORLD_PHASE 50, RESYNC_REQUEST 64, RESYNC_SNAPSHOT 65 |
+| Event | 2 | DAMAGE_REQUEST 32, DAMAGE_APPLIED 33, ACTOR_HEALTH 34, FLAG_TRANSACTION 48, CHEST_REWARD 49, WORLD_PHASE 50, RESYNC_REQUEST 64, RESYNC_SNAPSHOT 65 |
 
 The decoder rejects bad magic, unsupported version, unknown type/flags/channel/peer, nonzero reserved bits, oversized
 payload, wrong message channel, and packet-size mismatch. An unassigned sender is accepted only for HELLO. The
@@ -56,7 +56,7 @@ lobby currently sends and accepts control packets with zero flags.
 | Offset | Size | Field |
 |---:|---:|---|
 | 0 | 1 | peer ID |
-| 1 | 1 | grounded/gliding/crouching/guarding/dead flags |
+| 1 | 1 | grounded/gliding/crouching/guarding/dead/weapon pose/shield pose flags |
 | 2 | 2 | action ID |
 | 4 | 4 | area ID |
 | 8 | 4 | phase ID |
@@ -66,9 +66,14 @@ lobby currently sends and accepts control packets with zero flags.
 | 36 | 2 | health in quarter units |
 | 38 | 2 | stamina in quarter units |
 | 40 | 4 | equipment revision |
+| 44 | 6 | weapon X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
+| 50 | 6 | weapon pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
+| 56 | 6 | shield X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
+| 62 | 6 | shield pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 
-Equipment payloads are declared but not implemented. The revision lets a receiver request/expect a reliable equipment
-update when appearance changes.
+Each gear-pose bit requires a nonzero revision and limits each offset axis to ±3000 mm. The receiver pairs the
+pose with the reliable record for the same peer and revision. The changed snapshot layout requires matching
+multiplayer source fingerprints during admission.
 
 ## Session state
 
@@ -125,8 +130,8 @@ Native deletion finishes asynchronously, so use a rendered frame to confirm the 
 ## M2 remote Link proxy
 
 The receiver combines the admitted roster and 20 Hz position batches to drive a passive Link actor.
-The virtual RomFS builds an alias using the installed model and supplies idle, jump, walk, run and
-sprint clips from Player_Animation. The action field uses 0 through 4 in that order. Unknown action
+The virtual RomFS builds an alias using the installed model and supplies idle, jump, walk, sprint and
+run clips from Player_Animation. The action field uses 0 through 4 in that order. Unknown action
 IDs use idle. The guest thread samples local Link's native
 full-body state and selects a clip on each proxy's own animation controller while it holds the
 actor link. Playback starts on activation and on action changes. The native clock advances the
@@ -146,6 +151,28 @@ The native Move state is mapped to walk, run and sprint using horizontal speed s
 The separate native life observation reads current quarter-hearts from PlayerInfo. The window
 thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish
 it from missing health. Damage authority and death handling belong to M3.
+
+## M2.5 passive gear and expanded actions
+
+The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe in category zero
+and Wooden Shield in category one. The window thread advances the equipment revision when either identity
+changes. EQUIPMENT carries a one-byte peer, a four-byte revision, and one identity byte for each slot.
+The host accepts updates for
+the connection's own peer, relays them, and sends cached revisions after WELCOME. Identity and membership
+share the ordered control channel. Peer removal clears the cached identity and position before slot reuse.
+
+The virtual RomFS gives each gear variant a passive prop profile with dummy physics and a model list from
+installed resources. A matching gear pose and an active Link proxy let the guest thread request one visual
+actor per slot and peer. Each visual has its own native request and index, follows the sampled matrix
+relative to the Link's interpolated pose, and retires on unequip or loss of presence. A revision change
+only replaces the visuals whose identities changed. Sampling uses read-only access to local equipment.
+
+Landing uses action ID 5. IDs 6 through 9 select axe draw, first swing, finishing swing and spin clips
+when the native full-body state matches and the local player has the supported axe equipped. IDs 10 and
+11 add the drawn idle and stow clips. Idle selection uses the axe's measured hand-height band during
+native Wait and WaitAttention. IDs 12 and 13 add crouch idle and movement. ID 14 selects shield guard
+when the native WaitAttention state accompanies a forward shield pose. The receiver starts a clip when
+the action changes. Exact clip progress, blends and repeated activations of the same state are still open.
 
 ## M2 multiplayer release version
 
