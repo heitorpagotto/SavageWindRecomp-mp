@@ -10,12 +10,12 @@ require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 Defined in `mods/multiplayer/protocol.h`:
 
-- `SWMP_PROTOCOL_VERSION = 1`
+- `SWMP_PROTOCOL_VERSION = 2`
 - `SWMP_MAX_PEERS = 8`
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
 - `SWMP_PACKET_HEADER_SIZE = 32`
-- `SWMP_PLAYER_SNAPSHOT_SIZE = 68`
+- `SWMP_PLAYER_SNAPSHOT_SIZE = 96`
 - `SWMP_MAX_PAYLOAD_SIZE = 65536`
 
 Wire integers are big-endian/network byte order.
@@ -56,7 +56,7 @@ lobby currently sends and accepts control packets with zero flags.
 | Offset | Size | Field |
 |---:|---:|---|
 | 0 | 1 | peer ID |
-| 1 | 1 | grounded/gliding/crouching/guarding/dead/weapon pose/shield pose flags |
+| 1 | 1 | grounded/gliding/crouching/guarding/dead/weapon pose/shield pose/bow pose flags |
 | 2 | 2 | action ID |
 | 4 | 4 | area ID |
 | 8 | 4 | phase ID |
@@ -70,10 +70,17 @@ lobby currently sends and accepts control packets with zero flags.
 | 50 | 6 | weapon pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 | 56 | 6 | shield X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
 | 62 | 6 | shield pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
+| 68 | 6 | bow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
+| 74 | 6 | bow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
+| 80 | 1 | nocked arrow identity, zero for absent or one for Normal Arrow |
+| 81 | 3 | reserved, must be zero |
+| 84 | 6 | nocked arrow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
+| 90 | 6 | nocked arrow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 
 Each gear-pose bit requires a nonzero revision and limits each offset axis to ±3000 mm. The receiver pairs the
-pose with the reliable record for the same peer and revision. The changed snapshot layout requires matching
-multiplayer source fingerprints during admission.
+pose with the reliable record for the same peer and revision. The nocked arrow requires a bow pose and shares
+the offset bound. Its presence travels in each snapshot. The direct invite text format is independent of
+the packet version. Lobby traffic uses protocol 2 and admission requires matching source fingerprints.
 
 ## Session state
 
@@ -154,11 +161,12 @@ it from missing health. Damage authority and death handling belong to M3.
 
 ## M2.5 passive gear and expanded actions
 
-The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe in category zero
-and Wooden Shield in category one. The window thread advances the equipment revision when either identity
-changes. EQUIPMENT carries a one-byte peer, a four-byte revision, and one identity byte for each slot.
-The host accepts updates for
-the connection's own peer, relays them, and sends cached revisions after WELCOME. Identity and membership
+The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe and Traveler's
+Sword, Spear and Claymore in category zero, Wooden and Soldier's Shields in category one, and
+Traveler's and Soldier's Bows in category two. The window thread advances the equipment
+revision when any identity changes. EQUIPMENT carries a one-byte peer, a four-byte revision, and three
+identity bytes in weapon, shield and bow order. The host accepts updates for the connection's own peer,
+relays them, and sends cached revisions after WELCOME. Identity and membership
 share the ordered control channel. Peer removal clears the cached identity and position before slot reuse.
 
 The virtual RomFS gives each gear variant a passive prop profile with dummy physics and a model list from
@@ -167,12 +175,70 @@ actor per slot and peer. Each visual has its own native request and index, follo
 relative to the Link's interpolated pose, and retires on unequip or loss of presence. A revision change
 only replaces the visuals whose identities changed. Sampling uses read-only access to local equipment.
 
-Landing uses action ID 5. IDs 6 through 9 select axe draw, first swing, finishing swing and spin clips
-when the native full-body state matches and the local player has the supported axe equipped. IDs 10 and
-11 add the drawn idle and stow clips. Idle selection uses the axe's measured hand-height band during
-native Wait and WaitAttention. IDs 12 and 13 add crouch idle and movement. ID 14 selects shield guard
-when the native WaitAttention state accompanies a forward shield pose. The receiver starts a clip when
-the action changes. Exact clip progress, blends and repeated activations of the same state are still open.
+Landing uses action ID 5. IDs 6–11 select large-sword draw, first swing, finishing swing, spin, drawn idle
+and stow for the axe and claymore. IDs 49–69 add the sword and spear actions and the charge follow-ups
+for all three families. Native CutS3 and CutS4 reuse the same spear clip as CutS2, with separate action
+IDs to start each thrust independently. The measured hand-height band for each supported weapon detects
+drawn idle and gates the shared WeaponEquipOn state. The receiver plays a representative clip for
+each native action. IDs 12 and 13 add
+crouch idle and movement. ID 14 selects shield guard when the native WaitAttention state accompanies
+a forward shield pose. IDs 15–17 use the local upper-body state at layer 1, slot 1 to select reload,
+aim and release for both bows. IDs 70–72 map native parry, guard hit and guard break when a supported
+shield is equipped. Native shield destruction can precede GuardBreak by an update. The sender
+uses shield presence in the previous two snapshot intervals to identify the start of the reaction,
+keeps the action for the duration of GuardBreak, and publishes shield removal normally.
+IDs 73 and 74 cover grounded bow draw and stow. The sender uses the bow's position beside Link
+to distinguish the shared WeaponEquipOn state and the stow transition through WaitAttentionUpper.
+ID 75 selects the held-bow idle when the bow sits low and in front of Link in WaitAttentionUpper.
+During BowReload or BowAim, the 1.9.0 sender reads the attached NormalArrow actor from the
+equipped bow and samples its matrix in the same yaw-relative format as gear. The passive arrow
+alias uses the installed TitleBG pack member. Each peer has a separate indexed arrow visual
+that follows the current bow revision during reload or aim and retires when that state ends.
+The receiver plays one clip per action change. Standing ShieldGuard transitions to and from Idle
+or SwordReady blend over four native animation frames. The first playback float controls the
+blend, and the second controls the starting phase. Parry and hit reactions use the engine default.
+Exact clip
+progress, blends and repeated activations of the same state remain open.
+
+Action IDs 18–23 select treading water, forward swimming, swim dash, hanging on a wall, climbing
+and climbing jumps from the native full-body states. During native ClimbMove, the sender projects
+the sampled displacement onto the wall plane in Link's yaw frame. The nearest of eight directions
+selects the movement clip. ID 22 is the upward clip and IDs 24–30 cover the other seven directions.
+IDs 31 and 32 cover the wall approach and pulling over a ledge. ID 23 remains the upward climbing
+jump. IDs 36–39 add right, up-right, up-left and left. During native ClimbJump, the sender waits
+for at least 6 cm of displacement in the wall plane or falls back to the upward clip after about
+100 ms. It keeps the selected action for that jump so turning, release and landing motion do
+not restart the clip. The new action values fit in the existing snapshot.
+Applying the standalone swim clips at the sampled root left the model submerged. The receiver lifts
+the Link model for all swim clips while gear and range continue to use the sampled root.
+
+Native SwimMove blends straight and turning strokes at different speeds. ID 19 remains the slow
+straight stroke. IDs 40–44 add the fast straight stroke, slow left and right curves, and fast left
+and right curves. The sender measures planar speed and wrapped heading change over about 100 ms.
+It enters the fast tier at 1.30 m/s and leaves it below 1.15 m/s. Turns enter at 30 degrees/s and
+leave below 16 degrees/s in the current direction. Native SwimWait and SwimDash retain their
+dedicated clips. The receiver uses one representative clip per action and the same 1.65 m model
+lift for every swim action.
+
+Native SwimAtnMove covers movement while targeting. IDs 45–48 select forward, back, left and
+right from the swim lock-on clips. The sender projects recent planar displacement onto Link's
+current forward and right axes, then selects the dominant axis and current sign. It keeps the
+previous axis near diagonals. Stationary swimmers and rejected motion samples use SwimWait.
+These actions share the existing snapshot and waterline lift.
+
+Action IDs 33–35 select paraglider deployment, neutral glide and falling. The existing gliding flag
+is set only during native ParashawlGlide. The receiver requires this flag and the glide action to
+request a separate canopy visual, so the equipment revision and wire layout stay unchanged.
+The virtual actor pack reuses the installed canopy model and its Open animation. The receiver
+retires that actor when flight ends or when the remote Link retires.
+
+During flight, the sender estimates bank from the change in Link's native root heading over
+at least one snapshot interval. The native root stays upright. The estimate wraps heading at
+the signed turn boundary, rejects stale or discontinuous motion, and is bounded to 18 degrees.
+It travels in the existing snapshot roll field. The receiver uses roll during active gliding only
+and interpolates it with the root pose. Link keeps the neutral flight clip. The canopy shares
+Link's yaw and roll and sits 2 m along the tilted local up axis. Rigid equipment keeps its own
+native pose in Link's yaw frame.
 
 ## M2 multiplayer release version
 

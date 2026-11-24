@@ -12,14 +12,26 @@ static const char template_actor[] = "Obj_RockGray_A_M_01";
 static const char model_archive[] = "Obj_RockGray_A";
 static const char link_model[] = "Link";
 
-#define GEAR(slot, model, actor, label) {slot, model, actor, label, \
-    "Actor/Pack/" model ".sbactorpack", "Actor/Pack/" actor ".sbactorpack", \
-    "Actor/ActorLink/" actor ".bxml", "Actor/ModelList/" model ".bmodellist"}
-const SwmpGearAsset swmp_gear_assets[SWMP_GEAR_COUNT] = {
+#define VISUAL(slot, source, model, actor, label, bundle) {slot, model, actor, label, \
+    "Actor/Pack/" source ".sbactorpack", bundle, "Actor/Pack/" actor ".sbactorpack", \
+    "Actor/ActorLink/" actor ".bxml", source, "Actor/ModelList/" source ".bmodellist"}
+#define GEAR(slot, model, actor, label) VISUAL(slot, model, model, actor, label, NULL)
+const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
     [SWMP_GEAR_WOODCUTTERS_AXE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_032", "SwmpRemoteAxe", "axe"),
     [SWMP_GEAR_WOODEN_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_001", "SwmpRemoteShield", "shield"),
+    [SWMP_GEAR_TRAVELERS_BOW] = GEAR(SWMP_GEAR_BOW, "Weapon_Bow_001", "SwmpRemoteBow", "bow"),
+    [SWMP_GEAR_TRAVELERS_SWORD] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Sword_001", "SwmpRemoteSword", "sword"),
+    [SWMP_GEAR_TRAVELERS_SPEAR] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Spear_001", "SwmpRemoteSpear", "spear"),
+    [SWMP_GEAR_TRAVELERS_CLAYMORE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_001", "SwmpRemoteClaymore", "claymore"),
+    [SWMP_GEAR_SOLDIERS_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_002", "SwmpRemoteSoldierShield", "soldier shield"),
+    [SWMP_GEAR_SOLDIERS_BOW] = GEAR(SWMP_GEAR_BOW, "Weapon_Bow_002", "SwmpRemoteSoldierBow", "soldier bow"),
+    [SWMP_PARAGLIDER_ASSET] = VISUAL(SWMP_PARAGLIDER_SLOT, "PlayerStole2", "Item_Parastole2",
+                                    "SwmpRemoteGlider", "glider", "Pack/TitleBG.pack"),
+    [SWMP_NOCKED_ARROW_ASSET] = VISUAL(SWMP_NOCKED_ARROW_SLOT, "NormalArrow", "Weapon_Arrow_001",
+                                       "SwmpRemoteArrow", "nocked arrow", "Pack/TitleBG.pack"),
 };
 #undef GEAR
+#undef VISUAL
 
 static uint32_t read32(const uint8_t *at) {
     uint32_t value;
@@ -221,7 +233,7 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_ma
         free(b.data);
         return NULL;
     }
-    for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+    for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
         if (!(gear_mask & (1u << i))) continue;
         b.original_size = b.length;
         const SwmpGearAsset *gear = &swmp_gear_assets[i];
@@ -319,29 +331,100 @@ static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
     return found;
 }
 
+typedef enum {
+    PROXY_GEAR_NONE,
+    PROXY_GEAR_LSWORD,
+    PROXY_GEAR_SWORD,
+    PROXY_GEAR_SPEAR,
+    PROXY_GEAR_BOW,
+    PROXY_GEAR_SHIELD,
+} ProxyGear;
+
 typedef struct {
     const char *state, *file, *path, *clip, *native;
-    SwmpGear gear;
+    ProxyGear gear;
 } ProxyAction;
 
 // Only references to installed clips go into the alias.
 #define ACTION(state, clip, native, gear) {#state, "SwmpProxy" #state, "Actor/AS/SwmpProxy" #state ".bas", clip, native, gear}
 static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
-    [SWMP_PROXY_IDLE] = ACTION(Idle, "Nml_Wait", NULL, SWMP_GEAR_NONE),
-    [SWMP_PROXY_JUMP] = ACTION(Jump, "Nml_Wait_Jump", "Jump", SWMP_GEAR_NONE),
-    [SWMP_PROXY_WALK] = ACTION(Walk, "Nml_Move_Walk", "Move", SWMP_GEAR_NONE),
-    [SWMP_PROXY_DASH] = ACTION(Dash, "Nml_Move_Dash", "Dash", SWMP_GEAR_NONE),
-    [SWMP_PROXY_RUN] = ACTION(Run, "Nml_Move_Run", NULL, SWMP_GEAR_NONE),
-    [SWMP_PROXY_LAND] = ACTION(Land, "Nml_Wait_Land", "Land", SWMP_GEAR_NONE),
-    [SWMP_PROXY_AXE_DRAW] = ACTION(AxeDraw, "Equip_Lsword_On_Natural", "WeaponEquipOn", SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_AXE_SWING] = ACTION(AxeSwing, "Lsword_Attack_S1", "CutS1", SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_AXE_FINISH] = ACTION(AxeFinish, "Lsword_Attack_SF", "CutSF", SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_AXE_SPIN] = ACTION(AxeSpin, "Lsword_Attack_Charge", "CutChargeLswordSpin", SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_AXE_READY] = ACTION(AxeReady, "A_Pose_Lsword_Wait", NULL, SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_AXE_STOW] = ACTION(AxeStow, "Equip_Lsword_Off_Natural", "WeaponEquipOff", SWMP_GEAR_WOODCUTTERS_AXE),
-    [SWMP_PROXY_CROUCH_IDLE] = ACTION(CrouchIdle, "Squat_Wait_FootL", "SquatWait", SWMP_GEAR_NONE),
-    [SWMP_PROXY_CROUCH_MOVE] = ACTION(CrouchMove, "Squat_Move_Walk", "SquatMove", SWMP_GEAR_NONE),
-    [SWMP_PROXY_SHIELD_GUARD] = ACTION(ShieldGuard, "Shield_Guard_Wait", NULL, SWMP_GEAR_NONE),
+    [SWMP_PROXY_IDLE] = ACTION(Idle, "Nml_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_JUMP] = ACTION(Jump, "Nml_Wait_Jump", "Jump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_WALK] = ACTION(Walk, "Nml_Move_Walk", "Move", PROXY_GEAR_NONE),
+    [SWMP_PROXY_DASH] = ACTION(Dash, "Nml_Move_Dash", "Dash", PROXY_GEAR_NONE),
+    [SWMP_PROXY_RUN] = ACTION(Run, "Nml_Move_Run", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LAND] = ACTION(Land, "Nml_Wait_Land", "Land", PROXY_GEAR_NONE),
+    [SWMP_PROXY_AXE_DRAW] = ACTION(AxeDraw, "Equip_Lsword_On_Natural", "WeaponEquipOn", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_SWING] = ACTION(AxeSwing, "Lsword_Attack_S1", "CutS1", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_FINISH] = ACTION(AxeFinish, "Lsword_Attack_SF", "CutSF", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_SPIN] = ACTION(AxeSpin, "Lsword_Attack_Charge", "CutCharge", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_READY] = ACTION(AxeReady, "A_Pose_Lsword_Wait", NULL, PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_STOW] = ACTION(AxeStow, "Equip_Lsword_Off_Natural", "WeaponEquipOff", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_CROUCH_IDLE] = ACTION(CrouchIdle, "Squat_Wait_FootL", "SquatWait", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CROUCH_MOVE] = ACTION(CrouchMove, "Squat_Move_Walk", "SquatMove", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_GUARD] = ACTION(ShieldGuard, "Shield_Guard_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_BOW_RELOAD] = ACTION(BowReload, "Bow_Attack_Load", "BowReload", PROXY_GEAR_BOW),
+    [SWMP_PROXY_BOW_AIM] = ACTION(BowAim, "Bow_Attack_Charge", "BowCharge", PROXY_GEAR_BOW),
+    [SWMP_PROXY_BOW_SHOOT] = ACTION(BowShoot, "Bow_Attack_Shoot", "BowShoot", PROXY_GEAR_BOW),
+    [SWMP_PROXY_SWIM_WAIT] = ACTION(SwimWait, "Swim_Wait", "SwimWait", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_MOVE] = ACTION(SwimMove, "Swim_Move_Slow_F", "SwimMove", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_DASH] = ACTION(SwimDash, "Swim_Move_Dash", "SwimDash", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_WAIT] = ACTION(ClimbWait, "Climb_Wall_Wait_FootL", "ClimbWait", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_MOVE] = ACTION(ClimbMove, "Climb_Wall_Move_U", "ClimbMove", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_JUMP] = ACTION(ClimbJump, "Climb_Wall_Jump_U_FootL", "ClimbJump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_RIGHT] = ACTION(ClimbRight, "Climb_Wall_Move_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_UP_RIGHT] = ACTION(ClimbUpRight, "Climb_Wall_Move_UR", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_UP_LEFT] = ACTION(ClimbUpLeft, "Climb_Wall_Move_UL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_LEFT] = ACTION(ClimbLeft, "Climb_Wall_Move_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_DOWN_LEFT] = ACTION(ClimbDownLeft, "Climb_Wall_Move_DL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_DOWN] = ACTION(ClimbDown, "Climb_Wall_Move_D", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_DOWN_RIGHT] = ACTION(ClimbDownRight, "Climb_Wall_Move_DR", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_ENTER] = ACTION(ClimbEnter, "Wall_Dash_FootL", "WallDash", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_MANTLE] = ACTION(ClimbMantle, "Climb_Wall_Ed_Edge_L", "ClimbEd", PROXY_GEAR_NONE),
+    [SWMP_PROXY_GLIDE_DEPLOY] = ACTION(GlideDeploy, "Equip_Float_On_Fall", "ParaEquipOn", PROXY_GEAR_NONE),
+    [SWMP_PROXY_GLIDE] = ACTION(Glide, "Float_Float", "ParashawlGlide", PROXY_GEAR_NONE),
+    [SWMP_PROXY_FALL] = ACTION(Fall, "Fall", "Fall", PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_JUMP_RIGHT] = ACTION(ClimbJumpRight, "Climb_Wall_Jump_R_FootR", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_JUMP_UP_RIGHT] = ACTION(ClimbJumpUpRight, "Climb_Wall_Jump_UR_FootL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_JUMP_UP_LEFT] = ACTION(ClimbJumpUpLeft, "Climb_Wall_Jump_UL_FootL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_JUMP_LEFT] = ACTION(ClimbJumpLeft, "Climb_Wall_Jump_L_FootL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_FAST] = ACTION(SwimFast, "Swim_Move_Fast_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_SLOW_LEFT] = ACTION(SwimSlowLeft, "Swim_Move_Slow_F_Curve_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_SLOW_RIGHT] = ACTION(SwimSlowRight, "Swim_Move_Slow_F_Curve_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_FAST_LEFT] = ACTION(SwimFastLeft, "Swim_Move_Fast_F_Curve_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_FAST_RIGHT] = ACTION(SwimFastRight, "Swim_Move_Fast_F_Curve_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_LOCK_FORWARD] = ACTION(SwimLockForward, "Swim_Lockon_Move_F", "SwimAtnMove", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_LOCK_BACK] = ACTION(SwimLockBack, "Swim_Lockon_Move_B", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_LOCK_LEFT] = ACTION(SwimLockLeft, "Swim_Lockon_Move_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_LOCK_RIGHT] = ACTION(SwimLockRight, "Swim_Lockon_Move_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_DRAW] = ACTION(SwordDraw, "Equip_Sword_On_Natural", "WeaponEquipOn", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_READY] = ACTION(SwordReady, "A_Pose_Sword_Wait", NULL, PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_STOW] = ACTION(SwordStow, "Equip_Sword_Off_Natural", "WeaponEquipOff", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_SWING] = ACTION(SwordSwing, "Sword_Attack_S1", "CutS1", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_CHAIN_2] = ACTION(SwordChain2, "Sword_Attack_S2", "CutS2", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_CHAIN_3] = ACTION(SwordChain3, "Sword_Attack_S3", "CutS3", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_FINISH] = ACTION(SwordFinish, "Sword_Attack_SF", "CutSF", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SPEAR_DRAW] = ACTION(SpearDraw, "Equip_Spear_On_Natural", "WeaponEquipOn", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_READY] = ACTION(SpearReady, "A_Pose_Spear_Wait", NULL, PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_STOW] = ACTION(SpearStow, "Equip_Spear_Off_Natural", "WeaponEquipOff", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_THRUST] = ACTION(SpearThrust, "Spear_Attack_S1", "CutS1", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_CHAIN_2] = ACTION(SpearChain2, "Spear_Attack_S2", "CutS2", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_FINISH] = ACTION(SpearFinish, "Spear_Attack_SF", "CutSF", PROXY_GEAR_SPEAR),
+    // The native spear combo reuses the same clip for three separately activated thrusts.
+    [SWMP_PROXY_SPEAR_CHAIN_3] = ACTION(SpearChain3, "Spear_Attack_S2", "CutS3", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_CHAIN_4] = ACTION(SpearChain4, "Spear_Attack_S2", "CutS4", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_AXE_CHARGE_READY] = ACTION(AxeChargeReady, "Lsword_Charge_Wait", "CutChargeLswordSpin", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_SWORD_CHARGE_READY] = ACTION(SwordChargeReady, "Sword_Charge_Wait", "CutChargeWait", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_CHARGE] = ACTION(SwordCharge, "Sword_Attack_Charge", "CutCharge", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SPEAR_CHARGE_READY] = ACTION(SpearChargeReady, "Spear_Charge_Wait", "CutChargeWait", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_CHARGE] = ACTION(SpearCharge, "Spear_Attack_Charge_Rush", "CutCharge", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_CHARGE_FINISH] = ACTION(SpearChargeFinish, "Spear_Attack_SF", "CutChargeF", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SHIELD_PARRY] = ACTION(ShieldParry, "Shield_Guard_Just", "GuardJust", PROXY_GEAR_SHIELD),
+    [SWMP_PROXY_SHIELD_HIT] = ACTION(ShieldHit, "Shield_Guard_Hit", "GuardFailHit", PROXY_GEAR_SHIELD),
+    [SWMP_PROXY_SHIELD_BREAK] = ACTION(ShieldBreak, "Shield_Guard_Break", "GuardBreak", PROXY_GEAR_SHIELD),
+    [SWMP_PROXY_BOW_DRAW] = ACTION(BowDraw, "Equip_Bow_On_Natural", NULL, PROXY_GEAR_BOW),
+    [SWMP_PROXY_BOW_STOW] = ACTION(BowStow, "Equip_Bow_Off_Natural", NULL, PROXY_GEAR_BOW),
+    [SWMP_PROXY_BOW_READY] = ACTION(BowReady, "Bow_Lockon_Wait", NULL, PROXY_GEAR_BOW),
 };
 #undef ACTION
 
@@ -349,15 +432,56 @@ const char *swmp_proxy_action_name(SwmpProxyAction action) {
     return proxy_actions[(unsigned)action < SWMP_PROXY_ACTION_COUNT ? action : SWMP_PROXY_IDLE].state;
 }
 
-SwmpProxyAction swmp_proxy_sample_action(const char *state, SwmpGear weapon, bool drawn, bool shield_raised) {
-    if (shield_raised && !strcmp(state, "WaitAttention")) return SWMP_PROXY_SHIELD_GUARD;
-    if (weapon == SWMP_GEAR_WOODCUTTERS_AXE && drawn &&
-        (!strcmp(state, "Wait") || !strcmp(state, "WaitAttention"))) return SWMP_PROXY_AXE_READY;
+typedef struct {
+    ProxyGear family;
+    SwmpProxyAction ready;
+    int min_hand_y, max_hand_y;
+} WeaponAnimation;
+
+static const WeaponAnimation weapon_animations[SWMP_GEAR_COUNT] = {
+    [SWMP_GEAR_WOODCUTTERS_AXE] = {PROXY_GEAR_LSWORD, SWMP_PROXY_AXE_READY, 550, 1050},
+    [SWMP_GEAR_TRAVELERS_CLAYMORE] = {PROXY_GEAR_LSWORD, SWMP_PROXY_AXE_READY, 550, 1050},
+    [SWMP_GEAR_TRAVELERS_SWORD] = {PROXY_GEAR_SWORD, SWMP_PROXY_SWORD_READY, 550, 1050},
+    // The spear hangs lower than the other weapons even when drawn.
+    [SWMP_GEAR_TRAVELERS_SPEAR] = {PROXY_GEAR_SPEAR, SWMP_PROXY_SPEAR_READY, 525, 950},
+};
+
+SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, SwmpGearSet gear,
+                                         const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
+                                         bool shield_raised) {
+    if (!strcmp(state, "WallDashSt")) return SWMP_PROXY_CLIMB_ENTER;
+    unsigned id = gear.id[SWMP_GEAR_WEAPON];
+    const WeaponAnimation *weapon = &weapon_animations[id < SWMP_GEAR_COUNT ? id : SWMP_GEAR_NONE];
+    // The attachment height disambiguates native Wait and filters WeaponEquipOn for a bow draw.
+    bool weapon_drawn = weapon_pose && weapon->family &&
+        weapon_pose->offset_mm[1] >= weapon->min_hand_y && weapon_pose->offset_mm[1] <= weapon->max_hand_y;
+    bool drawing = !strcmp(state, "WeaponEquipOn");
+    bool attention = !strcmp(state, "WaitAttention");
+    if (gear.id[SWMP_GEAR_BOW] && bow_pose) {
+        const int16_t *bow = bow_pose->offset_mm;
+        // The bow passes Link's left side on its way between the back and aiming pose.
+        bool at_side = bow[0] >= 150 && bow[1] <= 1000;
+        if (drawing && at_side) return SWMP_PROXY_BOW_DRAW;
+        if (attention && !strcmp(upper, "WaitAttentionUpper")) {
+            if (at_side) return SWMP_PROXY_BOW_STOW;
+            // After release, WaitAttentionUpper holds the bow low and in front of Link.
+            if (bow[1] >= 500 && bow[1] <= 900 && bow[2] >= 225) return SWMP_PROXY_BOW_READY;
+        }
+    }
     for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
         const ProxyAction *action = &proxy_actions[i];
-        if (action->native && (!action->gear || action->gear == weapon) && !strcmp(state, action->native))
-            return (SwmpProxyAction)i;
+        if (!action->native) continue;
+        const char *name = state;
+        if (action->gear == PROXY_GEAR_BOW) {
+            if (!gear.id[SWMP_GEAR_BOW]) continue;
+            name = upper;
+        } else if (action->gear == PROXY_GEAR_SHIELD) {
+            if (!gear.id[SWMP_GEAR_SHIELD]) continue;
+        } else if (action->gear && (action->gear != weapon->family || (drawing && !weapon_drawn))) continue;
+        if (!strcmp(name, action->native)) return (SwmpProxyAction)i;
     }
+    if (shield_raised && attention) return SWMP_PROXY_SHIELD_GUARD;
+    if (weapon_drawn && (attention || !strcmp(state, "Wait"))) return weapon->ready;
     return SWMP_PROXY_IDLE;
 }
 
@@ -511,16 +635,32 @@ uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t s
     uint8_t *model = gear ? yaz0_unpack(gear, gear_size, &gn) : NULL;
     uint8_t *out = NULL;
     uint32_t data, ls, le, model_data, ms, me;
-    // Use only the rigid model list from the weapon pack. The prop profile and dummy physics
-    // keep this visual out of native pickup, inventory and weapon hit processing.
+    // Keep the prop profile and dummy physics so the visual stays out of pickup, inventory and hit processing.
     if (raw && model && sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
         sarc_find(model, gn, asset->model_list, &model_data, &ms, &me) >= 0) {
         size_t link_size;
-        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", asset->model, &link_size);
+        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", asset->model_user, &link_size);
         if (link) {
-            PackFile files[] = {{asset->actor_link, link, link_size},
-                                {asset->model_list, model + model_data + ms, me - ms}};
-            out = pack_files(files, sizeof files / sizeof files[0], out_size);
+            PackFile files[4] = {{asset->actor_link, link, link_size},
+                                 {asset->model_list, model + model_data + ms, me - ms}};
+            unsigned count = 2;
+            if (asset == &swmp_gear_assets[SWMP_PARAGLIDER_ASSET]) {
+                static const char list[] = "Actor/ASList/PlayerStole.baslist";
+                static const char clip[] = "Actor/AS/PlayerStole_Open.bas";
+                uint32_t as, ae, cs, ce;
+                uint8_t *animated = NULL;
+                if (sarc_find(model, gn, list, &model_data, &as, &ae) >= 0 &&
+                    sarc_find(model, gn, clip, &model_data, &cs, &ce) >= 0) {
+                    animated = proxy_actor_link(link, link_size, "ASUser", asset->actor, &link_size);
+                    files[0] = (PackFile){asset->actor_link, animated, link_size};
+                    files[2] = (PackFile){"Actor/ASList/SwmpRemoteGlider.baslist", model + model_data + as, ae - as};
+                    files[3] = (PackFile){clip, model + model_data + cs, ce - cs};
+                    count = 4;
+                }
+                free(link);
+                link = animated;
+            }
+            if (link) out = pack_files(files, count, out_size);
             free(link);
         }
     }

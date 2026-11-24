@@ -139,20 +139,49 @@ const char *swmp_packet_error_string(SwmpPacketError error) {
 }
 
 bool swmp_gear_set_valid(SwmpGearSet gear) {
-    return (!gear.id[SWMP_GEAR_WEAPON] || gear.id[SWMP_GEAR_WEAPON] == SWMP_GEAR_WOODCUTTERS_AXE) &&
-           (!gear.id[SWMP_GEAR_SHIELD] || gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_WOODEN_SHIELD);
+    uint8_t weapon = gear.id[SWMP_GEAR_WEAPON];
+    return (weapon == SWMP_GEAR_NONE || weapon == SWMP_GEAR_WOODCUTTERS_AXE ||
+            weapon == SWMP_GEAR_TRAVELERS_SWORD || weapon == SWMP_GEAR_TRAVELERS_SPEAR ||
+            weapon == SWMP_GEAR_TRAVELERS_CLAYMORE) &&
+           (!gear.id[SWMP_GEAR_SHIELD] || gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_WOODEN_SHIELD ||
+            gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_SOLDIERS_SHIELD) &&
+           (!gear.id[SWMP_GEAR_BOW] || gear.id[SWMP_GEAR_BOW] == SWMP_GEAR_TRAVELERS_BOW ||
+            gear.id[SWMP_GEAR_BOW] == SWMP_GEAR_SOLDIERS_BOW);
+}
+
+enum {
+    GEAR_POSE_SIZE = 12,
+    GEAR_POSES_AT = 44,
+    NOCKED_ARROW_AT = GEAR_POSES_AT + GEAR_POSE_SIZE * SWMP_GEAR_SLOTS,
+    ARROW_POSE_AT = NOCKED_ARROW_AT + 4,
+};
+
+static bool pose_offset_valid(const SwmpGearPose *pose) {
+    for (unsigned i = 0; i < 3; i++) {
+        int offset = pose->offset_mm[i];
+        if (offset < -SWMP_GEAR_OFFSET_LIMIT_MM || offset > SWMP_GEAR_OFFSET_LIMIT_MM) return false;
+    }
+    return true;
 }
 
 static bool gear_pose_valid(const SwmpPlayerSnapshot *s) {
     for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
         if (!(s->flags & swmp_gear_pose_flag(slot))) continue;
-        if (!s->equipment_revision) return false;
-        for (unsigned i = 0; i < 3; i++) {
-            int offset = s->gear_pose[slot].offset_mm[i];
-            if (offset < -SWMP_GEAR_OFFSET_LIMIT_MM || offset > SWMP_GEAR_OFFSET_LIMIT_MM) return false;
-        }
+        if (!s->equipment_revision || !pose_offset_valid(&s->gear_pose[slot])) return false;
     }
-    return true;
+    return s->nocked_arrow == SWMP_ARROW_NONE ||
+           (s->nocked_arrow == SWMP_ARROW_NORMAL && (s->flags & SWMP_PLAYER_BOW_POSE) &&
+            pose_offset_valid(&s->arrow_pose));
+}
+
+static void put_gear_pose(uint8_t *data, const SwmpGearPose *pose) {
+    for (unsigned i = 0; i < 3; i++) put16(data + 2 * i, (uint16_t)pose->offset_mm[i]);
+    for (unsigned i = 0; i < 3; i++) put16(data + 6 + 2 * i, (uint16_t)pose->rotation[i]);
+}
+
+static void get_gear_pose(SwmpGearPose *pose, const uint8_t *data) {
+    for (unsigned i = 0; i < 3; i++) pose->offset_mm[i] = (int16_t)get16(data + 2 * i);
+    for (unsigned i = 0; i < 3; i++) pose->rotation[i] = (int16_t)get16(data + 6 + 2 * i);
 }
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *s) {
@@ -169,20 +198,19 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     put16(out + 36, s->health_q4);
     put16(out + 38, s->stamina_q4);
     put32(out + 40, s->equipment_revision);
-    memset(out + 44, 0, 12 * SWMP_GEAR_SLOTS);
-    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
-        if (!(s->flags & swmp_gear_pose_flag(slot))) continue;
-        uint8_t *data = out + 44 + 12 * slot;
-        const SwmpGearPose *pose = &s->gear_pose[slot];
-        for (unsigned i = 0; i < 3; i++) put16(data + 2 * i, (uint16_t)pose->offset_mm[i]);
-        for (unsigned i = 0; i < 3; i++) put16(data + 6 + 2 * i, (uint16_t)pose->rotation[i]);
-    }
+    memset(out + GEAR_POSES_AT, 0, SWMP_PLAYER_SNAPSHOT_SIZE - GEAR_POSES_AT);
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++)
+        if (s->flags & swmp_gear_pose_flag(slot))
+            put_gear_pose(out + GEAR_POSES_AT + GEAR_POSE_SIZE * slot, &s->gear_pose[slot]);
+    out[NOCKED_ARROW_AT] = s->nocked_arrow;
+    if (s->nocked_arrow) put_gear_pose(out + ARROW_POSE_AT, &s->arrow_pose);
     return true;
 }
 
 bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
                                  const uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE]) {
-    if (!s || !data || data[0] >= SWMP_MAX_PEERS || (data[1] & ~SWMP_PLAYER_STATE_KNOWN)) return false;
+    if (!s || !data || data[0] >= SWMP_MAX_PEERS || (data[1] & ~SWMP_PLAYER_STATE_KNOWN) ||
+        data[NOCKED_ARROW_AT + 1] || data[NOCKED_ARROW_AT + 2] || data[NOCKED_ARROW_AT + 3]) return false;
     SwmpPlayerSnapshot decoded = {
         .peer_id = data[0],
         .flags = data[1],
@@ -192,16 +220,15 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .health_q4 = get16(data + 36),
         .stamina_q4 = get16(data + 38),
         .equipment_revision = get32(data + 40),
+        .nocked_arrow = data[NOCKED_ARROW_AT],
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);
     for (int i = 0; i < 3; i++) decoded.velocity_cm_s[i] = (int16_t)get16(data + 30 + i * 2);
-    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
-        if (!(decoded.flags & swmp_gear_pose_flag(slot))) continue;
-        const uint8_t *pose = data + 44 + 12 * slot;
-        for (unsigned i = 0; i < 3; i++) decoded.gear_pose[slot].offset_mm[i] = (int16_t)get16(pose + 2 * i);
-        for (unsigned i = 0; i < 3; i++) decoded.gear_pose[slot].rotation[i] = (int16_t)get16(pose + 6 + 2 * i);
-    }
+    for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++)
+        if (decoded.flags & swmp_gear_pose_flag(slot))
+            get_gear_pose(&decoded.gear_pose[slot], data + GEAR_POSES_AT + GEAR_POSE_SIZE * slot);
+    if (decoded.nocked_arrow) get_gear_pose(&decoded.arrow_pose, data + ARROW_POSE_AT);
     if (!gear_pose_valid(&decoded)) return false;
     *s = decoded;
     return true;

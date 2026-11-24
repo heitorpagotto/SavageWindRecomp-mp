@@ -5,13 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 1u
+#define SWMP_PROTOCOL_VERSION 2u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
-#define SWMP_PLAYER_SNAPSHOT_SIZE 68u
+#define SWMP_PLAYER_SNAPSHOT_SIZE 96u
 #define SWMP_GEAR_OFFSET_LIMIT_MM 3000
 #define SWMP_ENVIRONMENT_SIZE 8u
 #define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
@@ -98,14 +98,16 @@ enum {
     SWMP_PLAYER_DEAD = 1u << 4,
     SWMP_PLAYER_WEAPON_POSE = 1u << 5,
     SWMP_PLAYER_SHIELD_POSE = 1u << 6,
+    SWMP_PLAYER_BOW_POSE = 1u << 7,
     SWMP_PLAYER_STATE_KNOWN = SWMP_PLAYER_GROUNDED | SWMP_PLAYER_GLIDING | SWMP_PLAYER_CROUCHING |
                               SWMP_PLAYER_GUARDING | SWMP_PLAYER_DEAD |
-                              SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE
+                              SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE | SWMP_PLAYER_BOW_POSE
 };
 
 typedef enum {
     SWMP_GEAR_WEAPON,
     SWMP_GEAR_SHIELD,
+    SWMP_GEAR_BOW,
     SWMP_GEAR_SLOTS
 } SwmpGearSlot;
 
@@ -113,6 +115,12 @@ typedef enum {
     SWMP_GEAR_NONE,
     SWMP_GEAR_WOODCUTTERS_AXE,
     SWMP_GEAR_WOODEN_SHIELD,
+    SWMP_GEAR_TRAVELERS_BOW,
+    SWMP_GEAR_TRAVELERS_SWORD,
+    SWMP_GEAR_TRAVELERS_SPEAR,
+    SWMP_GEAR_TRAVELERS_CLAYMORE,
+    SWMP_GEAR_SOLDIERS_SHIELD,
+    SWMP_GEAR_SOLDIERS_BOW,
     SWMP_GEAR_COUNT
 } SwmpGear;
 
@@ -129,6 +137,11 @@ typedef struct {
     int16_t offset_mm[3];  // relative to Link's yaw frame
     int16_t rotation[3];  // relative pitch, yaw, roll as signed turn fractions
 } SwmpGearPose;
+
+typedef enum {
+    SWMP_ARROW_NONE,
+    SWMP_ARROW_NORMAL,
+} SwmpArrow;
 
 static inline unsigned swmp_gear_pose_flag(SwmpGearSlot slot) {
     return SWMP_PLAYER_WEAPON_POSE << slot;
@@ -151,6 +164,8 @@ typedef struct {
     uint16_t stamina_q4;
     uint32_t equipment_revision;
     SwmpGearPose gear_pose[SWMP_GEAR_SLOTS];
+    uint8_t nocked_arrow;  // SwmpArrow, valid with a bow pose
+    SwmpGearPose arrow_pose;
 } SwmpPlayerSnapshot;
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);

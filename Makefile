@@ -200,6 +200,7 @@ LDFLAGS += $(MP_RTC_LIBS) $(MP_RNG_LIBS)
 MP_BUILD_FLAGS := -DSW_MULTIPLAYER -iquote mods/multiplayer
 $(B)/rt/main.o $(B)/rt/multiplayer_presence.o $(B)/rt/nvn/vulkan/device.o: RTFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/multiplayer_assets.o $(B)/rt/services/fs.o: RTFLAGS += $(MP_BUILD_FLAGS)
+$(B)/rt/multiplayer_assets.o $(B)/rt/multiplayer_presence.o $(B)/rt/services/fs.o: mods/multiplayer/protocol.h
 $(B)/rt/weather.o: RTFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/ui/menu.o $(B)/rt/ui/multiplayer.o $(B)/rt/ui/game_options.o: CXXFLAGS += $(MP_BUILD_FLAGS)
 $(B)/rt/ui/launcher.o: CXXFLAGS += -DSWMP_RELEASE_VERSION='"$(MP_RELEASE_VERSION)"'

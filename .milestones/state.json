@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-23T21:02:00-03:00",
+  "updated_at": "2026-11-24T09:39:28-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
-    "protocol_version": 1,
+    "protocol_version": 2,
     "target_game_version": "1.9.0",
     "max_players": 8,
     "platform_policy": "every supported Savage Wind platform",
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "a4f9c7b",
+    "workspace_base_commit": "ed1725c",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -69,7 +69,7 @@
       "name": "Time, weather, and full Link synchronization",
       "status": "in_progress",
       "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible.",
-      "implemented_slice": "Host time and weather in position batches, overlay notices for admission and disconnect, independent revisioned Woodcutter's Axe and Wooden Shield slots, and native landing, axe draw, drawn idle, stow, axe attacks, shield guard and crouch clips."
+      "implemented_slice": "Host time and weather in position batches, overlay notices for admission and disconnect, independent revisioned Woodcutter's Axe, Wooden Shield and Traveler's Bow slots, native landing, weapon and crouch clips, free and directional lock-on swimming strokes, directional wall climbing and jumps, and gliding clips with synchronized Link and canopy banking."
     },
     {
       "id": "M3",
@@ -128,12 +128,15 @@
     "stable area IDs for the main field and individual shrine scenes from RomFS stage tracking",
     "host time and weather sync with a default-on preference shared by both settings surfaces",
     "join notices shown to the host and existing clients on admission",
-    "reliable Woodcutter's Axe and Wooden Shield identities, late-join replay and bounded relative poses in transient snapshots",
-    "per-peer passive axe and shield actors with independent indexed placement and retirement",
-    "native landing, axe draw, drawn idle, stow, first swing, finishing swing, spin, shield guard and crouch proxy clips"
+    "reliable Woodcutter's Axe, Traveler's Sword, Spear and Claymore, Wooden and Soldier's Shields, and Traveler's and Soldier's Bows, with late-join replay and bounded relative poses",
+    "per-peer passive weapon, shield and bow actors with independent indexed placement and retirement",
+    "passive nocked Normal Arrow with native pose and snapshot lifetime in wire protocol 2",
+    "native landing, grounded draw, drawn idle, stow, attack chains and charge for three melee families, standing shield guard blends, parry, hit and break, crouch, and grounded bow draw, reload, aim, release, ready and stow clips",
+    "native treading, swimming, swim dash, wall hold, directional climb, wall approach, mantle and upward climbing jump proxy clips",
+    "paraglider deployment, neutral flight and fall clips with a passive canopy driven by the transient gliding flag"
   ],
   "not_implemented": [
-    "skinned appearance, other rigid equipment slots and variants",
+    "skinned appearance and other rigid equipment variants",
     "broader action mapping, exact animation timing and layered blends",
     "broader area support",
     "combat and shared enemy health",
@@ -180,7 +183,23 @@
     "m2_package_acceptance": "Windows release ZIP built with LGPL FFmpeg. Manifest and archive integrity passed, including bundled libdatachannel. Packaged imports resolved from the archive staging directory. Linux Make target reported the identical version label. Native AppImage build pending.",
     "m2_udp_impairment": "Two 30 FPS Windows games exchanged snapshots over direct WebRTC under test-only UDP loss every fifth datagram and 0?45 ms delays. They converged on position, facing and walk/jump/idle in both directions with the same actor and independently reflected a client health change 12 to 9 to 12.",
     "m25_windows_environment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e followed the host's native clear weather and a controlled rain transition. Clock progression, host and client opt-out, reconnection around midnight, and the host overlay on both admissions passed. A native shrine round trip verified clock resync without leaving the lobby. Synthetic coverage also checks notifications on existing clients.",
-    "m25_windows_equipment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e rendered passive axes and the host's shield over direct WebRTC. Native shield removal and re-equip preserved the axe actor. Shrine exit and re-entry, Leave and same-slot rejoin passed. The client selected axe idle, stow, crouch idle and crouch move. Crouch also passed at 60, 90 and 120 FPS. The guard follow-up on source ID 5b6399a29f68162f952aff5316c44ad03ed9216d selected ShieldGuard and returned to idle. Linux x86-64 cross-compilation passed. Evidence is in build/m25-shield-5ohv11y3/ and build/m25-shield-6ort3715/."
+    "m25_windows_equipment": "Two 30 FPS Windows games with 1.9.0 gamelib 13365c313591b27e rendered passive axes and the host's shield over direct WebRTC. Native shield removal and re-equip preserved the axe actor. Shrine exit and re-entry, Leave and same-slot rejoin passed. The client selected axe idle, stow, crouch idle and crouch move. Crouch also passed at 60, 90 and 120 FPS. The guard follow-up on source ID 5b6399a29f68162f952aff5316c44ad03ed9216d selected ShieldGuard and returned to idle. Linux x86-64 cross-compilation passed. Evidence is in build/m25-shield-5ohv11y3/ and build/m25-shield-6ort3715/.",
+    "m25_windows_bow": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID 670a3194f0b5a7ae7a407ddd0b9a7353f947450c rendered the host's stowed and aimed Traveler's Bow over direct WebRTC. Native removal and re-equip preserved the axe and shield. The receiving controller selected reload, aim and release at 30, 60, 90 and 120 FPS. Native shrine travel, Leave and same-slot rejoin retired and restored all three visuals. Core, direct and WebRTC tests and Linux x86-64 cross-compilation passed. Evidence is in build/m25-bow-3d8133ed/.",
+    "m25_windows_traversal": "Two Windows 1.9.0 games at 30 FPS used gamelib 13365c313591b27e and source ID b6cc1385595f980904c71878c84b5b2e44ce7bb8. The client kept one remote Link through treading, swimming, swim dash, wall hold, climb, climbing jump and return to idle near Oman Au Shrine. The swim model offset kept the proxy visible at the waterline. Windows runtime link and Linux x86-64 cross-compilation passed. Evidence is in build/m25-traversal-i9v68ip5/.",
+    "m25_windows_wall_climb": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID 2fb96f88f354fd5544af2c78f21540288cfe8f50 verified all eight climb directions, wall approach and mantle at 30 FPS. Right, left and upward movement passed at the 60, 90 and 120 FPS targets respectively, with both games measuring about 99 FPS at the highest target. Linux x86-64 cross-compilation passed. Evidence is in build/m25-traversal-97uxmfan/ and build/m25-traversal-n4gg3i19/.",
+    "m25_windows_glide": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID c4f6bceacb6af307ab84ace438d5218871469310 verified deploy, glide, fall and landing clips and a visible remote canopy at 30 FPS. Midair cancel, normal landing and Leave retired the canopy. Same-slot rejoin during flight restored it. Close capture and natural landing passed at the 60 FPS cap. Windows runtime build and Linux x86-64 cross-compilation passed. Evidence is in build/m25-traversal-7fn4xuou/, build/m25-traversal-iwc0gye7/ and build/m25-traversal-g182s5tq/.",
+    "m25_windows_climbing_jumps": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID f6877769f778e5ad6dd4d41b96751c75d6caddc8 verified all five directional jump clips once each on one remote Link at 30 FPS. Right, up-left and up passed at 60, 90 and 120 FPS caps with measured host and client rates below the higher caps. Windows runtime build, multiplayer tests and Linux x86-64 cross-compilation passed. Evidence is in build/m25-traversal-d0ac70tc/ and build/m25-traversal-u32enh6k/.",
+    "m25_windows_glide_banking": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID 495498ca1eebc9f5628d0537b71a2a21abb07c21 verified both bank directions and return to neutral at the 30 FPS cap. Right turns passed at the 60, 90 and 120 FPS caps, with measured rates below the two highest caps. Matrix traces confirmed matching Link and canopy orientation. Cancel, dry and water landing, Leave and same-slot rejoin passed. Evidence is in build/m25-traversal-9_yjcvba/, build/m25-traversal-8coyqutq/ and build/m25-traversal-o_2o73v0/.",
+    "m25_windows_swim_strokes": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID d3d88b9e192aa7046ce55f95371214d6d65bf712 verified slow and fast straight, left and right strokes at 30 FPS on one remote Link. Treading, dash and a native shore exit passed. Fast forward and return to treading passed at 60, 90 and 120 FPS caps, with about 88/92 FPS measured at the highest cap. Evidence is in build/m25-traversal-xv6ytet5/ and build/m25-traversal-dbstd7g1/. Windows runtime build, multiplayer tests and Linux x86-64 cross-compilation passed.",
+    "m25_windows_lock_on_swimming": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID c3c71f0f65dcf665b4f3ba417fd05ef3dc8ddf7f verified four lock-on strokes while holding ZL and the return to free swim on release. Selected directions passed at 60, 90 and 120 FPS caps with measured rates below the two highest caps. Evidence is in build/m25-traversal-y9scfe2u/. Windows runtime build, multiplayer tests and Linux x86-64 cross-compilation passed.",
+    "m25_windows_clip_progress_probe": "Windows 1.9.0 scratch games at 30 FPS exposed advancing and resetting jump frame counters on both native Link and the proxy. Direct writes to either counter were overwritten. The second animation play float set the starting fraction on the proxy: 0.5 began around frame 5 at normal speed, and 2.0 clamped to frame 10. Evidence is in build/m25-traversal-527z85m4/, build/m25-traversal-esf2zqlh/ and build/m25-traversal-ctb9u26x/.",
+    "m25_windows_weapon_families": "Two Windows 1.9.0 games with gamelib 13365c313591b27e and source ID d8f1cbe57e11d234264704b43eeae942dceb6140 verified passive weapon swaps and standing draw, ready, stow, chains, charge and recovery at 30 FPS. Draw and ready passed for sword at 60 FPS, spear at 90 FPS and claymore at 120 FPS. Leave and same-slot rejoin restored the current weapon. Windows build and multiplayer tests passed. Evidence is in build/m25-weapon-live-pcclk2vu/.",
+    "m25_windows_soldiers_gear": "Two Windows 1.9.0 games at 30 FPS with source ID 9a531870ff22c2770f397f07c67f6bb2bd50e259 and gamelib 13365c313591b27e verified Soldier's Shield guard, parry and release, and Soldier's Bow draw, reload, aim, release and stow. Bow remove/re-equip preserved axe and shield. Axe draw and stow with all gear equipped, Leave and same-slot rejoin passed. A separate run verified the Traveler's Sword and Soldier's Shield together through guard, parry and attacks. Grounded bow draw, aim, release and stow passed at 30, 60, 90 and 120 FPS. Evidence is in build/m25-guard-bow-4b3vfoxa/, build/m25-sword-guard-en520aka/ and build/m25-guard-bow-ffvz5v53/.",
+    "m25_windows_guard_reactions": "At 30 FPS, native GuardFailHit reached the remote Link as ShieldHit and recovered to ShieldGuard in Soh Kofi and Chaas Qeta shrines. A close-range Chaas Qeta replay with source ID e9928eba4b67d29f45947018ecbd17a57d018317 verified native GuardBreak, ShieldBreak playback and normal retirement of the Wooden Shield while the axe and Link proxy stayed active. Evidence is in build/m25-guard-encounter-tna9m6wi/, build/m25-guard-encounter-drsxy9xe/ and build/m25-guard-break-72upt2zg/.",
+    "m25_windows_bow_ready": "Two Windows 1.9.0 games in Tah Muhl Shrine with source ID e9928eba4b67d29f45947018ecbd17a57d018317 verified the Soldier's Bow held-ready animation between release and stow for at least 0.65 seconds at 30, 60, 90 and 120 measured FPS. Draw, aim, release and stow passed at each cap. Evidence is in build/m25-bow-ready-y5zwclgm/.",
+    "m25_windows_shield_blends": "Two Windows 1.9.0 games in Tah Muhl Shrine with source ID 6204b14ff79e7a921c8f3aa5cf5f2459d13405da verified four-frame blends between ShieldGuard and Idle in both directions at 30, 60, 90 and 120 FPS targets. SwordReady transitions in both directions and default parry timing passed at 30 FPS. Evidence is in build/m25-guard-transition-zrheifj4/ and build/m25-guard-blend-kpq64rvp/.",
+    "m25_windows_nocked_arrow": "Two Windows 1.9.0 games with protocol 2, source ID 3f7f9da84ecd7ba679e60c5c03469d2f71d6922a and gamelib 13365c313591b27e verified nocked Normal Arrow pose and release at 30, 60, 90 and 120 measured FPS. Cancel and same-slot rejoin while aiming passed. A 30 FPS side-view capture shows the passive arrow on the remote Soldier's Bow. Evidence is in build/m25-nocked-arrow-jq6s5_sg/ and build/m25-arrow-profile-9pfm_fb9/.",
+    "m25_windows_airborne_bow_probe": "Native Fall overlapped upper-slot BowReload, BowCharge and BowShoot during 6 m and 9 m drops. The proxy played Fall and its upper slot remained empty when explicitly asked to play BowAim alongside it. Evidence is in build/m25-guard-bow-t9gnto0b/, build/m25-guard-bow-9g15fuvx/ and build/m25-sword-guard-en520aka/."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -199,5 +218,13 @@
     "dtls_minimum": "Pinned libdatachannel configures DTLS 1.0 as its minimum; actual negotiated version remains unverified",
     "disposition": "Verify patched packages and a DTLS 1.2 minimum. Game-specific denial of service remains unverified."
   },
-  "next_recommended_work": "Validate a bow slot and broaden the verified traversal and equipment animation map. Investigate native blend and clip progress and the skinned equipment path. Native Linux and mixed-platform gameplay remain open."
+  "animation_work_order": [
+    "Weapons",
+    "Shield and bow",
+    "Traversal and reactions",
+    "Playback",
+    "Appearance"
+  ],
+  "animation_validation": "Windows validation can happen during Appearance. The owner will validate Linux manually later and report any problems.",
+  "next_recommended_work": "Continue Shield and bow with bowstring animation. The nocked Normal Arrow is verified in Windows. Airborne aim awaits layered playback. Follow the owner's animation work order in HANDOFF.md and NEXT.md."
 }

@@ -291,6 +291,7 @@ void swmp_lobby_send_state(SwmpLobby *l, const SwmpPlayerSnapshot *local,
     sample->equipment_revision = equipment->revision;
     for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++)
         if (!equipment->gear.id[slot]) sample->flags &= ~swmp_gear_pose_flag(slot);
+    if (!(sample->flags & SWMP_PLAYER_BOW_POSE)) sample->nocked_arrow = SWMP_ARROW_NONE;
 
     uint8_t data[SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE + SWMP_MAX_PEERS * SWMP_PLAYER_SNAPSHOT_SIZE];
     size_t size = 0;

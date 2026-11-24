@@ -13,6 +13,9 @@ extern "C" {
 uint8_t *yaz0_unpack(const uint8_t *d, size_t n, size_t *out_n);
 // SARC (little-endian): the node of `name` (its index; start and end in the data, which begins at *data_off), or -1
 int sarc_find(const uint8_t *d, size_t n, const char *name, uint32_t *data_off, uint32_t *start, uint32_t *end);
+// Find a member from the SARC metadata prefix without loading the archive's data section.
+int sarc_find_range(const uint8_t *d, size_t prefix_size, size_t archive_size, const char *name,
+                    uint32_t *data_off, uint32_t *start, uint32_t *end);
 // How many nodes the SARC has, or -1 if it isn't a (little-endian) one
 int sarc_count(const uint8_t *d, size_t n);
 // Node i: its name without a leading '/' (NULL when the archive keeps only the name's hash) and its data inside d

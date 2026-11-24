@@ -1,15 +1,368 @@
 # Agent handoff
 
-Checkpoint 2026-11-23 on `multiplayer/windows-test`, with M2.5 work based on `a4f9c7b`.
+Checkpoint 2026-11-24 on `multiplayer/windows-test`, with the nocked Normal Arrow following standing shield blends on `ed1725c`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
 
+## M2.5 animation work order
+
+The owner set the following order.
+
+1. Weapons
+2. Shield and bow
+3. Traversal and reactions
+4. Playback
+5. Appearance (Validation on windows can happen here, on linux I will validate manually later and tell if there are any problems)
+
+The grounded Weapons and Soldier's gear slices are verified. Continue Shield and bow. The
+[animation backlog](NEXT.md#remaining-animation-work) describes each stage.
+
+## M2.5 weapon families
+
+- Resume review confirmed that the previous checkpoint recognizes the Woodcutter's Axe
+  as its only melee identity and gates the large-sword idle and draw clips on the axe's
+  measured attachment height. The installed 1.9.0 data has the Sword, Spear, and Lsword
+  `001` actor packs. The first weapon slice probes these three alongside the axe before
+  widening the action map.
+- Added stable identities and passive alias entries for Traveler's Sword, Traveler's Spear
+  and Traveler's Claymore. The three share the existing weapon slot, revision and pose layout.
+  The equipment codec test covers each identity and rejects it in the shield slot.
+- Windows core, direct invite and WebRTC loopback targets passed. The local
+  `build/m25_weapon_resources.py` check verified that all alias entries can coexist, stock
+  ActorInfo records are preserved, the three new packs use the passive profile, and all
+  70 proxy states reference installed clips.
+- The proxy action map now separates one-handed sword, spear, and large-sword clips. The
+  axe and claymore share the large-sword actions. The sword and spear have separate draw,
+  ready, stow and attack-chain clips.
+- The native Windows trace in `build/m25-weapons-jtk2dnpd/` captured all grounded chain
+  steps and charged releases. The installed controller uses the same spear clip for hits
+  two through four. The proxy gives each hit a distinct action so each can start playback.
+  Charge preparation and release are separate actions for all three weapon families.
+  The spear rests about 0.43 m above Link's root when stowed and 0.58–0.73 m when drawn.
+  The sword and large weapons use a higher stowed attachment.
+- The Windows app linked with source ID `d8f1cbe57e11d234264704b43eeae942dceb6140`
+  and uses the existing 1.9.0 gamelib `13365c313591b27e`. The updated core test passed
+  a simulated lobby weapon revision change with the shield and bow preserved. Direct invite
+  and WebRTC loopback tests passed again.
+- The receiving-game run in `build/m25-weapon-live-pcclk2vu/` confirmed native sword
+  equip replaced the remote axe on the same Link. The client selected draw, ready, stow,
+  all four normal attacks, charge and return to ready at 30 FPS. Draw and ready also
+  passed at 60 FPS.
+- The same run confirmed spear equip replaced the remote sword. All five thrusts,
+  charged rush and finish, draw, ready and stow passed at 30 FPS. Draw and ready also
+  passed at 90 FPS. A client capture shows the drawn spear on the remote Link.
+- Claymore equip replaced the spear and reused the large-sword draw, ready, stow,
+  normal chain and charged spin. The client selected every expected action at 30 FPS,
+  and draw and ready passed at 120 FPS. The client capture shows the drawn claymore.
+- Client Leave retired the claymore. A same-slot rejoin restored it from the current
+  equipment record. All three weapon swaps preserved the original Link proxy. The launcher
+  was `build/m25-build/Play-M25.cmd`. The scratch run used the ignored
+  `build/m25_weapon_live.py` and `build/m25_verify_weapons.py` against that checkpoint. See the
+  [test record](TESTING.md#m25-weapon-families) for the full settings and evidence.
+
+## M2.5 shield and bow follow-up
+
+- Added the Soldier's Shield and Soldier's Bow as passive aliases in their existing
+  equipment slots. Both bow variants share the standing reload, aim and release mapping.
+  The equipment codec test checks the new identities and rejects swapped slots.
+- Windows linked successfully. Core, direct invite and WebRTC loopback tests passed.
+  The local resource check verified all eight equipment packs and confirmed that their
+  alias entries coexist with unmodified stock ActorInfo records.
+- The Windows sender trace in `build/m25-guard-bow-k28m4n5x/` confirmed that native
+  Soldier's Shield equip activates the remote shield and that a parry reports full-body
+  GuardJust between WaitAttention samples. Added shield-gated parry, hit and break clip
+  mappings from the installed controller's GuardJust, GuardFailHit and GuardBreak states.
+- The same trace found that grounded bow draw shares WeaponEquipOn with melee. After a
+  shot, bow stow retained WaitAttention and WaitAttentionUpper while the bow crossed
+  Link's left side. Added grounded draw and stow selection using the observed relative
+  attachment and controller states.
+- The first two-game run verified Soldier's Bow reload, aim and release at 30 FPS.
+  Native remove and re-equip kept the axe and shield active. Leave and same-slot
+  rejoin retired and restored all three visuals.
+- The follow-up Windows build linked with source ID `9a531870ff22c2770f397f07c67f6bb2bd50e259`
+  and the existing 1.9.0 gamelib `13365c313591b27e`. Core, direct invite and WebRTC loopback
+  passed again, and the local resource check found installed clips for all 75 proxy states.
+  This checkpoint used `build/m25_guard_bow_live.py` and `build/m25_run_guard_bow.py` with
+  `SWMP_VERIFY_GUARD_BOW=1`.
+- The follow-up in `build/m25-guard-bow-5x4vetaa/` verified that the receiver selected
+  ShieldGuard, played two ShieldParry activations, returned to guard after each, and returned
+  to idle when the host released ZL.
+- The receiver also selected BowDraw, BowReload, BowAim, BowShoot and BowStow in the
+  grounded route. The client captures show the Soldier's Shield and aimed Soldier's Bow.
+- The retry in `build/m25-guard-bow-4b3vfoxa/` waited for native Wait after stow, then
+  verified axe draw, ready and stow with the shield and bow equipped. It also verified bow
+  remove/re-equip and retirement and restoration of all three visuals on same-slot rejoin.
+- The installed Equip_Shield_On and Equip_Shield_Off clips belong to the shared weapon-equip
+  states. The standing ZL trace entered and left WaitAttention without either equip state.
+  Separate guard raise and lower playback needs transition evidence.
+- The longer Windows fall in `build/m25-guard-bow-t9gnto0b/` reached native Fall over
+  upper-slot BowReload, BowCharge and BowShoot. The player was still about 3.9 m above the
+  starting point while aiming after the 6 m setup. The installed Fall state references
+  Bow_Jump_Upper. The current proxy gives Fall precedence.
+- The layered scratch run in `build/m25-guard-bow-9g15fuvx/` requested BowAim in layer 1,
+  slot 1 over Fall. The receiver continued reporting Fall in the base slot with an empty
+  upper slot during Fall and Land. The follow-up in `build/m25-sword-guard-en520aka/`
+  confirmed the request string immediately before the native call and reproduced the empty
+  upper slot. Layered aim needs a rig or animation graph that supports simultaneous playback.
+  Build the ignored fixture with `build/m25_bow_layer_probe.py`, then set
+  `SWMP_PROBE_APP=build/m25-build/bow-layer-probe/savagewind.exe` and `SWMP_AIR_BOW=1`
+  for `build/m25_run_guard_bow.py`.
+- The same follow-up verified that the Soldier's Shield and Traveler's Sword stayed active
+  together through sword draw, sustained guard, parry and the sword attack chain while ZL
+  was held. The ignored runner is `build/m25_run_sword_guard.py`.
+- A synthetic action check in `build/m25-guard-bow-tests/actions.c` passed. It covered
+  the shield requirement for guard hit/break and separation of bow and melee draw.
+- The Soh Kofi Shrine encounter in `build/m25-guard-encounter-tna9m6wi/` verified
+  native GuardFailHit after an enemy struck the raised Soldier's Shield. The receiver
+  played ShieldGuard, ShieldHit, and ShieldGuard on the same Link. Chaas Qeta Shrine
+  reproduced the hit in `build/m25-guard-encounter-drsxy9xe/` before the host died.
+  The ignored `build/m25_run_guard_encounter.py` runner accepts `SWMP_GUARD_DUNGEON`.
+- The frame-rate run in `build/m25-guard-bow-ffvz5v53/` verified BowDraw, BowAim,
+  BowShoot and BowStow at 30, 60, 90 and 120 measured FPS on both games. The same route
+  confirmed melee separation after each aim, followed by bow remove/re-equip, Leave
+  and same-slot rejoin. Set `SWMP_BOW_FPS=1` with
+  `SWMP_VERIFY_GUARD_BOW=1` to repeat it.
+
+## M2.5 held bow and shield destruction
+
+- The standing release trace showed the bow resting about 0.60 m above and 0.30 m in
+  front of Link while the native controller reported WaitAttention and WaitAttentionUpper.
+  The proxy selects the installed Bow_Lockon_Wait clip during that held pose.
+- A close-range Chaas Qeta test with the Wooden Shield reproduced native GuardBreak
+  in `build/m25-guard-break-vzld8rms/`. The shield actor disappeared on the same sampled
+  update. The receiver retired the visual and missed the reaction because the action
+  required a shield identity in the current sample.
+- The one-update carry in `build/m25-guard-break-zh8konic/` still missed playback. Its
+  trace showed a sample with the shield gone immediately before the controller entered
+  GuardBreak. The sender now accepts shield presence within two snapshot intervals
+  before the reaction and retains the action until the native state changes. It publishes
+  shield removal normally and clears the history on actor, area, or lobby changes.
+- The Windows app linked with source ID `e9928eba4b67d29f45947018ecbd17a57d018317` and
+  gamelib `13365c313591b27e`. The action check distinguishes held, side and stowed bow poses,
+  and the resource check found installed clips for all 76 proxy states. Core, direct invite
+  and WebRTC loopback passed.
+- The Chaas Qeta replay in `build/m25-guard-break-72upt2zg/` passed at 30 FPS. The native
+  GuardBreak reached the same remote Link as ShieldBreak and returned to idle. The
+  Wooden Shield retired exactly once, and the axe and Link actor remained active.
+  Reproduce with `SWMP_VERIFY_GUARD_BREAK=1`, `SWMP_PROBE_APP=build/m25-build/bow-ready-live/savagewind.exe`,
+  and `build/m25_run_guard_break.py`.
+- The previous standing guard trace shows the shield moving across Link's side during
+  the Wait to WaitAttention change. The forward offset crosses the 175 mm guard threshold
+  four samples after WaitAttention begins. Release already starts moving the shield
+  before Wait. The received rigid pose follows that movement. Distinct body transitions
+  need a playback blend across the native state edge.
+- The Tah Muhl replay in `build/m25-bow-ready-y5zwclgm/` verified BowReady after release
+  and before native stow at 30, 60, 90 and 120 measured FPS. The receiver held BowReady for
+  at least 0.65 seconds in each check. Draw, aim, release and stow also passed at every cap.
+  The same session passed axe draw and stow, bow remove/re-equip, Leave and same-slot rejoin.
+  Rebuild `build/m25_bow_ready_live.py` and run `build/m25_run_bow_ready.py` to repeat it.
+  The matching Windows launcher is `build/m25-build/Play-M25.cmd`.
+
+## M2.5 shield transition probe
+
+- The installed player animation list has a CFDefines section. It describes source
+  and target states with a frame count and starting fraction. The passive Link list
+  currently has resource and clip definitions. The Windows scratch fixture
+  `build/m25_guard_transition_probe.py` varies the first playback float across five
+  native guard raise and lower cycles to test whether the existing call can blend
+  transitions without additional animation-list entries.
+- The five 30 FPS cycles in `build/m25-guard-transition-zrheifj4/` compared default,
+  zero, 12, 60 and one frame. With 60, the proxy was still between idle and guard
+  at the mid-transition capture in each direction. With zero, the same capture
+  already showed the destination pose. Both paths reached the expected clip.
+  The first float can therefore supply the blend directly.
+- Standing Idle and SwordReady now crossfade to and from ShieldGuard over four
+  animation frames. That covers the part of the sampled native attachment motion
+  after the guard threshold crossing. The same engine call handles the blend,
+  with the existing action and pose fields.
+- The Windows app linked with source ID `6204b14ff79e7a921c8f3aa5cf5f2459d13405da`
+  and existing 1.9.0 gamelib `13365c313591b27e`. Core, direct invite and WebRTC
+  loopback tests passed. The 30 FPS probe's default argument also showed a blend
+  at the early capture, so the four-frame setting makes the tested guard edges explicit.
+- In `build/m25-guard-blend-kpq64rvp/`, the receiver used four frames in both
+  directions at 30, 60, 90 and 120 FPS targets for idle, and at 30 FPS for
+  SwordReady. Client captures show the progression between stance poses at 30 FPS.
+  Parry and its return to guard used the default. One Link and one shield stayed
+  active throughout. Rebuild `build/m25_guard_blend_live.py` and run
+  `build/m25_run_guard_blend.py` to repeat it. The matching launcher is
+  `build/m25-build/Play-M25.cmd`.
+- The Chaas Qeta replay in `build/m25-guard-break-03uykit4/` verified ShieldHit
+  and ShieldBreak with the engine default on the same build. The destroyed
+  shield retired once, and the axe and Link stayed active.
+- The installed NormalArrow actor pack is in TitleBG and its model list references
+  Weapon_Arrow_001. The Soldier's Bow model contains String_L_1, String_L_2,
+  String_R_1 and String_R_2. Those are the starting points for the arrow and
+  bowstring visual probes.
+
+## M2.5 nocked-arrow probe
+
+- The current Windows scratch probe walks bounded, read-only references from Link
+  and the equipped bow during reload, aim, release and post-release ready. It reports
+  nearby arrow actors and their matrices so a passive visual can use the native pose.
+  The probe uses `build/m25_arrow_probe.py` and the isolated `build/m25_run_guard_bow.py`
+  route.
+- The scratch run in `build/m25-guard-bow-khwv41j6/` found NormalArrow at bow actor
+  offset 0x88 during BowReload and BowAim. Its actor matrix carries the held pose.
+  BowShoot exposed a different placement and BowReady had no reachable arrow.
+  The installed actor info and TitleBG agree on the Weapon_Arrow_001 model. The
+  first visual slice will carry the held NormalArrow pose and stop on release.
+- The runtime reads the 1.9.0 bow attachment during reload and aim. A new passive
+  arrow alias uses the installed TitleBG member. Snapshot protocol 2 adds the
+  transient arrow identity and bounded relative pose. The renderer requires the
+  corresponding bow revision and a visible bow before activating the arrow.
+- The Windows app linked with source ID `3f7f9da84ecd7ba679e60c5c03469d2f71d6922a`
+  and existing gamelib `13365c313591b27e`. Core, direct invite and WebRTC loopback
+  tests passed. The core test covers arrow pose round-trip, bounded offsets,
+  reserved bytes, a missing bow pose and peer relay. The local resource check
+  verified the passive arrow pack and preserved stock actor information.
+- The first receiving-game route in `build/m25-nocked-arrow-jq6s5_sg/` verified
+  activation during aim and retirement on release at 30, 60, 90 and 120 measured
+  FPS. A held arrow restored after same-slot rejoin and retired on native cancel.
+  All 106 unique receiver pose tuples matched the sender trace.
+- The 30 FPS side-view replay in `build/m25-arrow-profile-9pfm_fb9/` shows the
+  Normal Arrow in the remote bow at 1280x720 and 100% render scale. The arrow
+  retired on release. Rebuild `build/m25_nocked_arrow_live.py` and run
+  `build/m25_run_nocked_arrow.py` or `build/m25_run_arrow_profile.py`.
+  Both peers need the updated build. The matching launcher is
+  `build/m25-build/Play-M25.cmd`.
+- Both installed bow packs contain the same Bow.baslist and six embedded clips.
+  The list loads Weapon_Bow_Common_Animation and exposes Draw, Hold, Shoot,
+  Equiped, Null and SelfCameraPause. This gives the bowstring work an installed
+  animation path alongside the existing rigid bow pose.
+
+## M2.5 animation clip progress probe
+
+- The playback probe used source ID `c3c71f0f65dcf665b4f3ba417fd05ef3dc8ddf7f`
+  and 1.9.0 gamelib `13365c313591b27e` on both peers.
+- On Windows 1.9.0, the native player and passive proxy exposed advancing frame counters
+  that reset for repeated jumps. The engine overwrote writes to the mirrored counters.
+  The second float argument to the existing animation play call starts the clip at a
+  normalized position. Passing 0.5 started the 10-frame jump halfway through at normal speed.
+- In stage 4, start with a standing-jump timing slice. Verify the track read for the matching native clip,
+  then carry its start phase and activation identity in snapshots. Use the normalized start
+  argument on activation and test delayed snapshots and repeated one-shots before expanding.
+- The ignored `build/m25_phase_probe.py` builds the read-only fixture. Use
+  `SWMP_PROBE_APP=build/m25-build/phase-probe/savagewind.exe` and
+  `SWMP_TRAVERSAL_ROUTE=build/m25_phase_route.txt` with `build/m25_run_traversal.py`.
+  The seek probe uses `build/m25_phase_seek_probe.py`, the `phase-seek-probe` executable directory,
+  and `build/m25_phase_seek_route.txt`. The normalized-start probe uses `build/m25_phase_rate_probe.py`
+  and the `phase-rate-probe` executable directory with that same route.
+  See the [test record](TESTING.md#m25-animation-clip-progress-probe).
+- See [remaining animation work](NEXT.md#remaining-animation-work) for playback, traversal,
+  weapon families, shield, bow and appearance coverage.
+
+## M2.5 lock-on swimming
+
+- The lock-on swimming checkpoint used source ID `c3c71f0f65dcf665b4f3ba417fd05ef3dc8ddf7f`.
+- Native SwimAtnMove exposes targeting movement. The sender projects planar displacement
+  into Link's facing frame and selects a forward, backward, left or right stroke. Treading
+  and free swimming keep their existing paths.
+- The ignored `build/m25_swim_lock_live.py` builds the instrumented app. Set
+  `SWMP_PROBE_APP=build/m25-build/swim-lock-live/savagewind.exe` and
+  `SWMP_TRAVERSAL_ROUTE=build/m25_swim_lock_verify.txt` for `build/m25_run_traversal.py`.
+  See the [test record](TESTING.md#m25-lock-on-swimming).
+- Target-following in the water, exact blend playback and water effects still need coverage.
+
+## M2.5 swim stroke selection
+
+- The free swim checkpoint used source ID `d3d88b9e192aa7046ce55f95371214d6d65bf712`.
+- Native SwimMove covers both stroke speeds and both turn directions. The sender samples
+  speed and wrapped heading change to select one of the six installed swimming clips.
+  Treading and dash keep their dedicated clips. All swim actions use the same model lift.
+- The ignored `build/m25_swim_blends_probe.py` builds the trace executable. Set
+  `SWMP_PROBE_APP=build/m25-build/swim-blends-probe/savagewind.exe` and use
+  `SWMP_TRAVERSAL_ROUTE=build/m25_swim_blends_route.txt` with `build/m25_run_traversal.py`.
+  Use `build/m25_swim_caps_route.txt` for the higher caps. See the [test record](TESTING.md#m25-swim-stroke-selection).
+
+## M2.5 glide banking
+
+- The glide banking checkpoint used source ID `495498ca1eebc9f5628d0537b71a2a21abb07c21`.
+- Link's native root stayed upright during steering. The sender estimates bank from heading change,
+  and the receiver tilts the neutral flight clip and open canopy together. Native blends and precise
+  hand attachment remain open.
+- The ignored `build/m25_bank_probe.py` builds the instrumented executable. Set
+  `SWMP_PROBE_APP=build/m25-build/bank-probe/savagewind.exe` and `SWMP_TRAVERSAL_ROUTE` to
+  `build/m25_bank_route.txt` for the two-direction and lifecycle run, or
+  `build/m25_bank_visible_route.txt` for same-slot rejoin and the higher caps. For close
+  captures use `build/m25_bank_close_route.txt`. Run `build/m25_run_traversal.py`.
+  See the [test record](TESTING.md#m25-glide-banking).
+
+## M2.5 directional climbing jumps
+
+- The climbing jump checkpoint used source ID `f6877769f778e5ad6dd4d41b96751c75d6caddc8`.
+- The sender selects one installed clip for each native ClimbJump using early movement in Link's
+  wall plane. The current clips cover right, up-right, up, up-left and left. Direction stays fixed
+  until the native state changes. The proxy still starts the clip with its own animation timing.
+- The ignored `build/m25_jump_probe.py` builds the instrumented app. Set
+  `SWMP_PROBE_APP=build/m25-build/jump-probe/savagewind.exe` for `build/m25_run_traversal.py`.
+  Set `SWMP_TRAVERSAL_ROUTE` to `build/m25_jump_30_route.txt` for all five clips at 30 FPS or
+  `build/m25_jump_route.txt` for the higher caps.
+  See the [test record](TESTING.md#m25-directional-climbing-jumps).
+
+## M2.5 gliding
+
+- The gliding checkpoint used source ID `c4f6bceacb6af307ab84ace438d5218871469310`.
+- Native ParaEquipOn, ParashawlGlide and Fall select the deploy, glide and fall clips. A transient
+  gliding bit and matching action create a passive animated canopy with a dedicated actor index.
+  The stock actor pack lives inside TitleBG. The virtual alias reads only the SARC metadata and
+  the requested member from the installed archive.
+- This checkpoint used the neutral flight clip and a fixed canopy transform in Link's yaw frame.
+  Precise hand attachment and additional glider variants remain open.
+- The ignored `build/m25_glide_probe.py` builds action and lifecycle traces. Use
+  `SWMP_PROBE_APP=build/m25-build/glide-probe/savagewind.exe` and
+  `SWMP_TRAVERSAL_ROUTE=build/m25_glide_route.txt` with `build/m25_run_traversal.py` for native cancel
+  and landing. Use `build/m25_glide_rejoin.txt` for Leave and rejoin during flight.
+  See the [test record](TESTING.md#m25-gliding).
+
+## M2.5 directional wall climbing
+
+- The wall climb checkpoint used source ID `2fb96f88f354fd5544af2c78f21540288cfe8f50`.
+- The native ClimbMove state covers all eight directions. The sender projects about 100 ms of
+  displacement into the wall plane. Link's local X axis points left. The selected direction
+  travels as an action ID in the existing position snapshot.
+- WallDashSt and WallDash share the approach clip. ClimbEd selects a ledge mantle clip.
+  This checkpoint used the upward variant for climbing jumps. The proxy plays discrete clips
+  with local animation timing.
+- Run the Oman Au masonry route with `SWMP_TRAVERSAL_ROUTE=build/m25_climb_route.txt` and
+  `build/m25_run_traversal.py`. Use `build/m25_mantle_route.txt` for the full climb to the ledge.
+  The local probe and scratch-save setup match the previous slice.
+  See the [test record](TESTING.md#m25-directional-wall-climbing).
+
+## M2.5 swimming and climbing
+
+- The initial traversal checkpoint used source ID `b6cc1385595f980904c71878c84b5b2e44ce7bb8`.
+- The native states SwimWait, SwimMove, SwimDash, ClimbWait, ClimbMove and ClimbJump select
+  the basic clips. The swimming movement clip depicts a forward stroke. This checkpoint used
+  the upward wall movement and jump variants.
+- The native actor matrix and PlayerInfo agree on the swimmer's position. At that root the standalone
+  proxy clips left Link below the waterline. The receiver raises the swimming model by 1.65 m.
+  Equipment transforms and range checks continue to use the sampled root. Water effects remain open.
+- The local `build/m25_run_traversal.py` runner accepts `SWMP_TRAVERSAL_ROUTE` with
+  `build/m25_traversal_route.txt` for the pond and masonry wall near Oman Au Shrine. It loads
+  `build/m25-build/traversal-probe/savagewind.exe` with isolated settings and saves.
+  See the [test record](TESTING.md#m25-swimming-and-climbing).
+
+## M2.5 Traveler's Bow
+
+- The bow checkpoint used source ID `670a3194f0b5a7ae7a407ddd0b9a7353f947450c`. It added
+  three gear identities per revision and 80-byte player snapshots.
+- The bow uses native equipment category two and a passive actor with its own index.
+  Layer 1, slot 1 exposes BowReload, BowCharge and BowShoot during standing bow use. The proxy
+  selects the corresponding installed clips. The base WeaponEquipOn state is shared by axe and bow,
+  so axe draw requires the axe's hand-height band.
+- The ignored `build/m25_bow_probe.py` builds the trace and an isolated clipboard. The runner
+  `build/m25_run_bow.py` uses scratch saves and native menus to equip the host's bow and arrows.
+  Set `SWMP_BOW_FPS=1` and `SWMP_BOW_TRAVEL=1` to exercise the additional frame rates and shrine
+  round trip. See the [test record](TESTING.md#m25-travelers-bow).
+- The bow actor applies a rigid transform. Bowstring and arrow visuals, blended or airborne aim,
+  exact clip progress and skinned equipment remain open. The
+  [appearance probe](M2_POSITION_HANDOFF.md#resume) describes the multi-model attempt.
+
 ## M2.5 shield, axe idle and crouch
 
-- The current Windows launcher is `build/m25-build/Play-M25.cmd`. Match multiplayer source ID
-  `5b6399a29f68162f952aff5316c44ad03ed9216d` on both peers. The 1.9.0 gamelib remains
-  `13365c313591b27e`.
+- The shield checkpoint used source ID `5b6399a29f68162f952aff5316c44ad03ed9216d` and
+  1.9.0 gamelib `13365c313591b27e`.
 - Weapon and shield identities now share a reliable equipment revision and each slot has a separate
   pose and native actor index. The Wooden Shield samples equipment getter category one, as confirmed
   in the [test record](TESTING.md#m25-shield-axe-idle-and-crouch). Updates to one slot preserve the
@@ -22,10 +375,6 @@ separate scratch settings and saves for game tests. Keep generated code and game
   traces. `build/m25_run_shield.py` drives both scratch games, including native inventory equip,
   shrine travel, same-slot rejoin, and changes from 30 through 120 FPS. The fixture stages the
   Wooden Shield in the host's scratch inventory using the app's item command.
-- Next, add a validated bow slot. The equipped-item drop path suggests
-  getter category two for the bow. Further traversal states, exact clip progress and skinned equipment
-  still need separate checks. The [appearance probe](M2_POSITION_HANDOFF.md#resume) describes the
-  failed multi-model attempt.
 
 ## M2.5 first slice
 
@@ -37,7 +386,7 @@ separate scratch settings and saves for game tests. Keep generated code and game
   session ends. Late joiners receive the current roster without a burst of notices.
 - The 1.9.0 `mp_weather_current` site resolves the world manager's effective-weather getter. The prior
   cheat override field returns 255 during ordinary forecasts and cannot serve as the host's sole source.
-  The environment and disconnect checks used game library `13365c313591b27e`. See the shield
+  The environment and disconnect checks used game library `13365c313591b27e`. See the weapon families
   checkpoint above for the current Windows launcher and multiplayer source ID.
   See the [M2.5 test record](TESTING.md#m25-first-slice) for Windows validation and remaining cases.
 - For overhead name feasibility, `control_camera_view()` in `runtime/nvn/vulkan/device.c` currently follows

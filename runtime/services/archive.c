@@ -29,24 +29,30 @@ uint8_t *yaz0_unpack(const uint8_t *d, size_t n, size_t *out_n) {
 }
 
 // SARC (little-endian): the node of `name` (its index; start and end in the data, which begins at *data_off), or -1
-int sarc_find(const uint8_t *d, size_t n, const char *name, uint32_t *data_off, uint32_t *start, uint32_t *end) {
+int sarc_find_range(const uint8_t *d, size_t n, size_t archive_size, const char *name,
+                    uint32_t *data_off, uint32_t *start, uint32_t *end) {
     if (n < 0x20 || memcmp(d, "SARC", 4) || d[6] != 0xFF || d[7] != 0xFE || memcmp(d + 0x14, "SFAT", 4)) return -1;
     uint32_t doff, cnt = d[0x1A] | d[0x1B] << 8;
     memcpy(&doff, d + 0xC, 4);
     size_t names = 0x20 + (size_t)cnt * 16 + 8;
-    if (names > n || doff > n) return -1;
+    if (names > doff || doff > n) return -1;
+    size_t name_size = strlen(name) + 1;
     for (uint32_t i = 0; i < cnt; i++) {
         uint32_t attr, s, e;
         memcpy(&attr, d + 0x20 + i * 16 + 4, 4);
         memcpy(&s, d + 0x20 + i * 16 + 8, 4);
         memcpy(&e, d + 0x20 + i * 16 + 12, 4);
         size_t at = names + (size_t)(attr & 0xFFFFFF) * 4;
-        if (!(attr >> 24) || at >= n || strncmp((const char *)d + at, name, n - at)) continue;
-        if (s > e || doff + (uint64_t)e > n) return -1;
+        if (!(attr >> 24) || at >= doff || name_size > doff - at || memcmp(d + at, name, name_size)) continue;
+        if (s > e || doff + (uint64_t)e > archive_size) return -1;
         *data_off = doff, *start = s, *end = e;
         return (int)i;
     }
     return -1;
+}
+
+int sarc_find(const uint8_t *d, size_t n, const char *name, uint32_t *data_off, uint32_t *start, uint32_t *end) {
+    return sarc_find_range(d, n, n, name, data_off, start, end);
 }
 
 int sarc_count(const uint8_t *d, size_t n) {

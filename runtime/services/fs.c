@@ -78,7 +78,7 @@ typedef struct {
     struct {
         uint8_t *pack;
         size_t size;
-    } gear[SWMP_GEAR_COUNT];
+    } gear[SWMP_VISUAL_ASSET_COUNT];
 #endif
 } RomImage;
 #define AOC_MAX 8
@@ -90,8 +90,8 @@ static _Atomic bool inventory_clip_layout_valid;
 static _Atomic bool multiplayer_proxy_ready;
 static _Atomic unsigned multiplayer_gear_ready;
 bool fs_multiplayer_proxy_ready(void) { return atomic_load(&multiplayer_proxy_ready); }
-bool fs_multiplayer_gear_ready(SwmpGear gear) {
-    return (unsigned)gear < SWMP_GEAR_COUNT && (atomic_load(&multiplayer_gear_ready) & (1u << gear));
+bool fs_multiplayer_gear_ready(unsigned asset) {
+    return asset < SWMP_VISUAL_ASSET_COUNT && (atomic_load(&multiplayer_gear_ready) & (1u << asset));
 }
 uint8_t *fs_game_file(const char *path, size_t *out_n);
 #endif
@@ -109,7 +109,7 @@ RT_ON_RESET(fs_reset) {
         free(m->ov_extended_meta);
 #ifdef SW_MULTIPLAYER
         free(m->proxy_pack);
-        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) free(m->gear[i].pack);
+        for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) free(m->gear[i].pack);
         free(m->proxy_actor_info);
 #endif
         for (int i = 0; i < m->rom_nfiles; i++) free(m->rom_files[i].path);
@@ -239,9 +239,9 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     }
 #ifdef SW_MULTIPLAYER
     if (R->proxy_pack) {
-        if (cap - n < SWMP_GEAR_COUNT) nf = realloc(nf, sizeof *nf * (n + SWMP_GEAR_COUNT));
+        if (cap - n < SWMP_VISUAL_ASSET_COUNT) nf = realloc(nf, sizeof *nf * (n + SWMP_VISUAL_ASSET_COUNT));
         nf[n++] = (NewFile){.rel = SWMP_PROXY_PACK, .size = R->proxy_pack_size, .mem = R->proxy_pack};
-        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+        for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
             if (!R->gear[i].pack) continue;
             nf[n] = (NewFile){.size = R->gear[i].size, .mem = R->gear[i].pack};
             strlcpy(nf[n].rel, swmp_gear_assets[i].pack, sizeof nf[n].rel);
@@ -309,7 +309,7 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
         R->ov[R->ov_n++] = (Overlay){data_at, size, nf[i].mem ? NULL : strdup(nf[i].host), -1, nf[i].mem};
 #ifdef SW_MULTIPLAYER
         proxy_added |= nf[i].mem && nf[i].mem == R->proxy_pack;
-        for (unsigned j = 1; nf[i].mem && j < SWMP_GEAR_COUNT; j++)
+        for (unsigned j = 1; nf[i].mem && j < SWMP_VISUAL_ASSET_COUNT; j++)
             if (nf[i].mem == R->gear[j].pack) gear_added |= 1u << j;
 #endif
         R->rom_files[R->rom_nfiles++] = (RomFile){data_at, size, strdup(nf[i].rel), entry};
@@ -529,6 +529,32 @@ static uint8_t *pack_proxy_resource(uint8_t *raw, size_t raw_size, size_t *size)
     return packed;
 }
 
+static uint8_t *read_proxy_bundle(const SwmpGearAsset *asset, size_t *size) {
+    int k = 0;
+    while (k < R->rom_nfiles && strcmp(R->rom_files[k].path, asset->bundle)) k++;
+    if (k == R->rom_nfiles) return NULL;
+    const RomFile *file = &R->rom_files[k];
+    uint8_t head[0x20];
+    if (file->size < sizeof head ||
+        romfs_image_pread(R->img, head, sizeof head, file->off) != sizeof head) return NULL;
+    uint32_t prefix, data, start, end;
+    memcpy(&prefix, head + 0xc, sizeof prefix);
+    if (prefix < sizeof head || prefix > file->size || prefix > (16u << 20)) return NULL;
+    uint8_t *table = malloc(prefix);
+    bool found = table && romfs_image_pread(R->img, table, prefix, file->off) == (ssize_t)prefix &&
+        sarc_find_range(table, prefix, file->size, asset->template_pack, &data, &start, &end) >= 0;
+    free(table);
+    if (!found || start == end || end - start > (4u << 20)) return NULL;
+    size_t n = end - start;
+    uint8_t *pack = malloc(n);
+    if (!pack || romfs_image_pread(R->img, pack, n, file->off + data + start) != (ssize_t)n) {
+        free(pack);
+        return NULL;
+    }
+    *size = n;
+    return pack;
+}
+
 static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t fsz) {
     if (R != &images[0] || !g_site.mp_presence_move || strcmp(g_game_version, "1.9.0")) return;
     char host[1200];
@@ -537,13 +563,17 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
         overlay_file(SWMP_PROXY_PACK, host, sizeof host)) return;
 
     unsigned gear_mask = 0;
-    for (unsigned i = 1; g_site.player_equipment && i < SWMP_GEAR_COUNT; i++)
-        if (!overlay_file(swmp_gear_assets[i].pack, host, sizeof host) &&
-            !overlay_file(swmp_gear_assets[i].template_pack, host, sizeof host)) gear_mask |= 1u << i;
+    for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
+        const SwmpGearAsset *asset = &swmp_gear_assets[i];
+        if ((!asset->bundle && !g_site.player_equipment) ||
+            overlay_file(asset->pack, host, sizeof host) ||
+            overlay_file(asset->bundle ? asset->bundle : asset->template_pack, host, sizeof host)) continue;
+        gear_mask |= 1u << i;
+    }
     const RomFile *info = NULL;
     for (int i = 0; i < R->rom_nfiles; i++) {
         if (!strcmp(R->rom_files[i].path, SWMP_PROXY_PACK)) return;
-        for (unsigned j = 1; j < SWMP_GEAR_COUNT; j++)
+        for (unsigned j = 1; j < SWMP_VISUAL_ASSET_COUNT; j++)
             if (!strcmp(R->rom_files[i].path, swmp_gear_assets[j].pack)) gear_mask &= ~(1u << j);
         if (!strcmp(R->rom_files[i].path, SWMP_ACTOR_INFO)) info = &R->rom_files[i];
     }
@@ -554,11 +584,11 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     uint8_t *stock = fs_game_file(SWMP_PROXY_TEMPLATE, &template_size);
     uint8_t *raw = swmp_proxy_pack(stock, template_size, &raw_size);
     uint8_t *pack = pack_proxy_resource(raw, raw_size, &pack_size);
-    for (unsigned i = 1; pack && i < SWMP_GEAR_COUNT; i++) {
+    for (unsigned i = 1; pack && i < SWMP_VISUAL_ASSET_COUNT; i++) {
         if (!(gear_mask & (1u << i))) continue;
         const SwmpGearAsset *asset = &swmp_gear_assets[i];
         size_t size = 0;
-        uint8_t *gear = fs_game_file(asset->template_pack, &size);
+        uint8_t *gear = asset->bundle ? read_proxy_bundle(asset, &size) : fs_game_file(asset->template_pack, &size);
         raw = swmp_gear_pack(asset, stock, template_size, gear, size, &raw_size);
         R->gear[i].pack = pack_proxy_resource(raw, raw_size, &R->gear[i].size);
         if (!R->gear[i].pack) gear_mask &= ~(1u << i);
@@ -568,7 +598,7 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     uint8_t *stock_info = pack ? fs_game_file(SWMP_ACTOR_INFO, &stock_info_size) : NULL;
     raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, &raw_size);
     if (!raw && gear_mask) {
-        for (unsigned i = 1; i < SWMP_GEAR_COUNT; i++) {
+        for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
             free(R->gear[i].pack);
             R->gear[i].pack = NULL;
         }
