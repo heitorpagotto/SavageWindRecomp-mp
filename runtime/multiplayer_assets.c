@@ -16,6 +16,8 @@ static const char link_model[] = "Link";
     "Actor/Pack/" source ".sbactorpack", bundle, "Actor/Pack/" actor ".sbactorpack", \
     "Actor/ActorLink/" actor ".bxml", source, "Actor/ModelList/" source ".bmodellist"}
 #define GEAR(slot, model, actor, label) VISUAL(slot, model, model, actor, label, NULL)
+#define ARROW(type, source, model, actor, label) \
+    [SWMP_ARROW_ASSET_BASE + SWMP_ARROW_##type] = VISUAL(SWMP_NOCKED_ARROW_SLOT, source, model, actor, label, "Pack/TitleBG.pack")
 const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
     [SWMP_GEAR_WOODCUTTERS_AXE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_032", "SwmpRemoteAxe", "axe"),
     [SWMP_GEAR_WOODEN_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_001", "SwmpRemoteShield", "shield"),
@@ -27,9 +29,14 @@ const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
     [SWMP_GEAR_SOLDIERS_BOW] = GEAR(SWMP_GEAR_BOW, "Weapon_Bow_002", "SwmpRemoteSoldierBow", "soldier bow"),
     [SWMP_PARAGLIDER_ASSET] = VISUAL(SWMP_PARAGLIDER_SLOT, "PlayerStole2", "Item_Parastole2",
                                     "SwmpRemoteGlider", "glider", "Pack/TitleBG.pack"),
-    [SWMP_NOCKED_ARROW_ASSET] = VISUAL(SWMP_NOCKED_ARROW_SLOT, "NormalArrow", "Weapon_Arrow_001",
-                                       "SwmpRemoteArrow", "nocked arrow", "Pack/TitleBG.pack"),
+    ARROW(NORMAL, "NormalArrow", "Weapon_Arrow_001", "SwmpRemoteArrow", "nocked arrow"),
+    ARROW(FIRE, "FireArrow", "Weapon_Arrow_005", "SwmpRemoteFireArrow", "nocked fire arrow"),
+    ARROW(ICE, "IceArrow", "Weapon_Arrow_006", "SwmpRemoteIceArrow", "nocked ice arrow"),
+    ARROW(SHOCK, "ElectricArrow", "Weapon_Arrow_004", "SwmpRemoteShockArrow", "nocked shock arrow"),
+    ARROW(BOMB, "BombArrow_A", "Weapon_Arrow_002", "SwmpRemoteBombArrow", "nocked bomb arrow"),
+    ARROW(ANCIENT, "AncientArrow", "Weapon_Arrow_007", "SwmpRemoteAncientArrow", "nocked ancient arrow"),
 };
+#undef ARROW
 #undef GEAR
 #undef VISUAL
 
@@ -225,7 +232,8 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_ma
         free(raw);
         return NULL;
     }
-    Byml b = {.original_size = n, .length = n, .capacity = 4 * n + 512};
+    // Each alias appends a copy of the string, actor and hash tables.
+    Byml b = {.original_size = n, .length = n, .capacity = 5 * n + 512};
     b.data = calloc(1, b.capacity);
     if (b.data) memcpy(b.data, raw, n);
     free(raw);
@@ -425,6 +433,26 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_BOW_DRAW] = ACTION(BowDraw, "Equip_Bow_On_Natural", NULL, PROXY_GEAR_BOW),
     [SWMP_PROXY_BOW_STOW] = ACTION(BowStow, "Equip_Bow_Off_Natural", NULL, PROXY_GEAR_BOW),
     [SWMP_PROXY_BOW_READY] = ACTION(BowReady, "Bow_Lockon_Wait", NULL, PROXY_GEAR_BOW),
+    [SWMP_PROXY_STEP] = ACTION(Step, "Nml_Lockon_Step_N_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LEFT] = ACTION(StepLeft, "Nml_Lockon_Step_L_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_RIGHT] = ACTION(StepRight, "Nml_Lockon_Step_R_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_FORWARD] = ACTION(StepForward, "Nml_Lockon_Step_F_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_BACK] = ACTION(StepBack, "Nml_Lockon_Step_B_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LAND] = ACTION(StepLand, "Nml_Lockon_Step_N_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LAND_LEFT] = ACTION(StepLandLeft, "Nml_Lockon_Step_L_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LAND_RIGHT] = ACTION(StepLandRight, "Nml_Lockon_Step_R_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LAND_FORWARD] = ACTION(StepLandForward, "Nml_Lockon_Step_F_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STEP_LAND_BACK] = ACTION(StepLandBack, "Nml_Lockon_Step_B_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_BACK_JUMP] = ACTION(BackJump, "Nml_Lockon_Jump_B_St", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_BACK_JUMP_LAND] = ACTION(BackJumpLand, "Nml_Lockon_Jump_B_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_DAMAGE_LIGHT] = ACTION(DamageLight, "Nml_Damage_S_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_DAMAGE_MEDIUM] = ACTION(DamageMedium, "Nml_Damage_M_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_KNOCKDOWN] = ACTION(Knockdown, "Nml_Damage_L_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_GET_UP] = ACTION(GetUp, "Nml_Damage_L_F_Standup", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_TUMBLE] = ACTION(Tumble, "Dive_To_Dive", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_TUMBLE_LAND] = ACTION(TumbleLand, "Rolldown_D", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HARD_LAND] = ACTION(HardLand, "Nml_Damage_Land", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HARD_LAND_RECOVER] = ACTION(HardLandRecover, "Nml_Damage_Land_Stand", NULL, PROXY_GEAR_NONE),
 };
 #undef ACTION
 
@@ -450,6 +478,19 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
                                          bool shield_raised) {
     if (!strcmp(state, "WallDashSt")) return SWMP_PROXY_CLIMB_ENTER;
+    if (!strcmp(state, "Step")) return SWMP_PROXY_STEP;
+    if (!strcmp(state, "StepLand")) return SWMP_PROXY_STEP_LAND;
+    if (!strcmp(state, "BackJump")) return SWMP_PROXY_BACK_JUMP;
+    if (!strcmp(state, "BackJumpLand")) return SWMP_PROXY_BACK_JUMP_LAND;
+    // Use a frontal clip for each full-body hit reaction. Native hit direction has its own selector.
+    if (!strcmp(state, "DamageS")) return SWMP_PROXY_DAMAGE_LIGHT;
+    if (!strcmp(state, "DamageM")) return SWMP_PROXY_DAMAGE_MEDIUM;
+    if (!strcmp(state, "DamageL")) return SWMP_PROXY_KNOCKDOWN;
+    if (!strcmp(state, "DamageLStand")) return SWMP_PROXY_GET_UP;
+    if (!strcmp(state, "SlippingDown")) return SWMP_PROXY_TUMBLE;
+    if (!strcmp(state, "SlippingDownLand")) return SWMP_PROXY_TUMBLE_LAND;
+    if (!strcmp(state, "LandDamage")) return SWMP_PROXY_HARD_LAND;
+    if (!strcmp(state, "LandDamageStand")) return SWMP_PROXY_HARD_LAND_RECOVER;
     unsigned id = gear.id[SWMP_GEAR_WEAPON];
     const WeaponAnimation *weapon = &weapon_animations[id < SWMP_GEAR_COUNT ? id : SWMP_GEAR_NONE];
     // The attachment height disambiguates native Wait and filters WeaponEquipOn for a bow draw.
@@ -630,6 +671,14 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size) {
 uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
                         const uint8_t *gear, size_t gear_size, size_t *out_size) {
     static const char stock_link[] = "Actor/ActorLink/Obj_RockGray_A_M_01.bxml";
+    static const char *const glider_anim[] = {
+        "Actor/ASList/PlayerStole.baslist", "Actor/AS/PlayerStole_Open.bas",
+    };
+    static const char *const bow_anim[] = {
+        "Actor/ASList/Bow.baslist", "Actor/AS/Bow_Draw.bas", "Actor/AS/Bow_Equiped.bas",
+        "Actor/AS/Bow_Hold.bas", "Actor/AS/Bow_Null.bas", "Actor/AS/Bow_SelfCameraPause.bas",
+        "Actor/AS/Bow_Shoot.bas",
+    };
     size_t n, gn;
     uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
     uint8_t *model = gear ? yaz0_unpack(gear, gear_size, &gn) : NULL;
@@ -641,26 +690,34 @@ uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t s
         size_t link_size;
         uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", asset->model_user, &link_size);
         if (link) {
-            PackFile files[4] = {{asset->actor_link, link, link_size},
-                                 {asset->model_list, model + model_data + ms, me - ms}};
+            PackFile files[2 + sizeof bow_anim / sizeof *bow_anim] = {
+                {asset->actor_link, link, link_size},
+                {asset->model_list, model + model_data + ms, me - ms},
+            };
             unsigned count = 2;
-            if (asset == &swmp_gear_assets[SWMP_PARAGLIDER_ASSET]) {
-                static const char list[] = "Actor/ASList/PlayerStole.baslist";
-                static const char clip[] = "Actor/AS/PlayerStole_Open.bas";
-                uint32_t as, ae, cs, ce;
-                uint8_t *animated = NULL;
-                if (sarc_find(model, gn, list, &model_data, &as, &ae) >= 0 &&
-                    sarc_find(model, gn, clip, &model_data, &cs, &ce) >= 0) {
-                    animated = proxy_actor_link(link, link_size, "ASUser", asset->actor, &link_size);
-                    files[0] = (PackFile){asset->actor_link, animated, link_size};
-                    files[2] = (PackFile){"Actor/ASList/SwmpRemoteGlider.baslist", model + model_data + as, ae - as};
-                    files[3] = (PackFile){clip, model + model_data + cs, ce - cs};
-                    count = 4;
+            char alias_list[80];
+            bool glider = asset->slot == SWMP_PARAGLIDER_SLOT;
+            const char *const *anim = glider ? glider_anim : bow_anim;
+            unsigned clips = glider ? sizeof glider_anim / sizeof *glider_anim :
+                asset->slot == SWMP_GEAR_BOW ? sizeof bow_anim / sizeof *bow_anim : 0;
+            if (clips) {
+                snprintf(alias_list, sizeof alias_list, "Actor/ASList/%s.baslist", asset->actor);
+                for (unsigned i = 0; i < clips; i++) {
+                    uint32_t start, end;
+                    if (sarc_find(model, gn, anim[i], &model_data, &start, &end) < 0) break;
+                    files[count++] = (PackFile){i ? anim[i] : alias_list, model + model_data + start, end - start};
                 }
-                free(link);
-                link = animated;
+                uint8_t *animated = count == 2 + clips ?
+                    proxy_actor_link(link, link_size, "ASUser", asset->actor, &link_size) : NULL;
+                if (animated) {
+                    free(link);
+                    link = animated;
+                    files[0] = (PackFile){asset->actor_link, link, link_size};
+                } else {
+                    count = 2;
+                }
             }
-            if (link) out = pack_files(files, count, out_size);
+            if (!glider || count > 2) out = pack_files(files, count, out_size);
             free(link);
         }
     }

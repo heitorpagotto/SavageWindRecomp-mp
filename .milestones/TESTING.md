@@ -2,6 +2,113 @@
 
 Reviewed 2026-11-24. The prototype and native build results below have separate verification scopes.
 
+## M2.5 fall-damage recovery
+
+- The Tah Muhl Shrine probe in `build/m25-hard-landing-an2p_5i_/` moved Link upward
+  using the existing `player.pos` control cell and let the native fall resolve.
+  The ordinary teleport command protects the player from fall damage for four seconds
+  after arrival. Direct drops of 6 through 18 m kept 12 quarter-hearts and entered Land.
+  The 21 m drop took four quarter-hearts and entered Fall, LandDamage, LandDamageStand
+  and Wait.
+- The verification run in `build/m25-hard-landing-xsbgdcyi/` used protocol 4, source ID
+  `950097e37b41370878be23e6338b9dc9a1b99845` and gamelib `13365c313591b27e`.
+  One remote Link played Fall, Land and Idle for each 6 m drop. Each 21 m drop played
+  Fall, HardLand, HardLandRecover and Idle at 30, 60, 90 and 120 measured FPS on both
+  Windows Vulkan clients. The sender lost four quarter-hearts per hard landing and the
+  receiver's own health stayed at 12. The scratch runner restored the sender's
+  health before each new cap. Receiver captures show impact and stand-up.
+- The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon Graphics
+  (25.10.30.02), both at 960x540 and 50% render scale with a 1400 MiB VRAM budget
+  and Vulkan heap copy off.
+- The local resource check verified all 96 proxy states and all fifteen gear visual packs
+  against installed 1.9.0 data. The synthetic action check distinguished ordinary
+  landing from hard landing and recovery. Windows link, core, direct invite and WebRTC
+  loopback passed.
+
+## M2.5 hit reactions and knockdown recovery
+
+- The Windows Vulkan scratch games used BOTW 1.9.0, gamelib `13365c313591b27e`, protocol 4
+  and source ID `2c0271b4f42fc881ad5245655c8f9af28c171725` for the initial playback checks. The
+  host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon Graphics
+  (25.10.30.02). Both used 960x540 at 50% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off.
+- In `build/m25-reactions-enemy-kabvjotp/`, an unguarded Soh Kofi Shrine hit changed
+  the host's native state to DamageM and dropped health from 12 to 2 quarter-hearts.
+  The same remote Link selected DamageMedium and returned to Idle at 60 FPS.
+- In `build/m25-reactions-bomb-r6byfsh3/`, a close Bomb Arrow blast at Tah Muhl Shrine
+  entered native DamageL and the receiver selected Knockdown. The fatal hit continued
+  into DeadRagdoll.
+- The survivable armored replay in `build/m25-reactions-armored-1_mpvqet/` used source
+  ID `1f30f098d12fb08eaeffd3767dff0476627fd914` and measured 30 FPS on both games.
+  Health fell from 12 to 1 quarter-hearts. Native DamageL, SlippingDown,
+  SlippingDownLand, DamageLStand and Wait reached the same remote Link as Knockdown,
+  Tumble, TumbleLand, GetUp and Idle, in that order. The capture shows the remote
+  knockdown. The stand-up selection was verified in the controller trace.
+- The local resource check verified all 94 proxy states and fifteen gear visual packs.
+  A synthetic action check covered light and medium hits, knockdown and stand-up
+  selection while the bow's upper-body state still reported aim. Windows link, core,
+  direct invite and WebRTC loopback checks passed.
+
+## M2.5 grounded dodges
+
+- The Windows Vulkan scratch games in Tah Muhl Shrine used BOTW 1.9.0, gamelib
+  `13365c313591b27e`, protocol 4 and source ID `4fc921cb3b83f486928a8a0305dc9f77521f4245`.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon Graphics
+  (25.10.30.02). Both used 960x540, 50% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off.
+- The receiving controller in `build/m25-dodge-live-35hivj8x/` selected the intended
+  neutral, left, right, forward and backflip takeoff and landing clips at 30, 60, 90 and
+  120 measured FPS. The trace recorded each pair once per dodge on one Link proxy.
+  Leave retired the proxy and same-slot rejoin restored it.
+- The closer 1280x720 capture at 100% render scale in `build/m25-dodge-profile-5zffty2m/`
+  showed the remote Link airborne during the side hop and inverted during the backflip.
+  The host measured 30 FPS and the client measured about 28 FPS at that cap. The stowed
+  axe and shield can briefly separate from the body during the backflip.
+- The local resource check verified all 88 proxy states against installed clips and all
+  fifteen gear visual packs. The Windows app linked and the multiplayer core, direct
+  invite and WebRTC loopback checks passed.
+
+## M2.5 nocked arrow variants and rapid reload
+
+- The Windows Vulkan scratch games in Tah Muhl Shrine used BOTW 1.9.0, gamelib
+  `13365c313591b27e`, protocol 4 and source ID `a7106be30f6384fe6ab5b88bac0f791ff033dd99`.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon Graphics
+  (25.10.30.02). Both used 960x540, 50% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off.
+- In `build/m25-arrow-variants-z9lpjpdt/`, four consecutive Normal Arrow draw and release
+  cycles passed on the same bow at 30 and 120 measured FPS. From a visual retiring to
+  the next arrow becoming visible, the receiver measured 733–766 ms at 30 FPS and
+  691–718 ms at 120 FPS. Both ranges fit inside the former one-second respawn delay.
+- In `build/m25-arrow-variants-34sl5juy/`, the host equipped Fire, Ice, Shock, Bomb and
+  Ancient via the native quick selector at 30 FPS. The logs recorded one active remote
+  arrow at a time. The client captured each nocked type during steady aim. Leaving and
+  rejoining during Ancient Arrow aim restored the same type and the bow's Draw state.
+- The full replay in `build/m25-arrow-variants-tu31l6l1/` repeated both cadence checks
+  and all five variant checks. It measured 765–800 ms and 691–700 ms between visuals at
+  30 and 120 FPS respectively. Bow removal and re-equip preserved the axe and shield,
+  and a final Leave and same-slot rejoin retired and restored all three gear visuals.
+- Core, direct invite and WebRTC loopback passed. Core round-tripped every new identity,
+  rejected invalid IDs and relayed Ancient Arrow through the host. The resource
+  check verified all fifteen passive visual packs and preserved the stock ActorInfo records.
+
+## M2.5 bowstring animation
+
+- Two Windows Vulkan games used BOTW 1.9.0, gamelib `13365c313591b27e`, protocol 3 and
+  source ID `856b34baf572ee17f73d0a94ac97c53b3c930d8a`. The scratch Tah Muhl Shrine route
+  used an RTX 4050 Laptop GPU (610.88) and AMD Radeon Graphics (25.10.30.02), 960x540 at
+  50% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off.
+- In `build/m25-nocked-arrow-1pfzvcs_/`, the same passive Soldier's Bow entered Draw and
+  Shoot at 30, 60, 90 and 120 measured FPS. The Normal Arrow activated while nocked and
+  retired on release at each cap. A same-slot rejoin during aim restored Draw and the
+  arrow. Native cancel retired the arrow and returned the bow to Equiped.
+  Bow removal and re-equip preserved the axe and shield actors. Axe draw and stow passed.
+- The 30 FPS Traveler's Bow replay in `build/m25-bowstring-profile-p8x7vv4h/` used the
+  same GPUs at 1280x720 and 100% render scale. Client captures
+  `bow-profile-neutral.png` and `bow-aim-remote-30.png` compare forced Hold and replicated
+  Draw at steady aim. The limbs bend and the string pulls toward the nocked arrow.
+  The receiver entered Shoot on release and restored the stowed bow on same-slot rejoin.
+- Core, direct invite and WebRTC loopback passed. Core verified bow state round-trip,
+  relay, and clearing on unequip, and rejected out-of-range states, states without a bow
+  pose and nonzero reserved bytes. The local resource check verified all ten passive
+  visual packs, including both bow lists and all six state definitions in each.
+
 ## M2.5 nocked Normal Arrow
 
 - Two Windows Vulkan games in Tah Muhl Shrine used BOTW 1.9.0, gamelib

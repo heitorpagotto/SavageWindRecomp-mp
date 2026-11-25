@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 2u
+#define SWMP_PROTOCOL_VERSION 4u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
@@ -141,7 +141,24 @@ typedef struct {
 typedef enum {
     SWMP_ARROW_NONE,
     SWMP_ARROW_NORMAL,
+    SWMP_ARROW_FIRE,
+    SWMP_ARROW_ICE,
+    SWMP_ARROW_SHOCK,
+    SWMP_ARROW_BOMB,
+    SWMP_ARROW_ANCIENT,
+    SWMP_ARROW_COUNT,
 } SwmpArrow;
+
+typedef enum {
+    SWMP_BOW_ANIM_NONE,
+    SWMP_BOW_ANIM_HOLD,
+    SWMP_BOW_ANIM_EQUIPPED,
+    SWMP_BOW_ANIM_DRAW,
+    SWMP_BOW_ANIM_SHOOT,
+    SWMP_BOW_ANIM_NEUTRAL,
+    SWMP_BOW_ANIM_CAMERA_PAUSE,
+    SWMP_BOW_ANIM_COUNT,
+} SwmpBowAnimation;
 
 static inline unsigned swmp_gear_pose_flag(SwmpGearSlot slot) {
     return SWMP_PLAYER_WEAPON_POSE << slot;
@@ -165,6 +182,7 @@ typedef struct {
     uint32_t equipment_revision;
     SwmpGearPose gear_pose[SWMP_GEAR_SLOTS];
     uint8_t nocked_arrow;  // SwmpArrow, valid with a bow pose
+    uint8_t bow_animation; // SwmpBowAnimation, valid with a bow pose
     SwmpGearPose arrow_pose;
 } SwmpPlayerSnapshot;
 

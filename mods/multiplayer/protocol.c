@@ -153,6 +153,7 @@ enum {
     GEAR_POSE_SIZE = 12,
     GEAR_POSES_AT = 44,
     NOCKED_ARROW_AT = GEAR_POSES_AT + GEAR_POSE_SIZE * SWMP_GEAR_SLOTS,
+    BOW_ANIMATION_AT = NOCKED_ARROW_AT + 1,
     ARROW_POSE_AT = NOCKED_ARROW_AT + 4,
 };
 
@@ -169,8 +170,10 @@ static bool gear_pose_valid(const SwmpPlayerSnapshot *s) {
         if (!(s->flags & swmp_gear_pose_flag(slot))) continue;
         if (!s->equipment_revision || !pose_offset_valid(&s->gear_pose[slot])) return false;
     }
+    if (s->bow_animation >= SWMP_BOW_ANIM_COUNT ||
+        (s->bow_animation && !(s->flags & SWMP_PLAYER_BOW_POSE))) return false;
     return s->nocked_arrow == SWMP_ARROW_NONE ||
-           (s->nocked_arrow == SWMP_ARROW_NORMAL && (s->flags & SWMP_PLAYER_BOW_POSE) &&
+           (s->nocked_arrow < SWMP_ARROW_COUNT && (s->flags & SWMP_PLAYER_BOW_POSE) &&
             pose_offset_valid(&s->arrow_pose));
 }
 
@@ -203,6 +206,7 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
         if (s->flags & swmp_gear_pose_flag(slot))
             put_gear_pose(out + GEAR_POSES_AT + GEAR_POSE_SIZE * slot, &s->gear_pose[slot]);
     out[NOCKED_ARROW_AT] = s->nocked_arrow;
+    out[BOW_ANIMATION_AT] = s->bow_animation;
     if (s->nocked_arrow) put_gear_pose(out + ARROW_POSE_AT, &s->arrow_pose);
     return true;
 }
@@ -210,7 +214,7 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
 bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
                                  const uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE]) {
     if (!s || !data || data[0] >= SWMP_MAX_PEERS || (data[1] & ~SWMP_PLAYER_STATE_KNOWN) ||
-        data[NOCKED_ARROW_AT + 1] || data[NOCKED_ARROW_AT + 2] || data[NOCKED_ARROW_AT + 3]) return false;
+        data[BOW_ANIMATION_AT + 1] || data[BOW_ANIMATION_AT + 2]) return false;
     SwmpPlayerSnapshot decoded = {
         .peer_id = data[0],
         .flags = data[1],
@@ -221,6 +225,7 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .stamina_q4 = get16(data + 38),
         .equipment_revision = get32(data + 40),
         .nocked_arrow = data[NOCKED_ARROW_AT],
+        .bow_animation = data[BOW_ANIMATION_AT],
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);

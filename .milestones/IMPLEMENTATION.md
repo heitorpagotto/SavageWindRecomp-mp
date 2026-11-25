@@ -10,7 +10,7 @@ require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 Defined in `mods/multiplayer/protocol.h`:
 
-- `SWMP_PROTOCOL_VERSION = 2`
+- `SWMP_PROTOCOL_VERSION = 4`
 - `SWMP_MAX_PEERS = 8`
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
@@ -72,15 +72,16 @@ lobby currently sends and accepts control packets with zero flags.
 | 62 | 6 | shield pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 | 68 | 6 | bow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
 | 74 | 6 | bow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
-| 80 | 1 | nocked arrow identity, zero for absent or one for Normal Arrow |
-| 81 | 3 | reserved, must be zero |
+| 80 | 1 | nocked arrow identity, zero for absent or 1–6 for Normal, Fire, Ice, Shock, Bomb, Ancient |
+| 81 | 1 | bow animation state, zero for unavailable or 1–6 for Hold, Equiped, Draw, Shoot, Null, SelfCameraPause |
+| 82 | 2 | reserved, must be zero |
 | 84 | 6 | nocked arrow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
 | 90 | 6 | nocked arrow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 
 Each gear-pose bit requires a nonzero revision and limits each offset axis to ±3000 mm. The receiver pairs the
-pose with the reliable record for the same peer and revision. The nocked arrow requires a bow pose and shares
-the offset bound. Its presence travels in each snapshot. The direct invite text format is independent of
-the packet version. Lobby traffic uses protocol 2 and admission requires matching source fingerprints.
+pose with the reliable record for the same peer and revision. The nocked arrow and bow animation state require a
+bow pose. The arrow shares the offset bound. The direct invite text format is independent of the packet version.
+Lobby traffic uses protocol 4 and admission requires matching source fingerprints.
 
 ## Session state
 
@@ -190,15 +191,37 @@ keeps the action for the duration of GuardBreak, and publishes shield removal no
 IDs 73 and 74 cover grounded bow draw and stow. The sender uses the bow's position beside Link
 to distinguish the shared WeaponEquipOn state and the stow transition through WaitAttentionUpper.
 ID 75 selects the held-bow idle when the bow sits low and in front of Link in WaitAttentionUpper.
-During BowReload or BowAim, the 1.9.0 sender reads the attached NormalArrow actor from the
-equipped bow and samples its matrix in the same yaw-relative format as gear. The passive arrow
-alias uses the installed TitleBG pack member. Each peer has a separate indexed arrow visual
-that follows the current bow revision during reload or aim and retires when that state ends.
+During BowReload or BowAim, the 1.9.0 sender samples the attached arrow actor's identity
+and matrix from the equipped bow. It uses the same yaw-relative format as gear. Each of the
+six inventory arrow types has a passive alias backed by its installed TitleBG pack member.
+One indexed arrow visual per peer follows the current bow revision during reload or aim
+and retires when that state ends. Routine arrow retirement allows a new request after one
+snapshot interval. Actor request failures and peer retirement retain the one-second backoff.
+Both passive bows use the installed bow animation list and six state definitions. The sender
+samples the equipped bow's own controller. The receiver selects that state on the passive bow
+when it activates or the state changes, using the matching equipment revision. The bow retains
+Draw through aim and completes Shoot while Link changes stance. The transform and animation
+travel in the same position snapshot.
 The receiver plays one clip per action change. Standing ShieldGuard transitions to and from Idle
 or SwordReady blend over four native animation frames. The first playback float controls the
 blend, and the second controls the starting phase. Parry and hit reactions use the engine default.
 Exact clip
 progress, blends and repeated activations of the same state remain open.
+
+Action IDs 76–85 pair takeoff and landing clips for the native Step and StepLand states.
+They cover neutral, left, right, forward and backward motion. The sender captures Link's
+facing at takeoff and projects the first planar displacement onto that frame. It locks
+the chosen direction for that dodge and reuses it for landing. A stationary takeoff
+selects neutral after one snapshot interval. The native BackJump and BackJumpLand states
+have dedicated backflip clips at IDs 86 and 87. These actions use the existing snapshot.
+
+Action IDs 88–91 select frontal clips for the native DamageS, DamageM, DamageL and
+DamageLStand full-body states. They cover light and medium hits, knockdown and getting
+up. IDs 92–93 cover SlippingDown and SlippingDownLand, which can occur between a
+knockdown and stand-up. IDs 94–95 select the hard landing and stand-up clips for
+LandDamage and LandDamageStand. The ordinary Land state still maps to its own landing
+clip. Full-body reactions take precedence over the bow's upper-body state. The sender
+continues to sample native health independently. Damage authority remains in M3.
 
 Action IDs 18–23 select treading water, forward swimming, swim dash, hanging on a wall, climbing
 and climbing jumps from the native full-body states. During native ClimbMove, the sender projects

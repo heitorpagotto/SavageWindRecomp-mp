@@ -1,6 +1,6 @@
 # Agent handoff
 
-Checkpoint 2026-11-24 on `multiplayer/windows-test`, with the nocked Normal Arrow following standing shield blends on `ed1725c`.
+Checkpoint 2026-11-24 on `multiplayer/windows-test`, with local bowstring, nocked-arrow, dodge and recovery changes based on `7364383`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
@@ -15,8 +15,8 @@ The owner set the following order.
 4. Playback
 5. Appearance (Validation on windows can happen here, on linux I will validate manually later and tell if there are any problems)
 
-The grounded Weapons and Soldier's gear slices are verified. Continue Shield and bow. The
-[animation backlog](NEXT.md#remaining-animation-work) describes each stage.
+The grounded Weapons and Shield and bow slices are verified. Continue with Traversal and reactions.
+The [animation backlog](NEXT.md#remaining-animation-work) describes each stage.
 
 ## M2.5 weapon families
 
@@ -228,8 +228,114 @@ The grounded Weapons and Soldier's gear slices are verified. Continue Shield and
   `build/m25-build/Play-M25.cmd`.
 - Both installed bow packs contain the same Bow.baslist and six embedded clips.
   The list loads Weapon_Bow_Common_Animation and exposes Draw, Hold, Shoot,
-  Equiped, Null and SelfCameraPause. This gives the bowstring work an installed
-  animation path alongside the existing rigid bow pose.
+  Equiped, Null and SelfCameraPause.
+
+## M2.5 bowstring animation
+
+- The native bow controller in `build/m25-guard-bow-4padu4m4/` remained Equiped during
+  early aim, then entered Draw. Shoot extended into Link's held-ready stance. The
+  passive bow uses its own controller to follow those timings.
+- Both supported bow aliases mount the installed bow animation list and states. Snapshot
+  protocol 3 uses a formerly reserved byte for the native bow state. Both peers need a
+  matching build. The snapshot stays at 96 bytes, and the renderer requires a bow pose
+  from the matching equipment revision.
+- The Windows app linked with source ID `856b34baf572ee17f73d0a94ac97c53b3c930d8a`
+  and existing 1.9.0 gamelib `13365c313591b27e`. The launcher is
+  `build/m25-build/Play-M25.cmd`. Core, direct invite and WebRTC loopback passed.
+- The scratch replay in `build/m25-nocked-arrow-1pfzvcs_/` verified Soldier's Bow draw and
+  release, steady aim, cancel, remove and re-equip, and restored Draw on same-slot
+  rejoin during aim. Draw and Shoot entered on one bow actor across the 30, 60, 90 and
+  120 FPS checks. The nocked Normal Arrow remained independent of the bow actor.
+- The 30 FPS side-view replay in `build/m25-bowstring-profile-p8x7vv4h/` verified the
+  Traveler's Bow. The captures compare forced Hold with replicated Draw while Link
+  stayed aimed. They show the limbs and string moving into the drawn pose.
+- Rebuild the ignored fixture with `build/m25_bowstring_live.py` and run
+  `build/m25_run_nocked_arrow.py` with
+  `SWMP_PROBE_APP=build/m25-build/bowstring-live/savagewind.exe`. The comparison uses
+  `build/m25_bowstring_profile_build.py` and `build/m25_run_bowstring_profile.py`. See the
+  [test record](TESTING.md#m25-bowstring-animation).
+
+## M2.5 nocked arrow variants and rapid reload
+
+- The five other inventory arrow types use passive aliases built from the installed TitleBG
+  members. The sender resolves the attached actor's native name while nocked. Protocol 4
+  accepts the expanded identity set and both peers need the matching build.
+- The ActorInfo builder's bounded buffer now fits the combined alias tables. The scratch
+  `build/m25_arrow_variants_resources.py` check verified all fifteen visual packs and
+  preserved the stock actor records.
+- The Windows app linked with source ID `a7106be30f6384fe6ab5b88bac0f791ff033dd99`, reusing
+  gamelib `13365c313591b27e`. The launcher is `build/m25-build/Play-M25.cmd`. Core, direct
+  invite and WebRTC loopback passed.
+- Routine arrow retirement now waits one snapshot interval before a new request. The
+  one-second failure backoff still applies. Four rapid Normal Arrow draws and releases
+  passed at both 30 and 120 FPS. See the [test record](TESTING.md#m25-nocked-arrow-variants-and-rapid-reload).
+- The native quick selector equipped Fire, Ice, Shock, Bomb, and Ancient Arrows at
+  30 FPS. Each nocked visual appeared and retired on the receiver. Same-slot rejoin during
+  Ancient Arrow aim restored its visual and the bow's Draw state.
+- The combined replay in `build/m25-arrow-variants-tu31l6l1/` also verified bow remove
+  and re-equip with the other gear active, followed by Leave and same-slot rejoin.
+- Rebuild the ignored fixture with `build/m25_arrow_variants_build.py` and run
+  `build/m25_run_arrow_variants.py`. Set `SWMP_RAPID_RELOAD=1` to include the cadence checks.
+
+## M2.5 grounded dodges
+
+- The native trace in `build/m25-dodge-sd300nm8/` confirmed Step and StepLand for neutral,
+  left, right and forward dodges. The sideways and forward steps moved about 18 cm in
+  the first 30 FPS update while facing stayed fixed. The native backflip used BackJump
+  and BackJumpLand.
+- The sender selects the shared Step direction from the first planar displacement
+  in Link's facing frame and retains it through StepLand. BackJump uses its own clip
+  pair. The installed backward Step clips are available if that shared state moves
+  backward. The tested back input went through BackJump.
+- In `build/m25-dodge-live-35hivj8x/`, two Windows games verified all five takeoff and
+  landing pairs at 30, 60, 90 and 120 measured FPS. Each clip played once per dodge on
+  the same proxy, and Leave and same-slot rejoin retired and restored the Link.
+- The closer capture in `build/m25-dodge-profile-5zffty2m/` showed the remote side hop
+  and backflip. The stowed axe and shield can briefly separate from the proxy during
+  the flip. Recheck attachment alignment during the Playback and Appearance stages.
+- The Windows source ID is `4fc921cb3b83f486928a8a0305dc9f77521f4245`, with protocol 4
+  and gamelib `13365c313591b27e`. The launcher is `build/m25-build/Play-M25.cmd`.
+  Rebuild the ignored fixture with `build/m25_dodge_live.py` and run
+  `build/m25_run_dodge_live.py` or `build/m25_run_dodge_profile.py`. See the
+  [test record](TESTING.md#m25-grounded-dodges).
+
+## M2.5 hit reactions and knockdown recovery
+
+- Unguarded Soh Kofi and Chaas Qeta enemy hits entered native DamageM. The Soh Kofi
+  replay in `build/m25-reactions-enemy-kabvjotp/` verified the remote reaction and
+  return to idle at 60 FPS. A close Bomb Arrow blast in Tah Muhl entered DamageL.
+- The survivable replay used the upgraded Champion's Tunic in scratch saves. It exposed
+  SlippingDown and SlippingDownLand between DamageL and DamageLStand. The receiver now
+  has separate tumble and landing actions before the stand-up clip.
+- The final run in `build/m25-reactions-armored-1_mpvqet/` verified the complete
+  knockdown, tumble, landing, stand-up and idle sequence on one Link at 30 FPS.
+  The Windows launcher is `build/m25-build/Play-M25.cmd`, source ID
+  `1f30f098d12fb08eaeffd3767dff0476627fd914`, with gamelib `13365c313591b27e`.
+- The build selects representative frontal reactions and a representative landing
+  roll. The installed light hit is checked synthetically. Native light hits, exact
+  direction and upper-body flinches remain open.
+- Rebuild the ignored fixtures with `build/m25_reactions_live.py` or
+  `build/m25_reactions_armored.py`. The routes are `build/m25_run_reaction_enemy.py`
+  and `build/m25_run_reaction_armored.py`. For the armored route set
+  `SWMP_PROBE_APP=build/m25-build/reactions-armored/savagewind.exe` and
+  `SWMP_VERIFY_REACTION=1`. See the [test record](TESTING.md#m25-hit-reactions-and-knockdown-recovery).
+
+## M2.5 fall-damage recovery
+
+- The scratch drops use `cell player.pos` to raise the native player and
+  let the game resolve the fall. The ordinary teleport command grants a short
+  fall-damage grace period. In Tah Muhl Shrine, the 21 m drop took four quarter-hearts
+  and entered LandDamage followed by LandDamageStand. A 6 m drop used Land.
+- The final two-game replay in `build/m25-hard-landing-xsbgdcyi/` verified both drops
+  at 30, 60, 90 and 120 measured FPS on one Link. The local receiver's health stayed
+  at 12 quarter-hearts. Captures show the remote impact and recovery poses.
+- The Windows launcher is `build/m25-build/Play-M25.cmd`, source ID
+  `950097e37b41370878be23e6338b9dc9a1b99845`, with gamelib `13365c313591b27e`.
+  Rebuild the ignored fixture with `build/m25_hard_landing_live.py`, then run
+  `build/m25_run_hard_landing.py` with `SWMP_VERIFY_LANDING=1`,
+  `SWMP_PROBE_APP=build/m25-build/hard-landing-live/savagewind.exe`,
+  `SWMP_FALL_HEIGHTS=6,21` and `SWMP_FALL_FPS=30,60,90,120`.
+  See the [test record](TESTING.md#m25-fall-damage-recovery).
 
 ## M2.5 animation clip progress probe
 

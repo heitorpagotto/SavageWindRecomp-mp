@@ -97,9 +97,12 @@ Acceptance criteria:
 Status **in progress**. The first slice implements host time and weather sync and admission notifications.
 The equipment slices add passive weapon, shield and bow slots and reliable identities. New native clips cover
 landing, standing draw, attacks, charge and stow for three melee families, shield guard blends and reactions,
-crouch, and grounded bow draw, reload, aim, release and stow with a passive nocked Normal Arrow,
+crouch, and grounded bow draw, reload, aim, release and stow with native bowstring playback
+and passive nocked visuals for all six inventory arrow types,
 slow and fast swimming with turns, directional targeting strokes, directional wall climbing and jumps,
-wall approach and mantle, and gliding with a passive canopy that banks with Link during turns.
+wall approach and mantle, grounded lock-on dodges and backflips with landing clips, hit,
+knockdown and fall-damage recovery clips, and gliding with a passive canopy that banks with
+Link during turns.
 The rest of the equipment and animation catalog and overhead names are open. See the
 [clip progress handoff](HANDOFF.md#m25-animation-clip-progress-probe) and
 [animation backlog](NEXT.md#remaining-animation-work).

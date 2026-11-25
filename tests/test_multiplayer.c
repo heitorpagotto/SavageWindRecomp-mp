@@ -29,7 +29,7 @@ static void packet_test(void) {
     };
     CHECK(swmp_packet_encode(packet, sizeof packet, &in) == SWMP_PACKET_OK);
     const uint8_t expected[] = {
-        0x53, 0x57, 0x4d, 0x50, 0, 2, 16, 4, 0, 0, 0, 3,
+        0x53, 0x57, 0x4d, 0x50, 0, 4, 16, 4, 0, 0, 0, 3,
         0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 3, 1, 0, 0,
         0x10, 0x20, 0x30, 0x40, 0xa0, 0xb0, 0xc0, 0xd0,
     };
@@ -45,7 +45,7 @@ static void packet_test(void) {
     packet[0] = 0;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_MAGIC);
     packet[0] = 0x53;
-    packet[5] = 1;
+    packet[5] = 3;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_VERSION);
     packet[5] = SWMP_PROTOCOL_VERSION;
     packet[21] = SWMP_CHANNEL_COUNT;
@@ -88,6 +88,7 @@ static void snapshot_test(void) {
             [SWMP_GEAR_BOW] = {.offset_mm = {3000, -3000, 26}, .rotation = {300, 40, -600}},
         },
         .nocked_arrow = SWMP_ARROW_NORMAL,
+        .bow_animation = SWMP_BOW_ANIM_DRAW,
         .arrow_pose = {.offset_mm = {-280, 1280, 450}, .rotation = {-649, -3610, 16003}},
     };
     uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE];
@@ -102,25 +103,44 @@ static void snapshot_test(void) {
     CHECK(out.health_q4 == in.health_q4 && out.stamina_q4 == in.stamina_q4);
     CHECK(out.equipment_revision == in.equipment_revision);
     CHECK(out.nocked_arrow == in.nocked_arrow);
+    CHECK(data[81] == SWMP_BOW_ANIM_DRAW && out.bow_animation == in.bow_animation);
     CHECK(!memcmp(out.arrow_pose.offset_mm, in.arrow_pose.offset_mm, sizeof in.arrow_pose.offset_mm));
     CHECK(!memcmp(out.arrow_pose.rotation, in.arrow_pose.rotation, sizeof in.arrow_pose.rotation));
     for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++) {
         CHECK(!memcmp(out.gear_pose[i].offset_mm, in.gear_pose[i].offset_mm, sizeof in.gear_pose[i].offset_mm));
         CHECK(!memcmp(out.gear_pose[i].rotation, in.gear_pose[i].rotation, sizeof in.gear_pose[i].rotation));
     }
+    for (uint8_t arrow = SWMP_ARROW_FIRE; arrow < SWMP_ARROW_COUNT; arrow++) {
+        in.nocked_arrow = arrow;
+        CHECK(swmp_player_snapshot_encode(data, &in));
+        CHECK(data[80] == arrow);
+        CHECK(swmp_player_snapshot_decode(&out, data));
+        CHECK(out.nocked_arrow == arrow && out.arrow_pose.offset_mm[0] == -280);
+    }
+    in.nocked_arrow = SWMP_ARROW_COUNT;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.nocked_arrow = SWMP_ARROW_NORMAL;
+    CHECK(swmp_player_snapshot_encode(data, &in));
     data[68] = 0x7f;
     CHECK(!swmp_player_snapshot_decode(&out, data));
     CHECK(swmp_player_snapshot_encode(data, &in));
     data[80] = 255;
     CHECK(!swmp_player_snapshot_decode(&out, data));
     CHECK(swmp_player_snapshot_encode(data, &in));
-    data[81] = 1;
+    data[81] = SWMP_BOW_ANIM_COUNT;
+    CHECK(!swmp_player_snapshot_decode(&out, data));
+    CHECK(swmp_player_snapshot_encode(data, &in));
+    data[82] = 1;
     CHECK(!swmp_player_snapshot_decode(&out, data));
     CHECK(swmp_player_snapshot_encode(data, &in));
     data[84] = 0x7f;
     CHECK(!swmp_player_snapshot_decode(&out, data));
     CHECK(swmp_player_snapshot_encode(data, &in));
     data[1] &= ~SWMP_PLAYER_BOW_POSE;
+    data[81] = SWMP_BOW_ANIM_NONE;
+    CHECK(!swmp_player_snapshot_decode(&out, data));
+    data[80] = SWMP_ARROW_NONE;
+    data[81] = SWMP_BOW_ANIM_DRAW;
     CHECK(!swmp_player_snapshot_decode(&out, data));
     CHECK(swmp_player_snapshot_encode(data, &in));
     data[1] = SWMP_PLAYER_BOW_POSE;
@@ -130,6 +150,12 @@ static void snapshot_test(void) {
     CHECK(!swmp_player_snapshot_encode(data, &in));
     in.equipment_revision = 1;
     in.nocked_arrow = SWMP_ARROW_NONE;
+    in.bow_animation = SWMP_BOW_ANIM_COUNT;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.bow_animation = SWMP_BOW_ANIM_DRAW;
+    in.flags &= ~SWMP_PLAYER_BOW_POSE;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.bow_animation = SWMP_BOW_ANIM_NONE;
     CHECK(swmp_player_snapshot_encode(data, &in));
     CHECK(!memcmp(data + 80, (const uint8_t[16]){0}, 16));
 }
@@ -403,7 +429,8 @@ static void lobby_test(void) {
     for (uint8_t i = 1; i < SWMP_MAX_PEERS; i++) {
         position.flags = i == 1 ? SWMP_PLAYER_WEAPON_POSE | SWMP_PLAYER_SHIELD_POSE | SWMP_PLAYER_BOW_POSE :
             i == 3 ? SWMP_PLAYER_WEAPON_POSE : 0;
-        position.nocked_arrow = i == 1 ? SWMP_ARROW_NORMAL : SWMP_ARROW_NONE;
+        position.nocked_arrow = i == 1 ? SWMP_ARROW_ANCIENT : SWMP_ARROW_NONE;
+        position.bow_animation = i == 1 ? SWMP_BOW_ANIM_DRAW : SWMP_BOW_ANIM_NONE;
         position.position_mm[0] = i * 1000;
         swmp_lobby_send_position(&lobbies[i], &position, 1);
     }
@@ -420,7 +447,8 @@ static void lobby_test(void) {
     CHECK(lobbies[2].positions[1].snapshot.gear_pose[SWMP_GEAR_WEAPON].offset_mm[1] == 1420);
     CHECK(lobbies[2].positions[1].snapshot.gear_pose[SWMP_GEAR_SHIELD].offset_mm[2] == -350);
     CHECK(lobbies[2].positions[1].snapshot.gear_pose[SWMP_GEAR_BOW].offset_mm[2] == -400);
-    CHECK(lobbies[2].positions[1].snapshot.nocked_arrow == SWMP_ARROW_NORMAL);
+    CHECK(lobbies[2].positions[1].snapshot.nocked_arrow == SWMP_ARROW_ANCIENT);
+    CHECK(lobbies[2].positions[1].snapshot.bow_animation == SWMP_BOW_ANIM_DRAW);
     CHECK(lobbies[2].positions[1].snapshot.arrow_pose.offset_mm[2] == 450);
     CHECK(lobbies[2].positions[3].snapshot.nocked_arrow == SWMP_ARROW_NONE);
     for (uint8_t i = 0; i < SWMP_MAX_PEERS; i++) {
@@ -511,11 +539,20 @@ static void lobby_test(void) {
     CHECK(!host->environment.area_id && !host->positions[3].snapshot.area_id);
 
     // A late join sees current players with the next batch, and expired entries drop out.
+    SwmpPlayerSnapshot before_unequip = position;
+    before_unequip.flags = SWMP_PLAYER_BOW_POSE;
+    before_unequip.nocked_arrow = SWMP_ARROW_NORMAL;
+    before_unequip.bow_animation = SWMP_BOW_ANIM_DRAW;
+    swmp_lobby_send_position(&lobbies[1], &before_unequip, 51);
+    swmp_lobby_poll(host, 51);
     environment.time_milli = 0;
     swmp_lobby_send_state(host, &position, &environment, 51);
     swmp_lobby_poll(extra, 51);
     CHECK(extra->environment.area_id == 1 && extra->environment.state.time_milli == 0);
     CHECK(extra->environment.state.weather == 6);
+    const SwmpPlayerSnapshot *after_unequip = &extra->positions[1].snapshot;
+    CHECK(after_unequip->equipment_revision == 3 && !(after_unequip->flags & SWMP_PLAYER_BOW_POSE));
+    CHECK(after_unequip->nocked_arrow == SWMP_ARROW_NONE && after_unequip->bow_animation == SWMP_BOW_ANIM_NONE);
     CHECK(extra->positions[2].snapshot.position_mm[0] == 2000);
     CHECK(!swmp_position_fresh(&extra->positions[2], 1051));
     swmp_lobby_send_position(host, &position, 1051);

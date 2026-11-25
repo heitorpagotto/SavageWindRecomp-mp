@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-24T09:39:28-03:00",
+  "updated_at": "2026-11-24T21:54:40-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
-    "protocol_version": 2,
+    "protocol_version": 4,
     "target_game_version": "1.9.0",
     "max_players": 8,
     "platform_policy": "every supported Savage Wind platform",
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "ed1725c",
+    "workspace_base_commit": "7364383",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -69,7 +69,7 @@
       "name": "Time, weather, and full Link synchronization",
       "status": "in_progress",
       "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible.",
-      "implemented_slice": "Host time and weather in position batches, overlay notices for admission and disconnect, independent revisioned Woodcutter's Axe, Wooden Shield and Traveler's Bow slots, native landing, weapon and crouch clips, free and directional lock-on swimming strokes, directional wall climbing and jumps, and gliding clips with synchronized Link and canopy banking."
+      "implemented_slice": "Host time and weather, connection notices, revisioned melee, shield and bow slots, native bowstring states and all six inventory arrow visuals, grounded weapon and shield actions, lock-on dodges and landings, swimming, directional climbing and jumps, and gliding with synchronized Link and canopy banking."
     },
     {
       "id": "M3",
@@ -131,6 +131,11 @@
     "reliable Woodcutter's Axe, Traveler's Sword, Spear and Claymore, Wooden and Soldier's Shields, and Traveler's and Soldier's Bows, with late-join replay and bounded relative poses",
     "per-peer passive weapon, shield and bow actors with independent indexed placement and retirement",
     "passive nocked Normal Arrow with native pose and snapshot lifetime in wire protocol 2",
+    "independent native bowstring animation states for Traveler's and Soldier's Bows in wire protocol 3",
+    "passive nocked Fire, Ice, Shock, Bomb, and Ancient Arrows in wire protocol 4, with a shorter respawn delay after normal release",
+    "grounded lock-on dodge and landing clips selected from native Step motion, with dedicated backflip clips",
+    "representative full-body hit, knockdown, tumble, landing roll and stand-up clips",
+    "hard landing and stand-up clips for native fall damage",
     "native landing, grounded draw, drawn idle, stow, attack chains and charge for three melee families, standing shield guard blends, parry, hit and break, crouch, and grounded bow draw, reload, aim, release, ready and stow clips",
     "native treading, swimming, swim dash, wall hold, directional climb, wall approach, mantle and upward climbing jump proxy clips",
     "paraglider deployment, neutral flight and fall clips with a passive canopy driven by the transient gliding flag"
@@ -199,6 +204,11 @@
     "m25_windows_bow_ready": "Two Windows 1.9.0 games in Tah Muhl Shrine with source ID e9928eba4b67d29f45947018ecbd17a57d018317 verified the Soldier's Bow held-ready animation between release and stow for at least 0.65 seconds at 30, 60, 90 and 120 measured FPS. Draw, aim, release and stow passed at each cap. Evidence is in build/m25-bow-ready-y5zwclgm/.",
     "m25_windows_shield_blends": "Two Windows 1.9.0 games in Tah Muhl Shrine with source ID 6204b14ff79e7a921c8f3aa5cf5f2459d13405da verified four-frame blends between ShieldGuard and Idle in both directions at 30, 60, 90 and 120 FPS targets. SwordReady transitions in both directions and default parry timing passed at 30 FPS. Evidence is in build/m25-guard-transition-zrheifj4/ and build/m25-guard-blend-kpq64rvp/.",
     "m25_windows_nocked_arrow": "Two Windows 1.9.0 games with protocol 2, source ID 3f7f9da84ecd7ba679e60c5c03469d2f71d6922a and gamelib 13365c313591b27e verified nocked Normal Arrow pose and release at 30, 60, 90 and 120 measured FPS. Cancel and same-slot rejoin while aiming passed. A 30 FPS side-view capture shows the passive arrow on the remote Soldier's Bow. Evidence is in build/m25-nocked-arrow-jq6s5_sg/ and build/m25-arrow-profile-9pfm_fb9/.",
+    "m25_windows_bowstring": "Two Windows 1.9.0 games with protocol 3, source ID 856b34baf572ee17f73d0a94ac97c53b3c930d8a and gamelib 13365c313591b27e verified Soldier's Bow draw and release at 30, 60, 90 and 120 measured FPS. Cancel, remove and re-equip, and same-slot rejoin during aim passed. The Traveler's Bow passed at 30 FPS, with side-view captures comparing Hold and Draw while Link aimed. Evidence is in build/m25-nocked-arrow-1pfzvcs_/ and build/m25-bowstring-profile-p8x7vv4h/.",
+    "m25_windows_arrow_variants": "Two Windows 1.9.0 games with protocol 4, source ID a7106be30f6384fe6ab5b88bac0f791ff033dd99 and gamelib 13365c313591b27e verified Fire, Ice, Shock, Bomb and Ancient Arrow visuals at 30 FPS. Rejoin during Ancient Arrow aim restored the visual. Four Normal Arrow draws and releases passed at 30 and 120 FPS, with 691 to 800 ms between retirement and the next visible arrow across both runs. Bow remove and re-equip, Leave and same-slot rejoin passed. Evidence is in build/m25-arrow-variants-tu31l6l1/, build/m25-arrow-variants-z9lpjpdt/ and build/m25-arrow-variants-34sl5juy/.",
+    "m25_windows_grounded_dodges": "Two Windows 1.9.0 games with protocol 4, source ID 4fc921cb3b83f486928a8a0305dc9f77521f4245 and gamelib 13365c313591b27e verified neutral, left, right and forward steps and the backflip, with their landings, at 30, 60, 90 and 120 measured FPS. Leave and same-slot rejoin passed. The backflip capture exposed a brief gear attachment offset. Evidence is in build/m25-dodge-live-35hivj8x/ and build/m25-dodge-profile-5zffty2m/.",
+    "m25_windows_reactions": "Windows BOTW 1.9.0 with protocol 4 and gamelib 13365c313591b27e verified a medium enemy hit and return to idle at 60 FPS in build/m25-reactions-enemy-kabvjotp/. At 30 FPS, the source ID 1f30f098d12fb08eaeffd3767dff0476627fd914 replay in build/m25-reactions-armored-1_mpvqet/ relayed a survivable knockdown, tumble, landing roll, stand-up and return to idle on one Link. Light hits passed the synthetic action check.",
+    "m25_windows_fall_damage": "Two Windows 1.9.0 games in Tah Muhl Shrine used protocol 4, source ID 950097e37b41370878be23e6338b9dc9a1b99845 and gamelib 13365c313591b27e. At 30, 60, 90 and 120 FPS, the receiver played ordinary landing after a 6 m drop and hard landing and recovery after a 21 m drop on the same Link. Hard landings took four quarter-hearts from the sender. Evidence is in build/m25-hard-landing-xsbgdcyi/.",
     "m25_windows_airborne_bow_probe": "Native Fall overlapped upper-slot BowReload, BowCharge and BowShoot during 6 m and 9 m drops. The proxy played Fall and its upper slot remained empty when explicitly asked to play BowAim alongside it. Evidence is in build/m25-guard-bow-t9gnto0b/, build/m25-guard-bow-9g15fuvx/ and build/m25-sword-guard-en520aka/."
   },
   "bootstrap_verification": {
@@ -226,5 +236,5 @@
     "Appearance"
   ],
   "animation_validation": "Windows validation can happen during Appearance. The owner will validate Linux manually later and report any problems.",
-  "next_recommended_work": "Continue Shield and bow with bowstring animation. The nocked Normal Arrow is verified in Windows. Airborne aim awaits layered playback. Follow the owner's animation work order in HANDOFF.md and NEXT.md."
+  "next_recommended_work": "Continue Traversal and reactions with native light and directional hits and movement transitions at water and ledges. Medium hits, knockdown recovery and fall-damage recovery are verified on Windows. Airborne Link aim awaits layered playback."
 }

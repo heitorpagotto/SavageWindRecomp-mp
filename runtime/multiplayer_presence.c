@@ -39,7 +39,8 @@ typedef struct {
 typedef struct {
     uint64_t deadline;
     unsigned gear;
-    bool retained, visible, animated;
+    const char *animation;
+    bool retained, visible;
 } GearActor;
 
 // Owned by the guest menu update thread. The request address must stay fixed while the game owns it.
@@ -108,18 +109,18 @@ static uint64_t actor_slots_alloc(void) {
     return addr;
 }
 
-static void retire_gear(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now) {
+static void retire_gear(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t retry_at) {
     GearActor *slot = &gear_slots[kind][peer];
     release_actor(cpu, gear_storage[kind] + peer * SLOT_SIZE, slot->retained);
     LOG("[multiplayer] remote %s %s for peer %u\n", swmp_gear_assets[slot->gear].label,
         slot->visible ? "removed" : "request retired", peer);
-    *slot = (GearActor){.deadline = now + retry_ns};
+    *slot = (GearActor){.deadline = retry_at};
 }
 
 static void retire(Cpu *cpu, uint8_t peer, uint64_t now, const char *reason) {
     Placeholder *slot = &slots[peer];
     for (unsigned kind = 0; kind < SWMP_VISUAL_SLOTS; kind++)
-        if (gear_slots[kind][peer].gear) retire_gear(cpu, peer, kind, now);
+        if (gear_slots[kind][peer].gear) retire_gear(cpu, peer, kind, now + retry_ns);
     release_actor(cpu, storage + peer * SLOT_SIZE, slot->retained);
     LOG("[multiplayer] %s %s for peer %u (%s)\n", slot->proxy ? "remote Link" : "placeholder",
         slot->visible ? "removed" : "request retired", peer, reason);
@@ -166,6 +167,24 @@ static const char *animation_state(Cpu *cpu, uint64_t controller, unsigned layer
     if (!guest_range(name, 64)) return "";
     const char *state = (const char *)(uintptr_t)name;
     return memchr(state, 0, 64) ? state : "";
+}
+
+static const char *const bow_animation_names[SWMP_BOW_ANIM_COUNT] = {
+    [SWMP_BOW_ANIM_HOLD] = "Hold",
+    [SWMP_BOW_ANIM_EQUIPPED] = "Equiped",
+    [SWMP_BOW_ANIM_DRAW] = "Draw",
+    [SWMP_BOW_ANIM_SHOOT] = "Shoot",
+    [SWMP_BOW_ANIM_NEUTRAL] = "Null",
+    [SWMP_BOW_ANIM_CAMERA_PAUSE] = "SelfCameraPause",
+};
+
+static SwmpBowAnimation sample_bow_animation(Cpu *cpu, uint64_t bow, uint64_t heap_size) {
+    uint64_t controller = g_site.mp_anim_current ? animation_controller(bow, heap_size) : 0;
+    if (!controller) return SWMP_BOW_ANIM_NONE;
+    const char *state = animation_state(cpu, controller, 0, 0);
+    for (unsigned i = SWMP_BOW_ANIM_HOLD; i < SWMP_BOW_ANIM_COUNT; i++)
+        if (!strcmp(state, bow_animation_names[i])) return i;
+    return SWMP_BOW_ANIM_NONE;
 }
 
 static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, uint64_t now, SwmpGearSet gear,
@@ -219,6 +238,48 @@ static SwmpProxyAction sample_climb_jump(const float pos[3], uint64_t now) {
             local_motion_action = directions[climb_direction(right, up)];
         else if (elapsed >= UINT64_C(100000000))
             local_motion_action = SWMP_PROXY_CLIMB_JUMP;
+    }
+    return local_motion_action;
+}
+
+static SwmpProxyAction sample_step(const float pos[3], uint64_t now, SwmpProxyAction state) {
+    static const SwmpProxyAction landings[] = {
+        [0] = SWMP_PROXY_STEP_LAND,
+        [SWMP_PROXY_STEP_LEFT - SWMP_PROXY_STEP] = SWMP_PROXY_STEP_LAND_LEFT,
+        [SWMP_PROXY_STEP_RIGHT - SWMP_PROXY_STEP] = SWMP_PROXY_STEP_LAND_RIGHT,
+        [SWMP_PROXY_STEP_FORWARD - SWMP_PROXY_STEP] = SWMP_PROXY_STEP_LAND_FORWARD,
+        [SWMP_PROXY_STEP_BACK - SWMP_PROXY_STEP] = SWMP_PROXY_STEP_LAND_BACK,
+    };
+    if (state == SWMP_PROXY_STEP_LAND) {
+        if (!local_motion_at || (local_motion_state != SWMP_PROXY_STEP && local_motion_state != SWMP_PROXY_STEP_LAND) ||
+            local_motion_action == SWMP_PROXY_IDLE)
+            local_motion_action = SWMP_PROXY_STEP;
+        local_motion_state = SWMP_PROXY_STEP_LAND;
+        return landings[local_motion_action - SWMP_PROXY_STEP];
+    }
+    if (!local_motion_at || local_motion_state != SWMP_PROXY_STEP) {
+        local_motion_at = now;
+        memcpy(local_motion_pos, pos, sizeof local_motion_pos);
+        local_motion_yaw = local_yaw;
+        local_motion_state = SWMP_PROXY_STEP;
+        local_motion_action = SWMP_PROXY_IDLE;
+    } else if (local_motion_action == SWMP_PROXY_IDLE) {
+        float dx = pos[0] - local_motion_pos[0], dz = pos[2] - local_motion_pos[2];
+        float distance = hypotf(dx, dz);
+        uint64_t elapsed = now - local_motion_at;
+        // A moving step covers about 18 cm in one 30 FPS update. Wait for launch motion,
+        // then hold the direction through landing even when Link stops moving.
+        if (distance >= 0.06f && distance < 1.0f && elapsed <= 2 * snapshot_ns) {
+            float yaw = local_motion_yaw * (pi / 32768.0f);
+            float forward = sinf(yaw) * dx + cosf(yaw) * dz;
+            float right = sinf(yaw) * dz - cosf(yaw) * dx;
+            if (fabsf(right) > fabsf(forward))
+                local_motion_action = right > 0 ? SWMP_PROXY_STEP_RIGHT : SWMP_PROXY_STEP_LEFT;
+            else
+                local_motion_action = forward > 0 ? SWMP_PROXY_STEP_FORWARD : SWMP_PROXY_STEP_BACK;
+        } else if (elapsed >= snapshot_ns) {
+            local_motion_action = SWMP_PROXY_STEP;
+        }
     }
     return local_motion_action;
 }
@@ -385,6 +446,20 @@ static bool bow_holds_arrow(SwmpProxyAction action) {
     return action == SWMP_PROXY_BOW_RELOAD || action == SWMP_PROXY_BOW_AIM;
 }
 
+static SwmpArrow sample_arrow(uint64_t bow, uint64_t heap_size, const float pos[3], SwmpPlayerSnapshot *sample) {
+    // The bow's attached actor becomes a projectile on release. Sample it only while nocked.
+    uint64_t arrow = LD64(bow + 0x88);
+    if (!heap_object(arrow, heap_size, 0x3c8) || LD8(arrow + 0x64) != 1 || (LD32(arrow + 0x78) & 1))
+        return SWMP_ARROW_NONE;
+    uint64_t name = LD64(arrow + 0x10);
+    for (unsigned i = SWMP_ARROW_NORMAL; i < SWMP_ARROW_COUNT; i++) {
+        const SwmpGearAsset *asset = &swmp_gear_assets[SWMP_ARROW_ASSET_BASE + i];
+        if (action_named(name, asset->model_user))
+            return sample_gear_pose(arrow, pos, sample->rotation[1], &sample->arrow_pose) ? i : SWMP_ARROW_NONE;
+    }
+    return SWMP_ARROW_NONE;
+}
+
 static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player, SwmpGearSet *gear) {
     SwmpPlayerSnapshot sample = {0};
     if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui()) return sample;
@@ -417,14 +492,10 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         sample.gear_pose[SWMP_GEAR_SHIELD].offset_mm[2] >= 175;
     const SwmpGearPose *bow_pose = (sample.flags & SWMP_PLAYER_BOW_POSE) ? &sample.gear_pose[SWMP_GEAR_BOW] : NULL;
     sample.action = sample_action(cpu, actor, heap_size, now, *gear, weapon_pose, bow_pose, shield_raised);
-    if (bow && bow_holds_arrow(sample.action) && !strcmp(g_game_version, "1.9.0")) {
-        // The bow's attached actor becomes a projectile on release. Sample it only while nocked.
-        uint64_t arrow = LD64(bow + 0x88);
-        if (heap_object(arrow, heap_size, 0x3c8) && LD8(arrow + 0x64) == 1 && !(LD32(arrow + 0x78) & 1) &&
-            action_named(LD64(arrow + 0x10), "NormalArrow") &&
-            sample_gear_pose(arrow, p, sample.rotation[1], &sample.arrow_pose))
-            sample.nocked_arrow = SWMP_ARROW_NORMAL;
-    }
+    // The bow starts drawing and finishes releasing independently of Link's upper-body state.
+    if (bow) sample.bow_animation = sample_bow_animation(cpu, bow, heap_size);
+    if (bow && bow_holds_arrow(sample.action) && !strcmp(g_game_version, "1.9.0"))
+        sample.nocked_arrow = sample_arrow(bow, heap_size, p, &sample);
     if (sample.action == SWMP_PROXY_CROUCH_IDLE || sample.action == SWMP_PROXY_CROUCH_MOVE)
         sample.flags |= SWMP_PLAYER_CROUCHING;
     if (sample.action == SWMP_PROXY_SHIELD_GUARD) sample.flags |= SWMP_PLAYER_GUARDING;
@@ -434,6 +505,8 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         else local_motion_at = 0;
     } else if (sample.action == SWMP_PROXY_CLIMB_JUMP)
         sample.action = sample_climb_jump(p, now);
+    else if (sample.action == SWMP_PROXY_STEP || sample.action == SWMP_PROXY_STEP_LAND)
+        sample.action = sample_step(p, now, sample.action);
     else if (sample.action == SWMP_PROXY_WALK || sample.action == SWMP_PROXY_CLIMB_MOVE ||
              (has_facing && (sample.action == SWMP_PROXY_SWIM_MOVE || sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD)))
         sample.action = sample_motion(p, now, sample.action);
@@ -579,11 +652,13 @@ static bool retain_actor(Cpu *cpu, uint64_t addr) {
 static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames);
 
 static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, uint64_t context,
-                          unsigned id, const SwmpGearPose *pose) {
+                          unsigned id, const SwmpGearPose *pose, const char *animation) {
     const Placeholder *link = &slots[peer];
     GearActor *slot = &gear_slots[kind][peer];
     if (slot->gear && slot->gear != id) {
-        retire_gear(cpu, peer, kind, now);
+        // Arrow release and replacement are routine. Leave a send interval for deletion
+        // without imposing the one-second failure backoff on the next nock.
+        retire_gear(cpu, peer, kind, now + (kind == SWMP_NOCKED_ARROW_SLOT ? snapshot_ns : retry_ns));
         return;
     }
     if ((!pose && id != SWMP_PARAGLIDER_ASSET) || !link->visible || !link->proxy ||
@@ -599,27 +674,27 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
         slot->gear = id;
         slot->deadline = now + request_ns;
         if (!request_actor(cpu, addr, context, &link->applied, asset->actor))
-            retire_gear(cpu, peer, kind, now);
+            retire_gear(cpu, peer, kind, now + retry_ns);
     } else if (slot->retained) {
         uint64_t actor = resolve(cpu, addr);
         bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
         if (active) {
-            if (id == SWMP_PARAGLIDER_ASSET) {
+            if (id == SWMP_PARAGLIDER_ASSET)
                 move_actor(cpu, actor, &link->applied, 2.0f);
-                if (!slot->animated) slot->animated = play_animation(cpu, actor, "Open", -1.0f);
-            } else {
+            else
                 move_gear(cpu, actor, &link->applied, pose);
-            }
+            if (animation && slot->animation != animation && play_animation(cpu, actor, animation, -1.0f))
+                slot->animation = animation;
             if (!slot->visible) LOG("[multiplayer] remote %s ready for peer %u\n", asset->label, peer);
             slot->visible = true;
         }
         call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
-        if (!active && (slot->visible || now >= slot->deadline)) retire_gear(cpu, peer, kind, now);
+        if (!active && (slot->visible || now >= slot->deadline)) retire_gear(cpu, peer, kind, now + retry_ns);
     } else if (call(cpu, g_site.mp_presence_ready, addr, 0, 0) & 1) {
         slot->retained = retain_actor(cpu, addr);
-        if (!slot->retained) retire_gear(cpu, peer, kind, now);
+        if (!slot->retained) retire_gear(cpu, peer, kind, now + retry_ns);
     } else if (now >= slot->deadline || (call(cpu, g_site.mp_presence_failed, addr, 0, 0) & 1)) {
-        retire_gear(cpu, peer, kind, now);
+        retire_gear(cpu, peer, kind, now + retry_ns);
     }
 }
 
@@ -628,19 +703,25 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
     for (unsigned kind = 0; kind < SWMP_GEAR_SLOTS; kind++) {
         unsigned id = gear->gear.id[kind];
         const SwmpGearPose *pose = NULL;
+        const char *animation = NULL;
         if (gear->revision == sample->equipment_revision) {
-            if (sample->flags & swmp_gear_pose_flag(kind)) pose = &sample->gear_pose[kind];
-            else id = SWMP_GEAR_NONE;
+            if (sample->flags & swmp_gear_pose_flag(kind)) {
+                pose = &sample->gear_pose[kind];
+                if (kind == SWMP_GEAR_BOW) animation = bow_animation_names[sample->bow_animation];
+            } else {
+                id = SWMP_GEAR_NONE;
+            }
         }
-        update_visual(cpu, peer, kind, now, context, id, pose);
+        update_visual(cpu, peer, kind, now, context, id, pose, animation);
     }
     bool deployed = action == SWMP_PROXY_GLIDE && (sample->flags & SWMP_PLAYER_GLIDING);
     update_visual(cpu, peer, SWMP_PARAGLIDER_SLOT, now, context,
-                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL);
-    bool nocked = sample->nocked_arrow == SWMP_ARROW_NORMAL && bow_holds_arrow(action) &&
+                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL, "Open");
+    bool nocked = sample->nocked_arrow != SWMP_ARROW_NONE && bow_holds_arrow(action) &&
         gear->revision == sample->equipment_revision && gear_slots[SWMP_GEAR_BOW][peer].visible;
     update_visual(cpu, peer, SWMP_NOCKED_ARROW_SLOT, now, context,
-                  nocked ? SWMP_NOCKED_ARROW_ASSET : SWMP_GEAR_NONE, nocked ? &sample->arrow_pose : NULL);
+                  nocked ? SWMP_ARROW_ASSET_BASE + sample->nocked_arrow : SWMP_GEAR_NONE,
+                  nocked ? &sample->arrow_pose : NULL, NULL);
 }
 
 static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames) {
@@ -754,6 +835,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
     SwmpGearSet gear = {0};
     bool changed = lobby_generation != roster.lobby_generation;
     if (changed) {
+        local_motion_at = 0;
         local_shield_at = 0;
         local_shield_break = false;
     }
