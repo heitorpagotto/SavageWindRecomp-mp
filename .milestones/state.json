@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-24T21:54:40-03:00",
+  "updated_at": "2026-11-25T14:17:24-03:00",
   "project": {
     "name": "Savage Wind Multiplayer",
-    "protocol_version": 4,
+    "protocol_version": 6,
     "target_game_version": "1.9.0",
     "max_players": 8,
     "platform_policy": "every supported Savage Wind platform",
@@ -28,7 +28,7 @@
     "lobby_work_base_commit": "11c1af1",
     "synthetic_lobby_commit": "11ed467",
     "direct_multiplayer_commit": "007973d",
-    "workspace_base_commit": "7364383",
+    "workspace_base_commit": "d5029de",
     "workspace_committed": false,
     "bootstrap_branch": "multiplayer/bootstrap"
   },
@@ -69,7 +69,7 @@
       "name": "Time, weather, and full Link synchronization",
       "status": "in_progress",
       "scope": "Synchronize host time and weather through one default-on multiplayer option, synchronize equipment and full animations, notify existing players with '[UserName] connected to the game' on admission, and add default-on overhead player names if feasible.",
-      "implemented_slice": "Host time and weather, connection notices, revisioned melee, shield and bow slots, native bowstring states and all six inventory arrow visuals, grounded weapon and shield actions, lock-on dodges and landings, swimming, directional climbing and jumps, and gliding with synchronized Link and canopy banking."
+      "implemented_slice": "Host time and weather, connection notices, revisioned melee, shield and bow slots, native bowstring states and all six inventory arrow visuals, grounded weapon and shield actions, lock-on dodges and landings, swimming, directional climbing and jumps, gliding with synchronized Link and canopy banking, buffered movement and gear playback, in-place grounded locomotion, standing-jump phase, and skinned default hair and equipped armor models."
     },
     {
       "id": "M3",
@@ -136,12 +136,14 @@
     "grounded lock-on dodge and landing clips selected from native Step motion, with dedicated backflip clips",
     "representative full-body hit, knockdown, tumble, landing roll and stand-up clips",
     "hard landing and stand-up clips for native fall damage",
+    "shared delayed playback for remote root and gear, in-place grounded locomotion, and standing-jump activation and phase in wire protocol 5",
+    "native head, upper and lower model identities in wire protocol 6, with default hair and independent skinned armor visuals",
     "native landing, grounded draw, drawn idle, stow, attack chains and charge for three melee families, standing shield guard blends, parry, hit and break, crouch, and grounded bow draw, reload, aim, release, ready and stow clips",
     "native treading, swimming, swim dash, wall hold, directional climb, wall approach, mantle and upward climbing jump proxy clips",
     "paraglider deployment, neutral flight and fall clips with a passive canopy driven by the transient gliding flag"
   ],
   "not_implemented": [
-    "skinned appearance and other rigid equipment variants",
+    "native armor material tint, dyes, body mesh masking and other rigid equipment variants",
     "broader action mapping, exact animation timing and layered blends",
     "broader area support",
     "combat and shared enemy health",
@@ -209,7 +211,9 @@
     "m25_windows_grounded_dodges": "Two Windows 1.9.0 games with protocol 4, source ID 4fc921cb3b83f486928a8a0305dc9f77521f4245 and gamelib 13365c313591b27e verified neutral, left, right and forward steps and the backflip, with their landings, at 30, 60, 90 and 120 measured FPS. Leave and same-slot rejoin passed. The backflip capture exposed a brief gear attachment offset. Evidence is in build/m25-dodge-live-35hivj8x/ and build/m25-dodge-profile-5zffty2m/.",
     "m25_windows_reactions": "Windows BOTW 1.9.0 with protocol 4 and gamelib 13365c313591b27e verified a medium enemy hit and return to idle at 60 FPS in build/m25-reactions-enemy-kabvjotp/. At 30 FPS, the source ID 1f30f098d12fb08eaeffd3767dff0476627fd914 replay in build/m25-reactions-armored-1_mpvqet/ relayed a survivable knockdown, tumble, landing roll, stand-up and return to idle on one Link. Light hits passed the synthetic action check.",
     "m25_windows_fall_damage": "Two Windows 1.9.0 games in Tah Muhl Shrine used protocol 4, source ID 950097e37b41370878be23e6338b9dc9a1b99845 and gamelib 13365c313591b27e. At 30, 60, 90 and 120 FPS, the receiver played ordinary landing after a 6 m drop and hard landing and recovery after a 21 m drop on the same Link. Hard landings took four quarter-hearts from the sender. Evidence is in build/m25-hard-landing-xsbgdcyi/.",
-    "m25_windows_airborne_bow_probe": "Native Fall overlapped upper-slot BowReload, BowCharge and BowShoot during 6 m and 9 m drops. The proxy played Fall and its upper slot remained empty when explicitly asked to play BowAim alongside it. Evidence is in build/m25-guard-bow-t9gnto0b/, build/m25-guard-bow-9g15fuvx/ and build/m25-sword-guard-en520aka/."
+    "m25_windows_airborne_bow_probe": "Native Fall overlapped upper-slot BowReload, BowCharge and BowShoot during 6 m and 9 m drops. The proxy played Fall and its upper slot remained empty when explicitly asked to play BowAim alongside it. Evidence is in build/m25-guard-bow-t9gnto0b/, build/m25-guard-bow-9g15fuvx/ and build/m25-sword-guard-en520aka/.",
+    "m25_windows_remote_movement": "Windows 1.9.0 with protocol 5, source ID 0724ac48f6da300ff33bfefb442ce2117dd955fc and gamelib 13365c313591b27e kept the Wooden Shield beside the sprinting proxy at 30, 60, 90 and 120 FPS. Twelve repeated standing jumps started from sampled phases. Shield guard, Leave and same-slot rejoin passed. Evidence is in build/m25-motion-final-3aoo7r_x/.",
+    "m25_windows_armor": "Windows 1.9.0 with protocol 6, source ID 51eff56c586d03a3f1d38dd0a5b0f500d34f6458 and gamelib 13365c313591b27e displayed default hair and the native Hylian Hood, Tunic and Trousers models. The pieces followed Link across standing jumps at 30, 60, 90 and 120 FPS targets. Rejoin restored the outfit and hood removal restored hair. A 30 FPS replay also verified Climber's Bandanna, Ancient Cuirass and Stealth Tights as one mixed outfit. Material colors and body masking still differ. Evidence is in build/m25-appearance-live-vcsd56ri/ and build/m25-appearance-mixed-5u3mn8rj/."
   },
   "bootstrap_verification": {
     "compiler": "GCC 16.2.1",
@@ -236,5 +240,5 @@
     "Appearance"
   ],
   "animation_validation": "Windows validation can happen during Appearance. The owner will validate Linux manually later and report any problems.",
-  "next_recommended_work": "Continue Traversal and reactions with native light and directional hits and movement transitions at water and ledges. Medium hits, knockdown recovery and fall-damage recovery are verified on Windows. Airborne Link aim awaits layered playback."
+  "next_recommended_work": "Fix remote armor palette matching and base skin clipping using the reproduction and checks in HANDOFF.md. Continue Traversal and reactions with native light and directional hits and movement transitions at water and ledges. Extend playback phase and rate beyond standing jumps. Airborne Link aim awaits layered playback."
 }

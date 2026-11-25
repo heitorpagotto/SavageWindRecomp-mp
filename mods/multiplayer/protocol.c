@@ -154,7 +154,10 @@ enum {
     GEAR_POSES_AT = 44,
     NOCKED_ARROW_AT = GEAR_POSES_AT + GEAR_POSE_SIZE * SWMP_GEAR_SLOTS,
     BOW_ANIMATION_AT = NOCKED_ARROW_AT + 1,
+    ANIMATION_ACTIVATION_AT = NOCKED_ARROW_AT + 2,
+    ANIMATION_PHASE_AT = NOCKED_ARROW_AT + 3,
     ARROW_POSE_AT = NOCKED_ARROW_AT + 4,
+    SAMPLED_MS_AT = ARROW_POSE_AT + GEAR_POSE_SIZE,
 };
 
 static bool pose_offset_valid(const SwmpGearPose *pose) {
@@ -189,6 +192,7 @@ static void get_gear_pose(SwmpGearPose *pose, const uint8_t *data) {
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *s) {
     if (!out || !s || s->peer_id >= SWMP_MAX_PEERS || (s->flags & ~SWMP_PLAYER_STATE_KNOWN)) return false;
+    if (s->animation_phase && !s->animation_activation) return false;
     if (!gear_pose_valid(s)) return false;
     out[0] = s->peer_id;
     out[1] = s->flags;
@@ -207,14 +211,17 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
             put_gear_pose(out + GEAR_POSES_AT + GEAR_POSE_SIZE * slot, &s->gear_pose[slot]);
     out[NOCKED_ARROW_AT] = s->nocked_arrow;
     out[BOW_ANIMATION_AT] = s->bow_animation;
+    out[ANIMATION_ACTIVATION_AT] = s->animation_activation;
+    out[ANIMATION_PHASE_AT] = s->animation_phase;
     if (s->nocked_arrow) put_gear_pose(out + ARROW_POSE_AT, &s->arrow_pose);
+    put32(out + SAMPLED_MS_AT, s->sampled_ms);
     return true;
 }
 
 bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
                                  const uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE]) {
     if (!s || !data || data[0] >= SWMP_MAX_PEERS || (data[1] & ~SWMP_PLAYER_STATE_KNOWN) ||
-        data[BOW_ANIMATION_AT + 1] || data[BOW_ANIMATION_AT + 2]) return false;
+        (data[ANIMATION_PHASE_AT] && !data[ANIMATION_ACTIVATION_AT])) return false;
     SwmpPlayerSnapshot decoded = {
         .peer_id = data[0],
         .flags = data[1],
@@ -226,6 +233,9 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .equipment_revision = get32(data + 40),
         .nocked_arrow = data[NOCKED_ARROW_AT],
         .bow_animation = data[BOW_ANIMATION_AT],
+        .animation_activation = data[ANIMATION_ACTIVATION_AT],
+        .animation_phase = data[ANIMATION_PHASE_AT],
+        .sampled_ms = get32(data + SAMPLED_MS_AT),
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);
@@ -372,12 +382,14 @@ bool swmp_control_encode(uint8_t *out, size_t capacity, size_t *size, SwmpMessag
     case SWMP_MSG_START:
         break;
     case SWMP_MSG_EQUIPMENT:
-        if (capacity < 5 + SWMP_GEAR_SLOTS || m->equipment.peer >= SWMP_MAX_PEERS ||
+        if (capacity < 5 + SWMP_GEAR_SLOTS + 4 * SWMP_ARMOR_SLOTS || m->equipment.peer >= SWMP_MAX_PEERS ||
             !swmp_gear_set_valid(m->equipment.state.gear) || !m->equipment.state.revision) return false;
         out[0] = m->equipment.peer;
         put32(out + 1, m->equipment.state.revision);
         memcpy(out + 5, m->equipment.state.gear.id, SWMP_GEAR_SLOTS);
         pos = 5 + SWMP_GEAR_SLOTS;
+        for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++, pos += 4)
+            put32(out + pos, m->equipment.state.gear.armor[i]);
         break;
     case SWMP_MSG_PING:
     case SWMP_MSG_PONG:
@@ -443,10 +455,12 @@ bool swmp_control_decode(SwmpControl *msg, SwmpMessageType type, const uint8_t *
     case SWMP_MSG_START:
         break;
     case SWMP_MSG_EQUIPMENT:
-        if (size != 5 + SWMP_GEAR_SLOTS || data[0] >= SWMP_MAX_PEERS) return false;
+        if (size != 5 + SWMP_GEAR_SLOTS + 4 * SWMP_ARMOR_SLOTS || data[0] >= SWMP_MAX_PEERS) return false;
         m.equipment.peer = data[0];
         m.equipment.state.revision = get32(data + 1);
         memcpy(m.equipment.state.gear.id, data + 5, SWMP_GEAR_SLOTS);
+        for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
+            m.equipment.state.gear.armor[i] = get32(data + 5 + SWMP_GEAR_SLOTS + i * 4);
         if (!m.equipment.state.revision || !swmp_gear_set_valid(m.equipment.state.gear)) return false;
         pos = size;
         break;

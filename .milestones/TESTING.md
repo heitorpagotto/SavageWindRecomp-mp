@@ -1,6 +1,70 @@
 # Test record and verification plan
 
-Reviewed 2026-11-24. The prototype and native build results below have separate verification scopes.
+Reviewed 2026-11-25. The prototype and native build results below have separate verification scopes.
+
+## M2.5 hair and equipped armor
+
+- The first Windows probe in `build/m25-appearance-probe-30dsokke/` displayed the default hair
+  and a Champion's Tunic as separate passive actors on Link. Both used the same Jump and Idle
+  clips as the proxy. The read-only trace saw the native upper body change from default to
+  Hylian Tunic after equipping it in the inventory.
+- The production replay in `build/m25-appearance-live-vcsd56ri/` used protocol 6, source ID
+  `51eff56c586d03a3f1d38dd0a5b0f500d34f6458`, and 1.9.0 gamelib `13365c313591b27e`.
+  Two Windows games in Tah Muhl Shrine used Vulkan at 1280x720, 75% render scale and a 1400 MiB
+  VRAM budget with heap copy off. The host used an RTX 4050 Laptop GPU (610.88) and the client
+  AMD Radeon Graphics (25.10.30.02).
+- Captures show default hair and each part of the Hylian set. Native inventory equips produced
+  only the corresponding remote appearance change. The receiving inventory remained independent.
+  The proxy and its three pieces each entered Jump once at 30, 60, 90 and 120 FPS targets.
+  Leave and same-slot rejoin restored the three equipped pieces. Removing the hood restored
+  hair while the tunic and trousers stayed active.
+- The capture comparison shows differences from the native outfit's material color and body mesh
+  masking. The trousers render with the boots, and the proxy's bare-leg mesh can show through.
+  The reference captures are `host/build/local-set.png` and `client/build/remote-set.png` under
+  `build/m25-appearance-live-vcsd56ri/`. Native color and masking, DLC and Linux are still open.
+- A 30 FPS Windows replay on the same build equipped the Ancient Cuirass, Climber's Bandanna
+  and Stealth Tights from the native inventory. Each appeared on the same remote Link, and
+  all three pieces entered Jump with the body at the same sampled phase.
+  See `build/m25-appearance-mixed-5u3mn8rj/client/build/remote-mixed-outfit.png` and the logs
+  from `build/m25_run_appearance_mixed.py`.
+- The installed-data check built 123 model packs from 420 native armor records. The runtime mounted
+  116 whose model resources were available. Upgrades can share the same model. Every original
+  ActorInfo entry survived the merge. The ignored probes are `build/m25_appearance_assets_test.py`,
+  `build/m25_appearance_live.py` and `build/m25_run_appearance_live.py`.
+
+## M2.5 remote movement and standing-jump playback
+
+- The Windows Vulkan pair used 1.9.0 gamelib `13365c313591b27e` in Tah Muhl Shrine.
+  Both used 960x540 at 50% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client AMD Radeon Graphics (25.10.30.02).
+- The baseline in `build/m25-motion-before-60pw37kg/` recorded eight held position updates
+  in sixteen consecutive 30 FPS mid-sprint steps, followed by movement steps as large as
+  0.84 m. The network trace itself had no backwards steps. The separate side view in
+  `build/m25-motion-model-3wxkvrdi/` shows the body passing the shield and axe during a
+  sprint despite agreement between the actor and equipment matrices. The
+  `build/m25-motion-idle-uk4r9qkc/` capture with the same movement applied over Idle and
+  the `build/m25-motion-root-ttjxvfes/` clip-curve experiment isolated animation root translation.
+- The final run in `build/m25-motion-final-3aoo7r_x/` used source ID
+  `0724ac48f6da300ff33bfefb442ce2117dd955fc` and protocol 5. Sprint captures show the
+  Wooden Shield and axe beside the running proxy at 30, 60, 90 and 120 measured FPS.
+  The receiver recorded zero held or backwards steps in 155 mid-sprint updates across the
+  four caps. At 30 FPS, the standard deviation of velocity between updates fell from
+  10.30 to 0.06 m/s. This compares the same 4.8–9.5 m window along the run.
+- Three standing jumps at each cap produced twelve native jump activations and twelve
+  remote starts. The receiver called playback at normalized phases between 0.0157 and 0.1378.
+  Standing shield guard still played, and Leave and same-slot rejoin retired and restored the
+  proxy and shield. The test used copied saves, scratch settings and an isolated clipboard.
+- The 30 FPS replay in `build/m25-motion-udp-rdowc22g/` used the existing test transport to
+  drop every fifth application datagram and delay the others by up to 45 ms. It recorded zero
+  held or backwards mid-sprint steps, three jump starts and shield guard. After Leave, the
+  rejoin timed out before the client sent a new lobby handshake.
+- The local resource check resolved all 96 clips and confirmed that only the four
+  locomotion curves changed. A truncated archive was rejected. A synthetic playback check
+  covered duplicate and older samples, a dropped sample, buffer underrun, timestamp wrap,
+  gear angle wrap, repeated activation and same-area teleport.
+- Windows app link, multiplayer core, eight-peer direct invite and WebRTC loopback passed.
+  The ignored `build/m25_motion_probe.py` and `build/m25_run_motion.py` reproduce the
+  instrumented route with `SWMP_MOTION_VARIANT=motion-final`.
 
 ## M2.5 fall-damage recovery
 

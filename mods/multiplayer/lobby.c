@@ -267,7 +267,8 @@ void swmp_lobby_set_equipment(SwmpLobby *l, SwmpGearSet gear) {
     if (!s->session_id || l->joining || s->local_peer >= SWMP_MAX_PEERS || !swmp_gear_set_valid(gear))
         return;
     SwmpEquipment *local = &l->equipment[s->local_peer];
-    if (!memcmp(local->gear.id, gear.id, sizeof gear.id)) return;
+    if (!memcmp(local->gear.id, gear.id, sizeof gear.id) &&
+        !memcmp(local->gear.armor, gear.armor, sizeof gear.armor)) return;
     local->gear = gear;
     if (!++local->revision) ++local->revision;
     SwmpControl msg = {.equipment = {.peer = s->local_peer, .state = *local}};

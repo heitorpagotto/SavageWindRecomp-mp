@@ -73,12 +73,17 @@ typedef struct {
     size_t hud_pack_size;
     uint8_t *voice_banks;    // the text language's voice banks with the chosen voices' lengths (bars_hybrid)
 #ifdef SW_MULTIPLAYER
-    uint8_t *proxy_pack, *proxy_actor_info;
-    size_t proxy_pack_size;
+    uint8_t *proxy_pack, *proxy_actor_info, *proxy_animation;
+    size_t proxy_pack_size, proxy_animation_size;
     struct {
         uint8_t *pack;
         size_t size;
     } gear[SWMP_VISUAL_ASSET_COUNT];
+    SwmpArmorCatalog armor;
+    struct {
+        uint8_t *pack;
+        size_t size;
+    } armor_packs[SWMP_MAX_ARMOR_MODELS];
 #endif
 } RomImage;
 #define AOC_MAX 8
@@ -92,6 +97,9 @@ static _Atomic unsigned multiplayer_gear_ready;
 bool fs_multiplayer_proxy_ready(void) { return atomic_load(&multiplayer_proxy_ready); }
 bool fs_multiplayer_gear_ready(unsigned asset) {
     return asset < SWMP_VISUAL_ASSET_COUNT && (atomic_load(&multiplayer_gear_ready) & (1u << asset));
+}
+const SwmpArmorCatalog *fs_multiplayer_armor_catalog(void) {
+    return atomic_load(&multiplayer_proxy_ready) ? &images[0].armor : NULL;
 }
 uint8_t *fs_game_file(const char *path, size_t *out_n);
 #endif
@@ -109,7 +117,9 @@ RT_ON_RESET(fs_reset) {
         free(m->ov_extended_meta);
 #ifdef SW_MULTIPLAYER
         free(m->proxy_pack);
+        free(m->proxy_animation);
         for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) free(m->gear[i].pack);
+        for (unsigned i = 0; i < m->armor.model_count; i++) free(m->armor_packs[i].pack);
         free(m->proxy_actor_info);
 #endif
         for (int i = 0; i < m->rom_nfiles; i++) free(m->rom_files[i].path);
@@ -239,12 +249,22 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     }
 #ifdef SW_MULTIPLAYER
     if (R->proxy_pack) {
-        if (cap - n < SWMP_VISUAL_ASSET_COUNT) nf = realloc(nf, sizeof *nf * (n + SWMP_VISUAL_ASSET_COUNT));
+        int capacity = n + SWMP_VISUAL_ASSET_COUNT + 1 + R->armor.model_count;
+        if (cap < capacity) nf = realloc(nf, sizeof *nf * capacity);
         nf[n++] = (NewFile){.rel = SWMP_PROXY_PACK, .size = R->proxy_pack_size, .mem = R->proxy_pack};
+        if (R->proxy_animation)
+            nf[n++] = (NewFile){.rel = SWMP_PROXY_ANIMATION_FILE, .size = R->proxy_animation_size,
+                                .mem = R->proxy_animation};
         for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
             if (!R->gear[i].pack) continue;
             nf[n] = (NewFile){.size = R->gear[i].size, .mem = R->gear[i].pack};
             strlcpy(nf[n].rel, swmp_gear_assets[i].pack, sizeof nf[n].rel);
+            n++;
+        }
+        for (unsigned i = 0; i < R->armor.model_count; i++) {
+            if (!R->armor_packs[i].pack) continue;
+            nf[n] = (NewFile){.size = R->armor_packs[i].size, .mem = R->armor_packs[i].pack};
+            snprintf(nf[n].rel, sizeof nf[n].rel, "Actor/Pack/%s.sbactorpack", R->armor.models[i].actor);
             n++;
         }
     }
@@ -522,6 +542,8 @@ static uint8_t *yaz0_pack_literal(const uint8_t *d, size_t n, size_t *out_n) {
 }
 
 #ifdef SW_MULTIPLAYER
+static uint8_t *yaz0_pack(const uint8_t *d, size_t n, const uint8_t *hdr, size_t *out_n);
+
 static uint8_t *pack_proxy_resource(uint8_t *raw, size_t raw_size, size_t *size) {
     if (!raw) return NULL;
     uint8_t *packed = yaz0_pack_literal(raw, raw_size, size);
@@ -555,6 +577,28 @@ static uint8_t *read_proxy_bundle(const SwmpGearAsset *asset, size_t *size) {
     return pack;
 }
 
+static bool multiplayer_armor_available(const SwmpArmorAsset *armor) {
+    char model[80], pack[80], host[1200];
+    snprintf(pack, sizeof pack, "Actor/Pack/%s.sbactorpack", armor->actor);
+    if (overlay_file(pack, host, sizeof host)) return false;
+    snprintf(model, sizeof model, "Model/%s.sbfres", armor->folder);
+    // The default hair and clothing load from the native shared TitleBG archive.
+    bool found = !strcmp(armor->folder, "Armor_Default") || overlay_file(model, host, sizeof host);
+    for (int i = 0; i < R->rom_nfiles; i++) {
+        if (!strcmp(R->rom_files[i].path, pack)) return false;
+        if (!strcmp(R->rom_files[i].path, model)) found = true;
+    }
+    return found;
+}
+
+static void discard_multiplayer_armor(void) {
+    for (unsigned i = 0; i < R->armor.model_count; i++) {
+        free(R->armor_packs[i].pack);
+        R->armor_packs[i].pack = NULL;
+    }
+    R->armor = (SwmpArmorCatalog){0};
+}
+
 static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t fsz) {
     if (R != &images[0] || !g_site.mp_presence_move || strcmp(g_game_version, "1.9.0")) return;
     char host[1200];
@@ -571,18 +615,30 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
         gear_mask |= 1u << i;
     }
     const RomFile *info = NULL;
+    bool alias_exists = overlay_file(SWMP_PROXY_ANIMATION_FILE, host, sizeof host);
     for (int i = 0; i < R->rom_nfiles; i++) {
         if (!strcmp(R->rom_files[i].path, SWMP_PROXY_PACK)) return;
+        if (!strcmp(R->rom_files[i].path, SWMP_PROXY_ANIMATION_FILE)) alias_exists = true;
         for (unsigned j = 1; j < SWMP_VISUAL_ASSET_COUNT; j++)
             if (!strcmp(R->rom_files[i].path, swmp_gear_assets[j].pack)) gear_mask &= ~(1u << j);
         if (!strcmp(R->rom_files[i].path, SWMP_ACTOR_INFO)) info = &R->rom_files[i];
     }
     if (!info) return;
 
-    size_t template_size = 0, raw_size = 0;
+    size_t template_size = 0, raw_size = 0, animation_size = 0;
+    uint8_t *animation = NULL;
+    if (g_site.mp_anim_play && !alias_exists && !overlay_file(SWMP_PLAYER_ANIMATION_FILE, host, sizeof host)) {
+        size_t stock_size = 0;
+        uint8_t *stock_animation = fs_game_file(SWMP_PLAYER_ANIMATION_FILE, &stock_size);
+        uint8_t *raw = swmp_proxy_animation(stock_animation, stock_size, &raw_size);
+        if (raw) animation = yaz0_pack(raw, raw_size, stock_animation, &animation_size);
+        free(raw);
+        free(stock_animation);
+        if (!animation) LOG("[multiplayer] in-place locomotion resources unavailable\n");
+    }
     size_t pack_size = 0, info_size = 0, stock_info_size = 0;
     uint8_t *stock = fs_game_file(SWMP_PROXY_TEMPLATE, &template_size);
-    uint8_t *raw = swmp_proxy_pack(stock, template_size, &raw_size);
+    uint8_t *raw = swmp_proxy_pack(stock, template_size, animation != NULL, &raw_size);
     uint8_t *pack = pack_proxy_resource(raw, raw_size, &pack_size);
     for (unsigned i = 1; pack && i < SWMP_VISUAL_ASSET_COUNT; i++) {
         if (!(gear_mask & (1u << i))) continue;
@@ -594,20 +650,35 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
         if (!R->gear[i].pack) gear_mask &= ~(1u << i);
         free(gear);
     }
-    free(stock);
     uint8_t *stock_info = pack ? fs_game_file(SWMP_ACTOR_INFO, &stock_info_size) : NULL;
-    raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, &raw_size);
+    if (stock_info && g_site.mp_anim_play && swmp_armor_catalog(stock_info, stock_info_size, &R->armor)) {
+        for (unsigned i = 0; i < R->armor.model_count; i++) {
+            SwmpArmorAsset *armor = &R->armor.models[i];
+            if (!multiplayer_armor_available(armor)) continue;
+            raw = swmp_armor_pack(armor, stock, template_size, animation != NULL, &raw_size);
+            R->armor_packs[i].pack = pack_proxy_resource(raw, raw_size, &R->armor_packs[i].size);
+            armor->ready = R->armor_packs[i].pack != NULL;
+        }
+    }
+    free(stock);
+    raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, &R->armor, &raw_size);
+    if (!raw && R->armor.model_count) {
+        discard_multiplayer_armor();
+        raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, NULL, &raw_size);
+    }
     if (!raw && gear_mask) {
         for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
             free(R->gear[i].pack);
             R->gear[i].pack = NULL;
         }
-        raw = swmp_proxy_actor_info(stock_info, stock_info_size, 0, &raw_size);
+        raw = swmp_proxy_actor_info(stock_info, stock_info_size, 0, NULL, &raw_size);
     }
     free(stock_info);
     uint8_t *actor_info = pack_proxy_resource(raw, raw_size, &info_size);
     if (!actor_info) {
         free(pack);
+        free(animation);
+        discard_multiplayer_armor();
         LOG("[multiplayer] remote Link resources unavailable, using NPC placeholders\n");
         return;
     }
@@ -615,6 +686,8 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     R->proxy_pack = pack;
     R->proxy_pack_size = pack_size;
     R->proxy_actor_info = actor_info;
+    R->proxy_animation = animation;
+    R->proxy_animation_size = animation_size;
     uint8_t *meta = meta_copy(fmeta, foff, fsz);
     uint64_t relative = R->ov_end - R->rom_data_off, size = info_size;
     memcpy(meta + info->meta + 8, &relative, 8);
@@ -631,6 +704,12 @@ static uint8_t *yaz0_pack(const uint8_t *d, size_t n, const uint8_t *hdr, size_t
     enum { WIN = 0x1000, MAXM = 0x111, HBITS = 16, DEPTH = 48 };
     uint8_t *o = malloc(16 + n + (n + 7) / 8 + 16);
     int32_t *head = malloc(sizeof *head << HBITS), *prev = malloc(sizeof *prev * WIN);
+    if (!o || !head || !prev) {
+        free(o);
+        free(head);
+        free(prev);
+        return NULL;
+    }
     memset(head, 0xff, sizeof *head << HBITS);
     memcpy(o, hdr, 16);
     o[4] = (uint8_t)(n >> 24), o[5] = (uint8_t)(n >> 16), o[6] = (uint8_t)(n >> 8), o[7] = (uint8_t)n;

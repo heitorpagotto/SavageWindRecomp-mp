@@ -5,13 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 4u
+#define SWMP_PROTOCOL_VERSION 6u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
-#define SWMP_PLAYER_SNAPSHOT_SIZE 96u
+#define SWMP_PLAYER_SNAPSHOT_SIZE 100u
 #define SWMP_GEAR_OFFSET_LIMIT_MM 3000
 #define SWMP_ENVIRONMENT_SIZE 8u
 #define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
@@ -124,8 +124,16 @@ typedef enum {
     SWMP_GEAR_COUNT
 } SwmpGear;
 
+typedef enum {
+    SWMP_ARMOR_HEAD,
+    SWMP_ARMOR_UPPER,
+    SWMP_ARMOR_LOWER,
+    SWMP_ARMOR_SLOTS
+} SwmpArmorSlot;
+
 typedef struct {
     uint8_t id[SWMP_GEAR_SLOTS];  // SwmpGear identities, resolved against installed resources
+    uint32_t armor[SWMP_ARMOR_SLOTS];  // installed model identities, zero for the default appearance
 } SwmpGearSet;
 
 typedef struct {
@@ -183,7 +191,10 @@ typedef struct {
     SwmpGearPose gear_pose[SWMP_GEAR_SLOTS];
     uint8_t nocked_arrow;  // SwmpArrow, valid with a bow pose
     uint8_t bow_animation; // SwmpBowAnimation, valid with a bow pose
+    uint8_t animation_activation; // nonzero for a tracked clip instance
+    uint8_t animation_phase;      // 1..255 maps to [0, 1], zero if unavailable
     SwmpGearPose arrow_pose;
+    uint32_t sampled_ms;          // low 32 bits of the owning game's monotonic sample time
 } SwmpPlayerSnapshot;
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);

@@ -10,12 +10,12 @@ require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 Defined in `mods/multiplayer/protocol.h`:
 
-- `SWMP_PROTOCOL_VERSION = 4`
+- `SWMP_PROTOCOL_VERSION = 6`
 - `SWMP_MAX_PEERS = 8`
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
 - `SWMP_PACKET_HEADER_SIZE = 32`
-- `SWMP_PLAYER_SNAPSHOT_SIZE = 96`
+- `SWMP_PLAYER_SNAPSHOT_SIZE = 100`
 - `SWMP_MAX_PAYLOAD_SIZE = 65536`
 
 Wire integers are big-endian/network byte order.
@@ -74,14 +74,17 @@ lobby currently sends and accepts control packets with zero flags.
 | 74 | 6 | bow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 | 80 | 1 | nocked arrow identity, zero for absent or 1–6 for Normal, Fire, Ice, Shock, Bomb, Ancient |
 | 81 | 1 | bow animation state, zero for unavailable or 1–6 for Hold, Equiped, Draw, Shoot, Null, SelfCameraPause |
-| 82 | 2 | reserved, must be zero |
+| 82 | 1 | animation activation ID, zero for untracked clips |
+| 83 | 1 | normalized animation phase, zero for unavailable and 1–255 for start through end |
 | 84 | 6 | nocked arrow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
 | 90 | 6 | nocked arrow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
+| 96 | 4 | low 32 bits of the owning game's monotonic sample time in milliseconds |
 
 Each gear-pose bit requires a nonzero revision and limits each offset axis to ±3000 mm. The receiver pairs the
 pose with the reliable record for the same peer and revision. The nocked arrow and bow animation state require a
-bow pose. The arrow shares the offset bound. The direct invite text format is independent of the packet version.
-Lobby traffic uses protocol 4 and admission requires matching source fingerprints.
+bow pose. The arrow shares the offset bound. A phase requires an activation ID. The host preserves the owning
+game's sample time when relaying a peer's snapshot. The direct invite text format is independent of the packet
+version. Lobby traffic uses protocol 6 and admission requires matching source fingerprints.
 
 ## Session state
 
@@ -142,10 +145,15 @@ The virtual RomFS builds an alias using the installed model and supplies idle, j
 run clips from Player_Animation. The action field uses 0 through 4 in that order. Unknown action
 IDs use idle. The guest thread samples local Link's native
 full-body state and selects a clip on each proxy's own animation controller while it holds the
-actor link. Playback starts on activation and on action changes. The native clock advances the
-clip while the interpolator applies position and facing. The interpolator blends over one send
-interval, snaps across corrections above 3 m, and holds the latest pose until the next sample or
-expiry. A new slot generation starts with a fresh controller and the latest snapshot.
+actor link. The receiver schedules snapshots on a delayed timeline using the owning game's sample intervals.
+The buffer starts 125 ms after the first arrival and ignores repeats of that source timestamp. Link's root,
+facing, roll and compatible gear poses interpolate between the same two samples. Action changes and
+corrections above 3 m take effect at their snapshot boundary. When the buffer runs out, Link holds the
+last pose and resumes from there. A new slot generation starts with a fresh controller and buffer.
+
+The 1.9.0 standing jump samples the native ten-frame track and sends a new byte-sized activation ID
+when the clip starts. The proxy starts at the sampled phase when it first sees an activation. The native
+clock advances playback between activations.
 
 The visibility follow-up accepts fresh positions on the main field and in individual shrine scenes.
 The RomFS stage tracker maps the field to area ID 1 and a shrine to 2 plus its pack number. IDs are
@@ -154,7 +162,10 @@ Peers must share the same area ID. A changed local area, actor or spawn context 
 proxies independently of lobby membership. The spawn radius is 50 m in three dimensions, with retirement
 beyond 60 m. This keeps proxy lifetime within the distance sustained in the Windows range probe.
 The native Move state is mapped to walk, run and sprint using horizontal speed sampled over roughly
-100 ms. Each action uses its own installed clip.
+100 ms. The proxy's virtual animation archive removes planar root translation from walk, run,
+sprint and crouch locomotion. The player snapshot supplies that movement. The local Link continues
+using the stock archive. The proxy uses the stock archive as a fallback if the local animation
+resource cannot be prepared.
 
 The separate native life observation reads current quarter-hearts from PlayerInfo. The window
 thread copies fresh health to the F1 roster. Zero life uses the snapshot's dead flag to distinguish
@@ -165,8 +176,9 @@ it from missing health. Damage authority and death handling belong to M3.
 The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe and Traveler's
 Sword, Spear and Claymore in category zero, Wooden and Soldier's Shields in category one, and
 Traveler's and Soldier's Bows in category two. The window thread advances the equipment
-revision when any identity changes. EQUIPMENT carries a one-byte peer, a four-byte revision, and three
-identity bytes in weapon, shield and bow order. The host accepts updates for the connection's own peer,
+revision when any identity changes. EQUIPMENT carries a one-byte peer, a four-byte revision, three
+identity bytes in weapon, shield and bow order, and three four-byte armor model IDs in head, torso and
+legs order. The host accepts updates for the connection's own peer,
 relays them, and sends cached revisions after WELCOME. Identity and membership
 share the ordered control channel. Peer removal clears the cached identity and position before slot reuse.
 
@@ -174,7 +186,17 @@ The virtual RomFS gives each gear variant a passive prop profile with dummy phys
 installed resources. A matching gear pose and an active Link proxy let the guest thread request one visual
 actor per slot and peer. Each visual has its own native request and index, follows the sampled matrix
 relative to the Link's interpolated pose, and retires on unequip or loss of presence. A revision change
-only replaces the visuals whose identities changed. Sampling uses read-only access to local equipment.
+only replaces the visuals whose identities changed. An already equipped visual follows Link using its last
+valid relative pose while a matching equipment snapshot or native pose is unavailable. Sampling uses
+read-only access to local equipment.
+
+The 1.9.0 local Link publishes retained armor indices. The guest thread resolves them to the actual
+head, upper and lower actor, then maps each native name to its installed model. Upgraded items that
+share the model use one ID. The virtual RomFS builds skinned actors from the passive template and
+shares the animation archive with the Link proxy. Each piece is placed at Link's playback
+root and starts the same clip with the matching phase and blend. A zero head ID selects the default
+hair. A zero top or bottom ID displays the Link proxy's base body. The resolver checks model IDs
+against the receiving game's catalog.
 
 Landing uses action ID 5. IDs 6–11 select large-sword draw, first swing, finishing swing, spin, drawn idle
 and stow for the axe and claymore. IDs 49–69 add the sword and spear actions and the charge follow-ups

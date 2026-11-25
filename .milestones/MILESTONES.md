@@ -102,9 +102,11 @@ and passive nocked visuals for all six inventory arrow types,
 slow and fast swimming with turns, directional targeting strokes, directional wall climbing and jumps,
 wall approach and mantle, grounded lock-on dodges and backflips with landing clips, hit,
 knockdown and fall-damage recovery clips, and gliding with a passive canopy that banks with
-Link during turns.
+Link during turns. Grounded locomotion and equipment share buffered playback, and standing jumps
+start at the sampled animation phase. Default hair and equipped armor use skinned models that follow
+the remote proxy. Material tint and body mesh masking remain open.
 The rest of the equipment and animation catalog and overhead names are open. See the
-[clip progress handoff](HANDOFF.md#m25-animation-clip-progress-probe) and
+[playback handoff](HANDOFF.md#m25-remote-movement-and-standing-jump-playback) and
 [animation backlog](NEXT.md#remaining-animation-work).
 
 Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped

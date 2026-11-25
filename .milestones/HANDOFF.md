@@ -1,6 +1,7 @@
 # Agent handoff
 
-Checkpoint 2026-11-24 on `multiplayer/windows-test`, with local bowstring, nocked-arrow, dodge and recovery changes based on `7364383`.
+Checkpoint 2026-11-25 on `multiplayer/windows-test`, with skinned appearance and the previous
+movement and standing-jump playback changes based on `d5029de`.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
@@ -15,8 +16,59 @@ The owner set the following order.
 4. Playback
 5. Appearance (Validation on windows can happen here, on linux I will validate manually later and tell if there are any problems)
 
-The grounded Weapons and Shield and bow slices are verified. Continue with Traversal and reactions.
-The [animation backlog](NEXT.md#remaining-animation-work) describes each stage.
+The grounded Weapons and Shield and bow slices are verified. The movement and shield report led to
+the first Playback work after the fall-damage checkpoint. The owner then asked to render hair and
+equipped armor before extending animation coverage. The
+[animation backlog](NEXT.md#remaining-animation-work) describes the open work in each stage.
+
+## M2.5 hair and equipped armor
+
+- The 1.9.0 local player has retained actor indices for the head, upper body and lower body at
+  offsets `0x23f0`, `0x2400` and `0x2410`. The guest thread resolves those indices temporarily.
+  It sees the on-body actor, including a different Hylian Hood variant than the inventory name.
+- The installed ActorInfo table supplies per-piece model identities and upgrade aliases.
+  Protocol 6 includes three model IDs in the existing reliable equipment revision.
+  Each receiver looks up those IDs by slot in its own installed resources.
+- A separate passive actor per slot plays Link's skeletal clips on the same root and starts at
+  Link's current phase. The default head provides hair. Changing a piece preserves Link, the other
+  armor pieces and rigid gear. Helmet variants, cloth simulation and DLC assets need further coverage.
+- The [Windows test record](TESTING.md#m25-hair-and-equipped-armor) has the verified equip, removal
+  and rejoin path. A second replay verified a mixed outfit of Climber's Bandanna, Ancient Cuirass
+  and Stealth Tights on the same proxy. Both peers need the matching build from
+  `build/m25-build/Play-M25.cmd`.
+
+## M2.5 armor colors and base skin clipping
+
+1. Match native armor material colors. In the Windows Hylian outfit replay, the local tunic
+   renders blue and the remote tunic renders dark with red accents. The remote actors currently
+   play the skeletal clips. The installed dyeable armor packs also define a `ColorChange` state,
+   and the native spawn path carries `ArmorDyeColor`. Verify how the native path applies the
+   default palette before carrying dye choices. Compare the same piece locally and remotely in
+   the same lighting, including an undyed and a dyed variant.
+2. Apply the native body visibility for each worn piece to the remote Link. In the same replay,
+   bare legs show through the Hylian Trousers. Match which parts the native outfit covers and
+   restore the corresponding base meshes on unequip or when the replacement model is unavailable.
+   Check idle and movement, a mixed outfit, and rejoin with armor equipped.
+
+Keep the per-slot equip and removal behavior when correcting color and visibility.
+The reference captures are listed in the [appearance test record](TESTING.md#m25-hair-and-equipped-armor).
+
+## M2.5 remote movement and standing-jump playback
+
+- The passive proxy played locomotion clips whose Root bone included forward translation. The
+  sprint clip travels about 3.7 m in one cycle. The shield and axe used the networked root, so the
+  body ran ahead of them and snapped back when the clip looped. A diagnostic sprint with Idle
+  showed the same position updates with the gear beside the body.
+- The 1.9.0 virtual RomFS now supplies an animation archive for the proxy with the planar Root
+  curves removed in walk, run, sprint and crouch locomotion. The installed archive still serves
+  native Link. The proxy archive retains vertical root motion and the remaining clip data.
+- Protocol 5 adds source sample time, animation activation and phase to the snapshot. Both peers
+  need the matching build. The receiver interpolates the body and compatible gear poses on the
+  same delayed timeline. When an equipped item's pose is temporarily unavailable it carries the
+  last valid relative offset with Link. Standing jumps use the tracked native frame to start
+  the matching clip at the sampled phase.
+- The matching Windows launcher is `build/m25-build/Play-M25.cmd`. See the
+  [test record](TESTING.md#m25-remote-movement-and-standing-jump-playback) for coverage.
 
 ## M2.5 weapon families
 

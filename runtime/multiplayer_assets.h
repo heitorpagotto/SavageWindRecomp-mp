@@ -9,6 +9,10 @@
 #define SWMP_PROXY_PACK "Actor/Pack/" SWMP_PROXY_ACTOR ".sbactorpack"
 #define SWMP_PROXY_TEMPLATE "Actor/Pack/Obj_RockGray_A_M_01.sbactorpack"
 #define SWMP_ACTOR_INFO "Actor/ActorInfo.product.sbyml"
+#define SWMP_PLAYER_ANIMATION "Player_Animation"
+#define SWMP_PROXY_ANIMATION "SwmpLinkAnimation"
+#define SWMP_PLAYER_ANIMATION_FILE "Model/" SWMP_PLAYER_ANIMATION ".sbfres"
+#define SWMP_PROXY_ANIMATION_FILE "Model/" SWMP_PROXY_ANIMATION ".sbfres"
 
 typedef struct {
     SwmpGearSlot slot;
@@ -22,8 +26,26 @@ enum {
     SWMP_VISUAL_ASSET_COUNT = SWMP_ARROW_ASSET_BASE + SWMP_ARROW_COUNT,
     SWMP_PARAGLIDER_SLOT = SWMP_GEAR_SLOTS,
     SWMP_NOCKED_ARROW_SLOT,
-    SWMP_VISUAL_SLOTS,
+    SWMP_FIRST_ARMOR_SLOT,
+    SWMP_VISUAL_SLOTS = SWMP_FIRST_ARMOR_SLOT + SWMP_ARMOR_SLOTS,
 };
+
+enum { SWMP_MAX_ARMOR_MODELS = 160, SWMP_MAX_ARMOR_NAMES = 512 };
+
+typedef struct {
+    uint32_t id;
+    SwmpArmorSlot slot;
+    uint32_t heap_size;
+    char actor[24], folder[32], model[48];
+    bool ready;
+} SwmpArmorAsset;
+
+typedef struct {
+    SwmpArmorAsset models[SWMP_MAX_ARMOR_MODELS];
+    struct { uint32_t native_id, model_id; SwmpArmorSlot slot; } names[SWMP_MAX_ARMOR_NAMES];
+    uint32_t defaults[SWMP_ARMOR_SLOTS];
+    unsigned model_count, name_count;
+} SwmpArmorCatalog;
 
 extern const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT];
 
@@ -133,9 +155,16 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
                                          bool shield_raised);
 // Build uncompressed RomFS resources from the local game's data. The caller owns the result.
-uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, size_t *out_size);
+uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t *out_size);
+uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size);
 uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
                         const uint8_t *gear, size_t gear_size, size_t *out_size);
-uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_mask, size_t *out_size);
+bool swmp_armor_catalog(const uint8_t *src, size_t size, SwmpArmorCatalog *out);
+uint32_t swmp_armor_identity(const SwmpArmorCatalog *catalog, SwmpArmorSlot slot, const char *native_name);
+uint8_t *swmp_armor_pack(const SwmpArmorAsset *asset, const uint8_t *src, size_t size,
+                         bool in_place, size_t *out_size);
+uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_mask,
+                              const SwmpArmorCatalog *armor, size_t *out_size);
 bool fs_multiplayer_proxy_ready(void);
 bool fs_multiplayer_gear_ready(unsigned asset);
+const SwmpArmorCatalog *fs_multiplayer_armor_catalog(void);
