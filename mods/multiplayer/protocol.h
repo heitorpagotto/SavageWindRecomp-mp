@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 6u
+#define SWMP_PROTOCOL_VERSION 7u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
@@ -131,9 +131,12 @@ typedef enum {
     SWMP_ARMOR_SLOTS
 } SwmpArmorSlot;
 
+enum { SWMP_ARMOR_DYE_MAX = 15 };
+
 typedef struct {
     uint8_t id[SWMP_GEAR_SLOTS];  // SwmpGear identities, resolved against installed resources
     uint32_t armor[SWMP_ARMOR_SLOTS];  // installed model identities, zero for the default appearance
+    uint8_t armor_dye[SWMP_ARMOR_SLOTS];  // zero selects the native undyed palette
 } SwmpGearSet;
 
 typedef struct {

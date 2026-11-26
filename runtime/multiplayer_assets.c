@@ -198,7 +198,7 @@ bool swmp_armor_catalog(const uint8_t *src, size_t size, SwmpArmorCatalog *out) 
             uint32_t native_size = heap ? read32(heap) : 0;
             *asset = (SwmpArmorAsset){.id = id, .slot = slot,
                 .heap_size = 512 * 1024 + (native_size <= 1024 * 1024 ? native_size : 0)};
-            snprintf(asset->actor, sizeof asset->actor, "SwmpArmor%08x", id);
+            snprintf(asset->actor, sizeof asset->actor, SWMP_ARMOR_ACTOR_PREFIX "%08x", id);
             memcpy(asset->folder, folder, strlen(folder) + 1);
             memcpy(asset->model, model, strlen(model) + 1);
             out->model_count++;
@@ -884,6 +884,10 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t 
     return out;
 }
 
+static const char *const armor_palette[SWMP_ARMOR_SLOTS] = {
+    [SWMP_ARMOR_HEAD] = "Head", [SWMP_ARMOR_UPPER] = "Upper", [SWMP_ARMOR_LOWER] = "Lower",
+};
+
 uint8_t *swmp_armor_pack(const SwmpArmorAsset *asset, const uint8_t *src, size_t size,
                          bool in_place, size_t *out_size) {
     size_t n;
@@ -906,13 +910,20 @@ uint8_t *swmp_armor_pack(const SwmpArmorAsset *asset, const uint8_t *src, size_t
         read32(stock + 44)) goto done;
     uint8_t *folder = aamp_param(stock, stock_size, "Folder", 8);
     uint8_t *unit = aamp_param(stock, stock_size, "UnitName", 8);
-    if (!folder || !unit) goto done;
-    size_t model_size = stock_size + align4(strlen(asset->folder) + 1) + align4(strlen(asset->model) + 1);
+    uint8_t *material = aamp_param(stock, stock_size, "VariationMatAnim", 8);
+    uint8_t *shader = aamp_param(stock, stock_size, "VariationShaderAnim", 8);
+    if (!folder || !unit || !material || !shader) goto done;
+    // These variation names reserve the native material tracks alongside the skeletal AS.
+    const char *palette = armor_palette[asset->slot];
+    size_t model_size = stock_size + align4(strlen(asset->folder) + 1) + align4(strlen(asset->model) + 1) +
+        2 * align4(strlen(palette) + 1);
     model = calloc(1, model_size);
     if (!model) goto done;
     memcpy(model, stock, stock_size);
     unsigned end = aamp_string(model, (unsigned)(folder - stock), "Folder", (unsigned)stock_size, asset->folder);
-    aamp_string(model, (unsigned)(unit - stock), "UnitName", end, asset->model);
+    end = aamp_string(model, (unsigned)(unit - stock), "UnitName", end, asset->model);
+    end = aamp_string(model, (unsigned)(material - stock), "VariationMatAnim", end, palette);
+    aamp_string(model, (unsigned)(shader - stock), "VariationShaderAnim", end, palette);
     write32(model + 12, (uint32_t)model_size);
     write32(model + 40, read32(stock + 40) + (uint32_t)(model_size - stock_size));
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "protocol.h"
 
+#define SWMP_ARMOR_ACTOR_PREFIX "SwmpArmor"
 #define SWMP_PROXY_ACTOR "SwmpRemoteLinkProxy"
 #define SWMP_PROXY_PACK "Actor/Pack/" SWMP_PROXY_ACTOR ".sbactorpack"
 #define SWMP_PROXY_TEMPLATE "Actor/Pack/Obj_RockGray_A_M_01.sbactorpack"

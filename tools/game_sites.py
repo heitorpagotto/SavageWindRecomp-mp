@@ -64,9 +64,11 @@ MP_PRESENCE_SITES = ('mp_presence_tick', 'mp_presence_context', 'mp_presence_cre
                      'mp_presence_ready', 'mp_presence_failed', 'mp_presence_release',
                      'mp_presence_take', 'mp_presence_delete', 'mp_presence_move')
 MP_ANIMATION_SITES = ('mp_anim_play', 'mp_anim_current', 'mp_anim_string')
+MP_ARMOR_SITES = ('mp_armor_visibility', 'mp_armor_dye', 'mp_armor_dye_key',
+                  'mp_armor_load', 'mp_armor_texture_frame', 'mp_armor_material_frame')
 MP_HEALTH_SITES = ('mp_health_current',)
 MP_WEATHER_SITES = ('mp_weather_current',)
-STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_HEALTH_SITES + MP_WEATHER_SITES)
+STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_ARMOR_SITES + MP_HEALTH_SITES + MP_WEATHER_SITES)
 MP_ANIMATION_PLAY = ('90000008/9f00001f 1e3e1001 1e204100 f9400108/ffc003ff 910003e1 aa1503e0 '
                      '2a1403e2 2a1303e3 52800024 91004108 a9005be8 94000000/fc000000')
 
@@ -400,6 +402,21 @@ SITES = [
     Site('mp_anim_string', 'got', MP_ANIMATION_PLAY, 3),
     Site('mp_anim_current', 'call', 'f9400408 f942b115 b4000015/ff00001f 1e204008 2a0403f3 2a0303f4 aa0103f6 '
          '36000002/fff8001f aa1503e0 2a1403e1 2a1303e2 94000000/fc000000 f9400008 aa0003f7 f9400d08', 11),
+    # The outfit path matches HideMaterialGroup tags between Link and each equipped model.
+    Site('mp_armor_visibility', 'code', 'b9403828 7100051f 5400000b/ff00001f d101c3ff a9017bfd a9026ffc '
+         'a90367fa a9045ff8 a90557f6 a9064ff4 910043fd aa0203f3', 0),
+    # Read the on-body armor's dye. Apply the same placement key when the passive model loads its variation.
+    Site('mp_armor_dye', 'code', 'a9be7bfd f9000bf3 910003fd f9400413 b4000013/ff00001f 94000000/fc000000 '
+         'f9400268 aa0003e1 aa1303e0 f9400908 d63f0100 36000000/fff8001f 94000000/fc000000 '
+         'f9400268 aa0003e1 aa1303e0 f9400908 d63f0100 36000000/fff8001f b9485a60', 0),
+    Site('mp_armor_dye_key', 'ref', '90000009/9f00001f 91000129/ffc003ff f9413108 910023e1 b9000bfa '
+         'd10063a2 aa1b03e0 52800083 2a1f03e4 91004108 a93ea7a8', 1),
+    Site('mp_armor_load', 'code', 'd10403ff a90a7bfd a90b6ffc a90c67fa a90d5ff8 a90e57f6 a90f4ff4 '
+         '910283fd f942b808 aa0003f3 aa0103f9 f940491c', 0),
+    Site('mp_armor_texture_frame', 'code', '6b09011f 54000000/ff00001f b9439b88 910073e5 9100a3e6 '
+         'd100a3a7 b81d83a8 f90003fa aa1603e0 aa1403e1', 2),
+    Site('mp_armor_material_frame', 'code', '6b09011f 54000000/ff00001f bd43e380 510006a8 2a0003e2 '
+         'aa1403e0 2a1503e1 b9001fe8 5e21d800', 2),
     # PlayerInfo's read-only getter returns Link's current life in quarter hearts.
     Site('mp_health_current', 'code', 'f9403000 b4000000/ff00001f a9bf7bfd 910003fd f9400008 f9415d08 '
          'd63f0100 b4000000/ff00001f b9400000 a8c17bfd d65f03c0 52800020', 0),
@@ -430,6 +447,7 @@ SITES = [
 OPTIONAL_GROUPS = [
     MP_PRESENCE_SITES,
     MP_ANIMATION_SITES,
+    MP_ARMOR_SITES,
     MP_HEALTH_SITES,
     MP_WEATHER_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
@@ -516,6 +534,12 @@ KNOWN = {
         'mp_anim_play': 0x700149f24c,
         'mp_anim_current': 0x70014a0040,
         'mp_anim_string': 0x7001bc32b8,
+        'mp_armor_visibility': 0x700126ba4c,
+        'mp_armor_dye': 0x7001174b68,
+        'mp_armor_dye_key': 0x7001649f1c,
+        'mp_armor_load': 0x7001529b60,
+        'mp_armor_texture_frame': 0x7001529cec,
+        'mp_armor_material_frame': 0x7001529d64,
         'mp_health_current': 0x7000cc7184,
         'mp_weather_current': 0x7001431c3c,
         'quick_sort_enter': 0x7000e283fc,

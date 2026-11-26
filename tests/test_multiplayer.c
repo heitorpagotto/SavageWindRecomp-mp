@@ -29,7 +29,7 @@ static void packet_test(void) {
     };
     CHECK(swmp_packet_encode(packet, sizeof packet, &in) == SWMP_PACKET_OK);
     const uint8_t expected[] = {
-        0x53, 0x57, 0x4d, 0x50, 0, 6, 16, 4, 0, 0, 0, 3,
+        0x53, 0x57, 0x4d, 0x50, 0, 7, 16, 4, 0, 0, 0, 3,
         0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 3, 1, 0, 0,
         0x10, 0x20, 0x30, 0x40, 0xa0, 0xb0, 0xc0, 0xd0,
     };
@@ -300,13 +300,24 @@ static void control_test(void) {
     CHECK(!swmp_control_decode(&out, SWMP_MSG_PEER_LEFT, data, size));
     in = (SwmpControl){.equipment = {.peer = 3, .state = {
         .gear = {.id = {SWMP_GEAR_WOODCUTTERS_AXE, SWMP_GEAR_WOODEN_SHIELD, SWMP_GEAR_TRAVELERS_BOW},
-                 .armor = {UINT32_C(0x10203040), UINT32_C(0x50607080), 0}}, .revision = 8}}};
+                 .armor = {UINT32_C(0x10203040), UINT32_C(0x50607080), 0},
+                 .armor_dye = {0, SWMP_ARMOR_DYE_MAX, 0}}, .revision = 8}}};
     CHECK(swmp_control_encode(data, sizeof data, &size, SWMP_MSG_EQUIPMENT, &in));
     CHECK(swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
-    CHECK(size == 20 && out.equipment.peer == 3 && out.equipment.state.revision == 8);
+    CHECK(size == 23 && out.equipment.peer == 3 && out.equipment.state.revision == 8);
     CHECK(!memcmp(out.equipment.state.gear.id, in.equipment.state.gear.id, SWMP_GEAR_SLOTS));
     CHECK(!memcmp(out.equipment.state.gear.armor, in.equipment.state.gear.armor, sizeof in.equipment.state.gear.armor));
-    CHECK(data[8] == 0x10 && data[15] == 0x80);
+    CHECK(!memcmp(out.equipment.state.gear.armor_dye, in.equipment.state.gear.armor_dye, SWMP_ARMOR_SLOTS));
+    CHECK(data[8] == 0x10 && data[15] == 0x80 && data[21] == SWMP_ARMOR_DYE_MAX);
+    data[21] = SWMP_ARMOR_DYE_MAX + 1;
+    CHECK(!swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
+    data[21] = SWMP_ARMOR_DYE_MAX;
+    data[22] = 1;
+    CHECK(!swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
+    data[22] = 0;
+    in.equipment.state.gear.armor_dye[SWMP_ARMOR_LOWER] = 1;
+    CHECK(!swmp_gear_set_valid(in.equipment.state.gear));
+    in.equipment.state.gear.armor_dye[SWMP_ARMOR_LOWER] = 0;
     CHECK(!swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size - 1));
     data[7] = SWMP_GEAR_WOODEN_SHIELD;
     CHECK(!swmp_control_decode(&out, SWMP_MSG_EQUIPMENT, data, size));
@@ -621,6 +632,15 @@ static void lobby_test(void) {
     swmp_lobby_poll(host, 2251);
     swmp_lobby_poll(extra, 2251);
     CHECK(extra->equipment[1].revision == 4);
+    CHECK(extra->equipment[1].gear.armor[SWMP_ARMOR_HEAD] == armored.armor[SWMP_ARMOR_HEAD]);
+    CHECK(!memcmp(extra->equipment[1].gear.id, without_bow.id, sizeof without_bow.id));
+
+    armored.armor_dye[SWMP_ARMOR_HEAD] = 2;
+    swmp_lobby_set_equipment(&lobbies[1], armored);
+    swmp_lobby_poll(host, 2251);
+    swmp_lobby_poll(extra, 2251);
+    CHECK(extra->equipment[1].revision == 5);
+    CHECK(extra->equipment[1].gear.armor_dye[SWMP_ARMOR_HEAD] == 2);
     CHECK(extra->equipment[1].gear.armor[SWMP_ARMOR_HEAD] == armored.armor[SWMP_ARMOR_HEAD]);
     CHECK(!memcmp(extra->equipment[1].gear.id, without_bow.id, sizeof without_bow.id));
 

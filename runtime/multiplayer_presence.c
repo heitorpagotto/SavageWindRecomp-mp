@@ -43,6 +43,7 @@ typedef struct {
     uint8_t animation_activation;
     uint64_t animation_started;
     float animation_phase, animation_blend;
+    uint8_t armor_visible;
     bool retained, visible, proxy;
 } Placeholder;
 
@@ -50,7 +51,7 @@ typedef struct {
     uint64_t deadline;
     unsigned gear;
     const char *animation;
-    uint8_t animation_activation;
+    uint8_t animation_activation, dye;
     SwmpGearPose pose;
     bool retained, visible, has_pose;
 } GearActor;
@@ -73,7 +74,10 @@ static uint8_t local_jump_activation;
 static bool local_jumping;
 static float local_jump_frame;
 static uint64_t local_armor_at;
-static uint32_t local_armor[SWMP_ARMOR_SLOTS];
+static struct {
+    uint32_t model[SWMP_ARMOR_SLOTS];
+    uint8_t dye[SWMP_ARMOR_SLOTS];
+} local_armor;
 
 RT_ON_RESET(multiplayer_presence_reset) {
     storage = lobby_generation = 0;
@@ -87,7 +91,7 @@ RT_ON_RESET(multiplayer_presence_reset) {
     local_jump_activation = 0;
     local_jumping = false;
     local_armor_at = 0;
-    memset(local_armor, 0, sizeof local_armor);
+    memset(&local_armor, 0, sizeof local_armor);
     memset(slots, 0, sizeof slots);
     memset(gear_slots, 0, sizeof gear_slots);
     memset(gear_storage, 0, sizeof gear_storage);
@@ -522,13 +526,18 @@ static void sample_armor(Cpu *cpu, uint64_t actor, uint64_t heap_size, uint64_t 
             if (heap_object(item, heap_size, 0x7c) && LD64(link + 8) == item && LD8(item + 0x64) == 1 &&
                 !(LD32(item + 0x78) & 1)) {
                 uint64_t name = LD64(item + 0x10);
-                if (guest_range(name, 48) && memchr((const void *)(uintptr_t)name, 0, 48))
-                    local_armor[part] = swmp_armor_identity(catalog, part, (const char *)(uintptr_t)name);
+                if (guest_range(name, 48) && memchr((const void *)(uintptr_t)name, 0, 48)) {
+                    local_armor.model[part] = swmp_armor_identity(catalog, part, (const char *)(uintptr_t)name);
+                    uint32_t dye = local_armor.model[part] && g_site.mp_armor_dye ?
+                        (uint32_t)call(&scratch, g_site.mp_armor_dye, link, 0, 0) : 0;
+                    local_armor.dye[part] = dye <= SWMP_ARMOR_DYE_MAX ? dye : 0;
+                }
             }
             call(&scratch, g_site.actor_link_release, link, 0, 0);
         }
     }
-    memcpy(gear->armor, local_armor, sizeof local_armor);
+    memcpy(gear->armor, local_armor.model, sizeof gear->armor);
+    memcpy(gear->armor_dye, local_armor.dye, sizeof gear->armor_dye);
 }
 
 static bool bow_holds_arrow(SwmpProxyAction action) {
@@ -570,7 +579,7 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         local_shield_break = false;
         local_jumping = false;
         local_armor_at = 0;
-        memset(local_armor, 0, sizeof local_armor);
+        memset(&local_armor, 0, sizeof local_armor);
     }
     for (unsigned i = 0; i < 3; i++) sample.position_mm[i] = (int32_t)lround((double)p[i] * 1000);
     bool has_facing = sample_facing(actor, heap_size, p);
@@ -762,8 +771,25 @@ static void copy_transform(uint64_t dst, const Pose *pose, float lift) {
     memcpy((void *)(uintptr_t)dst, matrix, sizeof matrix);
 }
 
-static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Pose *pose, const char *actor_name) {
+// The placement request copies a 0xc4-byte parameter list from the argument at +0x10.
+enum { SPAWN_PARAM_OFFSET = 0x10, SPAWN_PARAM_BYTES = 0xc4, SPAWN_DYE_BYTES = 13 };
+
+static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Pose *pose, const char *actor_name,
+                          uint8_t dye) {
     Cpu cpu = *source;
+    uint64_t args = 0;
+    if (dye && g_site.mp_armor_dye_key) {
+        cpu.sp -= 0xe0;
+        args = cpu.sp;
+        memset((void *)(uintptr_t)args, 0, SPAWN_PARAM_OFFSET + SPAWN_PARAM_BYTES);
+        uint64_t params = args + SPAWN_PARAM_OFFSET;
+        // One signed integer entry. The name points to a resident native placement key.
+        ST16(params, 1);
+        ST16(params + 2, SPAWN_DYE_BYTES);
+        ST64(params + 4, g_site.mp_armor_dye_key);
+        ST8(params + 12, 0);
+        ST32(params + 13, dye);
+    }
     cpu.sp -= 0x80;
     uint64_t name = cpu.sp + 0x10, transform = cpu.sp + 0x30;
     memcpy((void *)(uintptr_t)name, actor_name, strlen(actor_name) + 1);
@@ -773,7 +799,7 @@ static bool request_actor(Cpu *source, uint64_t addr, uint64_t context, const Po
     cpu.x[2] = context;
     cpu.x[3] = addr;
     cpu.x[4] = UINT32_MAX;  // no life override or placement ID
-    cpu.x[5] = 0;
+    cpu.x[5] = args;
     cpu.x[6] = 1;
     cpu.v[0] = UINT32_C(0x3f800000);  // unit scale in s0
     guest_call(&cpu, g_site.mp_presence_create);
@@ -826,12 +852,57 @@ static bool retain_actor(Cpu *cpu, uint64_t addr) {
 
 static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames, float phase);
 
+static uint64_t appearance_model(uint64_t actor, uint64_t heap_size) {
+    if (!heap_object(actor, heap_size, 0x4e8)) return 0;
+    uint64_t model = LD64(actor + 0x4e0);
+    return heap_object(model, heap_size, 0xe0) ? model : 0;
+}
+
+static void set_armor_visibility(Cpu *source, uint64_t body, uint64_t cover, bool visible) {
+    Cpu cpu = *source;
+    cpu.x[0] = 0;
+    cpu.x[1] = body;
+    cpu.x[2] = cover;
+    cpu.x[3] = visible;
+    guest_call(&cpu, g_site.mp_armor_visibility);
+}
+
+static void update_armor_visibility(Cpu *cpu, uint8_t peer) {
+    Placeholder *link = &slots[peer];
+    if (!g_site.mp_armor_visibility || !link->visible || !link->proxy) return;
+    uint8_t visible = 0;
+    for (unsigned part = 0; part < SWMP_ARMOR_SLOTS; part++)
+        if (gear_slots[SWMP_FIRST_ARMOR_SLOT + part][peer].visible) visible |= 1u << part;
+    if (visible == link->armor_visible) return;
+
+    uint64_t heap_size = kernel_heap_size();
+    uint64_t addr = storage + peer * SLOT_SIZE;
+    uint64_t body = appearance_model(resolve(cpu, addr), heap_size);
+    if (body) {
+        uint8_t applied = 0;
+        set_armor_visibility(cpu, body, 0, true);
+        // Native Link resets the grouped meshes, then lets each active piece hide its covered groups.
+        for (unsigned part = 0; part < SWMP_ARMOR_SLOTS; part++) {
+            if (!(visible & (1u << part))) continue;
+            uint64_t armor_addr = gear_storage[SWMP_FIRST_ARMOR_SLOT + part] + peer * SLOT_SIZE;
+            uint64_t cover = appearance_model(resolve(cpu, armor_addr), heap_size);
+            if (cover) {
+                set_armor_visibility(cpu, body, cover, false);
+                applied |= 1u << part;
+            }
+            call(cpu, g_site.actor_link_release, armor_addr + LINK_OFFSET, 0, 0);
+        }
+        link->armor_visible = applied;
+    }
+    call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
+}
+
 static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, uint64_t context,
-                          unsigned id, const SwmpGearPose *pose, const char *animation) {
+                          unsigned id, const SwmpGearPose *pose, const char *animation, uint8_t dye) {
     const Placeholder *link = &slots[peer];
     GearActor *slot = &gear_slots[kind][peer];
     bool skinned = kind >= SWMP_FIRST_ARMOR_SLOT;
-    if (slot->gear && slot->gear != id) {
+    if (slot->gear && (slot->gear != id || (skinned && slot->dye != dye))) {
         // Arrow release and replacement are routine. Leave a send interval for deletion
         // without imposing the one-second failure backoff on the next nock.
         retire_gear(cpu, peer, kind, now + (kind == SWMP_NOCKED_ARROW_SLOT || skinned ? snapshot_ns : retry_ns));
@@ -855,9 +926,10 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
     if (!slot->gear) {
         if (now < slot->deadline) return;
         slot->gear = id;
+        slot->dye = dye;
         slot->deadline = now + request_ns;
         const char *actor_name = armor ? armor->actor : swmp_gear_assets[id].actor;
-        if (!request_actor(cpu, addr, context, &link->applied, actor_name))
+        if (!request_actor(cpu, addr, context, &link->applied, actor_name, dye))
             retire_gear(cpu, peer, kind, now + retry_ns);
     } else if (slot->retained) {
         uint64_t actor = resolve(cpu, addr);
@@ -904,16 +976,16 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
             pose = &sample->gear_pose[kind];
             if (kind == SWMP_GEAR_BOW) animation = bow_animation_names[sample->bow_animation];
         }
-        update_visual(cpu, peer, kind, now, context, id, pose, animation);
+        update_visual(cpu, peer, kind, now, context, id, pose, animation, 0);
     }
     bool deployed = action == SWMP_PROXY_GLIDE && (sample->flags & SWMP_PLAYER_GLIDING);
     update_visual(cpu, peer, SWMP_PARAGLIDER_SLOT, now, context,
-                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL, "Open");
+                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL, "Open", 0);
     bool nocked = sample->nocked_arrow != SWMP_ARROW_NONE && bow_holds_arrow(action) &&
         matching_revision && gear_slots[SWMP_GEAR_BOW][peer].visible;
     update_visual(cpu, peer, SWMP_NOCKED_ARROW_SLOT, now, context,
                   nocked ? SWMP_ARROW_ASSET_BASE + sample->nocked_arrow : SWMP_GEAR_NONE,
-                  nocked ? &sample->arrow_pose : NULL, NULL);
+                  nocked ? &sample->arrow_pose : NULL, NULL, 0);
 
     const SwmpArmorCatalog *catalog = fs_multiplayer_armor_catalog();
     if (!catalog) return;
@@ -921,14 +993,21 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
     const char *animation = link->animation < SWMP_PROXY_ACTION_COUNT ? swmp_proxy_action_name(link->animation) : NULL;
     for (unsigned part = 0; part < SWMP_ARMOR_SLOTS; part++) {
         unsigned kind = SWMP_FIRST_ARMOR_SLOT + part;
-        uint32_t id = gear_slots[kind][peer].gear;
+        const GearActor *slot = &gear_slots[kind][peer];
+        uint32_t id = slot->gear;
+        uint8_t dye = slot->dye;
         if (matching_revision) {
             id = gear->gear.armor[part];
+            dye = gear->gear.armor_dye[part];
             // Link's base model contains bare skin. The default head supplies his hair.
-            if (part == SWMP_ARMOR_HEAD && !find_armor(part, id)) id = catalog->defaults[part];
+            if (part == SWMP_ARMOR_HEAD && !find_armor(part, id)) {
+                id = catalog->defaults[part];
+                dye = 0;
+            }
         }
-        update_visual(cpu, peer, kind, now, context, id, NULL, animation);
+        update_visual(cpu, peer, kind, now, context, id, NULL, animation, dye);
     }
+    update_armor_visibility(cpu, peer);
 }
 
 static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames, float phase) {
@@ -1024,6 +1103,28 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
 
 #endif
 
+// Called by the native variation loader while the placement parameters are still live.
+uint32_t rt_mp_armor_spawn_dye(uint64_t actor, uint64_t args) {
+#ifdef SW_MULTIPLAYER
+    if (!g_site.mp_armor_dye_key || !guest_range(actor, 0x18) || !guest_range(args, 0x20)) return UINT32_MAX;
+    uint64_t name = LD64(actor + 0x10);
+    size_t prefix = sizeof SWMP_ARMOR_ACTOR_PREFIX - 1;
+    if (!guest_range(name, prefix) ||
+        memcmp((const void *)(uintptr_t)name, SWMP_ARMOR_ACTOR_PREFIX, prefix)) return UINT32_MAX;
+
+    uint64_t ref = LD64(args + 0x18);
+    uint64_t params = guest_range(ref, 8) ? LD64(ref) : 0;
+    if (!guest_range(params, 4 + SPAWN_DYE_BYTES) || !LD16(params) || LD16(params + 2) < SPAWN_DYE_BYTES ||
+        LD64(params + 4) != g_site.mp_armor_dye_key || LD8(params + 12) != 0) return UINT32_MAX;
+    uint32_t dye = LD32(params + 13);
+    if (dye <= SWMP_ARMOR_DYE_MAX) return dye;
+#else
+    (void)actor;
+    (void)args;
+#endif
+    return UINT32_MAX;
+}
+
 void rt_mp_presence_tick(Cpu *cpu) {
 #ifdef SW_MULTIPLAYER
     SwmpM1Roster roster = swmp_m1_roster();
@@ -1041,7 +1142,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         local_shield_break = false;
         local_jumping = false;
         local_armor_at = 0;
-        memset(local_armor, 0, sizeof local_armor);
+        memset(&local_armor, 0, sizeof local_armor);
     }
     SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu, now, &player, &gear) : (SwmpPlayerSnapshot){0};
     uint64_t context = local.area_id ? spawn_context() : 0;
@@ -1097,7 +1198,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
             bool proxy = fs_multiplayer_proxy_ready();
             if (!proxy && local.area_id != GAME_PLACE_MAIN_FIELD_AREA) continue;
             if (!proxy) pose.yaw = pose.roll = 0;
-            if (request_actor(cpu, addr, context, &pose, proxy ? SWMP_PROXY_ACTOR : placeholder_name)) {
+            if (request_actor(cpu, addr, context, &pose, proxy ? SWMP_PROXY_ACTOR : placeholder_name, 0)) {
                 *slot = (Placeholder){.generation = generation, .deadline = now + request_ns, .proxy = proxy,
                     .applied = pose, .animation = SWMP_PROXY_ACTION_COUNT};
                 queue_playback(slot, position, now_ms);

@@ -68,6 +68,22 @@ def _mp_presence_tick(gen, a):
             'ST64(c->sp + 0x20, c->x[29]); ST64(c->sp + 0x28, c->x[30]); }')
 
 
+def _mp_armor_load(gen, a):
+    assert _word(gen, a) == _sub_sp(0x100), hex(_word(gen, a))
+    return ('extern uint32_t rt_mp_armor_spawn_dye(uint64_t actor, uint64_t args); '
+            'uint32_t armor_spawn_dye = rt_mp_armor_spawn_dye(c->x[0], c->x[1]); c->sp -= 0x100;')
+
+
+def _mp_armor_texture_frame(gen, a):
+    assert _word(gen, a) == 0xb9439b88, hex(_word(gen, a))  # ldr w8, [x28, #0x398]
+    return ('c->x[8] = armor_spawn_dye == UINT32_MAX ? LD32(c->x[28] + 0x398) : armor_spawn_dye;')
+
+
+def _mp_armor_material_frame(gen, a):
+    assert _word(gen, a) == 0xbd43e380, hex(_word(gen, a))  # ldr s0, [x28, #0x3e0]
+    return ('c->v[0] = armor_spawn_dye == UINT32_MAX ? LD32(c->x[28] + 0x3e0) : armor_spawn_dye;')
+
+
 def _quick_drop_actor_call(gen, a):
     assert _word(gen, a) == 0xd63f0100, hex(_word(gen, a))  # blr x8
     return ('{ extern uint64_t rt_quick_drop_actor_begin(uint64_t, uint64_t); '
@@ -1021,6 +1037,9 @@ PATCHES = {
     'ui_layout_pane': _ui_layout_pane,
     'quick_drop_tick': _quick_drop_tick,
     'mp_presence_tick': _mp_presence_tick,
+    'mp_armor_load': _mp_armor_load,
+    'mp_armor_texture_frame': _mp_armor_texture_frame,
+    'mp_armor_material_frame': _mp_armor_material_frame,
     'quick_drop_actor_call': _quick_drop_actor_call,
     'quick_sort_enter': _quick_sort_enter,
     'quick_sort_menu': _quick_sort_menu,

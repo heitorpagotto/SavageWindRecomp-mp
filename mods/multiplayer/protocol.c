@@ -139,6 +139,8 @@ const char *swmp_packet_error_string(SwmpPacketError error) {
 }
 
 bool swmp_gear_set_valid(SwmpGearSet gear) {
+    for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
+        if (gear.armor_dye[i] > SWMP_ARMOR_DYE_MAX || (!gear.armor[i] && gear.armor_dye[i])) return false;
     uint8_t weapon = gear.id[SWMP_GEAR_WEAPON];
     return (weapon == SWMP_GEAR_NONE || weapon == SWMP_GEAR_WOODCUTTERS_AXE ||
             weapon == SWMP_GEAR_TRAVELERS_SWORD || weapon == SWMP_GEAR_TRAVELERS_SPEAR ||
@@ -327,6 +329,10 @@ static bool get_text(char *text, size_t limit, const uint8_t *data, size_t size,
     return true;
 }
 
+enum { EQUIPMENT_ARMOR_AT = 5 + SWMP_GEAR_SLOTS,
+       EQUIPMENT_DYE_AT = EQUIPMENT_ARMOR_AT + 4 * SWMP_ARMOR_SLOTS,
+       EQUIPMENT_SIZE = EQUIPMENT_DYE_AT + SWMP_ARMOR_SLOTS };
+
 static bool client_id_valid(uint8_t id) {
     return id > SWMP_HOST_PEER && id < SWMP_MAX_PEERS;
 }
@@ -382,14 +388,15 @@ bool swmp_control_encode(uint8_t *out, size_t capacity, size_t *size, SwmpMessag
     case SWMP_MSG_START:
         break;
     case SWMP_MSG_EQUIPMENT:
-        if (capacity < 5 + SWMP_GEAR_SLOTS + 4 * SWMP_ARMOR_SLOTS || m->equipment.peer >= SWMP_MAX_PEERS ||
+        if (capacity < EQUIPMENT_SIZE || m->equipment.peer >= SWMP_MAX_PEERS ||
             !swmp_gear_set_valid(m->equipment.state.gear) || !m->equipment.state.revision) return false;
         out[0] = m->equipment.peer;
         put32(out + 1, m->equipment.state.revision);
         memcpy(out + 5, m->equipment.state.gear.id, SWMP_GEAR_SLOTS);
-        pos = 5 + SWMP_GEAR_SLOTS;
-        for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++, pos += 4)
-            put32(out + pos, m->equipment.state.gear.armor[i]);
+        for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
+            put32(out + EQUIPMENT_ARMOR_AT + i * 4, m->equipment.state.gear.armor[i]);
+        memcpy(out + EQUIPMENT_DYE_AT, m->equipment.state.gear.armor_dye, SWMP_ARMOR_SLOTS);
+        pos = EQUIPMENT_SIZE;
         break;
     case SWMP_MSG_PING:
     case SWMP_MSG_PONG:
@@ -455,12 +462,13 @@ bool swmp_control_decode(SwmpControl *msg, SwmpMessageType type, const uint8_t *
     case SWMP_MSG_START:
         break;
     case SWMP_MSG_EQUIPMENT:
-        if (size != 5 + SWMP_GEAR_SLOTS + 4 * SWMP_ARMOR_SLOTS || data[0] >= SWMP_MAX_PEERS) return false;
+        if (size != EQUIPMENT_SIZE || data[0] >= SWMP_MAX_PEERS) return false;
         m.equipment.peer = data[0];
         m.equipment.state.revision = get32(data + 1);
         memcpy(m.equipment.state.gear.id, data + 5, SWMP_GEAR_SLOTS);
         for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
-            m.equipment.state.gear.armor[i] = get32(data + 5 + SWMP_GEAR_SLOTS + i * 4);
+            m.equipment.state.gear.armor[i] = get32(data + EQUIPMENT_ARMOR_AT + i * 4);
+        memcpy(m.equipment.state.gear.armor_dye, data + EQUIPMENT_DYE_AT, SWMP_ARMOR_SLOTS);
         if (!m.equipment.state.revision || !swmp_gear_set_valid(m.equipment.state.gear)) return false;
         pos = size;
         break;

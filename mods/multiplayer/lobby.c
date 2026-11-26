@@ -268,7 +268,8 @@ void swmp_lobby_set_equipment(SwmpLobby *l, SwmpGearSet gear) {
         return;
     SwmpEquipment *local = &l->equipment[s->local_peer];
     if (!memcmp(local->gear.id, gear.id, sizeof gear.id) &&
-        !memcmp(local->gear.armor, gear.armor, sizeof gear.armor)) return;
+        !memcmp(local->gear.armor, gear.armor, sizeof gear.armor) &&
+        !memcmp(local->gear.armor_dye, gear.armor_dye, sizeof gear.armor_dye)) return;
     local->gear = gear;
     if (!++local->revision) ++local->revision;
     SwmpControl msg = {.equipment = {.peer = s->local_peer, .state = *local}};

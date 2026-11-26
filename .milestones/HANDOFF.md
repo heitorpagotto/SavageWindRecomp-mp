@@ -1,7 +1,7 @@
 # Agent handoff
 
-Checkpoint 2026-11-25 on `multiplayer/windows-test`, with skinned appearance and the previous
-movement and standing-jump playback changes based on `d5029de`.
+Checkpoint 2026-11-26 on `multiplayer/windows-test`, based on `256ab64`, with native
+armor palette selection and body visibility for remote Link.
 The M2 version label is `0.6.0-alpha.6-0.1.0-mp`. Read [AGENTS.md](../AGENTS.md) and
 [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes. Use RTK for supported shell commands and
 separate scratch settings and saves for game tests. Keep generated code and game data local.
@@ -27,31 +27,51 @@ equipped armor before extending animation coverage. The
   offsets `0x23f0`, `0x2400` and `0x2410`. The guest thread resolves those indices temporarily.
   It sees the on-body actor, including a different Hylian Hood variant than the inventory name.
 - The installed ActorInfo table supplies per-piece model identities and upgrade aliases.
-  Protocol 6 includes three model IDs in the existing reliable equipment revision.
+  The original protocol 6 sent three model IDs in the reliable equipment revision.
   Each receiver looks up those IDs by slot in its own installed resources.
 - A separate passive actor per slot plays Link's skeletal clips on the same root and starts at
   Link's current phase. The default head provides hair. Changing a piece preserves Link, the other
   armor pieces and rigid gear. Helmet variants, cloth simulation and DLC assets need further coverage.
 - The [Windows test record](TESTING.md#m25-hair-and-equipped-armor) has the verified equip, removal
   and rejoin path. A second replay verified a mixed outfit of Climber's Bandanna, Ancient Cuirass
-  and Stealth Tights on the same proxy. Both peers need the matching build from
-  `build/m25-build/Play-M25.cmd`.
+  and Stealth Tights on the same proxy. The current launcher is listed below.
 
 ## M2.5 armor colors and base skin clipping
 
-1. Match native armor material colors. In the Windows Hylian outfit replay, the local tunic
-   renders blue and the remote tunic renders dark with red accents. The remote actors currently
-   play the skeletal clips. The installed dyeable armor packs also define a `ColorChange` state,
-   and the native spawn path carries `ArmorDyeColor`. Verify how the native path applies the
-   default palette before carrying dye choices. Compare the same piece locally and remotely in
-   the same lighting, including an undyed and a dyed variant.
-2. Apply the native body visibility for each worn piece to the remote Link. In the same replay,
-   bare legs show through the Hylian Trousers. Match which parts the native outfit covers and
-   restore the corresponding base meshes on unequip or when the replacement model is unavailable.
-   Check idle and movement, a mixed outfit, and rejoin with armor equipped.
-
-Keep the per-slot equip and removal behavior when correcting color and visibility.
-The reference captures are listed in the [appearance test record](TESTING.md#m25-hair-and-equipped-armor).
+- Protocol 7 carries a native dye index (0 through 15) per armor slot with the reliable
+  equipment revision. The sender reads the equipped actor. The receiver passes the dye
+  through the native placement parameters so the model loader binds the correct palette
+  textures before the piece appears. A dye change reloads only the affected armor slot.
+- The receiver uses the native `HideMaterialGroup` rules. It restores Link's grouped meshes
+  and reapplies coverage from the active pieces when the worn models change. Unequipped,
+  pending and unavailable pieces leave their corresponding base meshes visible.
+- Run `build/m25-outfit-build/Play-M25-Outfit.cmd` on both Windows peers. It uses game version
+  1.9.0, x86-64-v3 gamelib `baf44255c0bc3428`, multiplayer source ID
+  `4afc4c9f6fea459a9a837809966d1ef3bd521b6f`. The previous appearance launcher uses
+  protocol 6.
+- The Windows core, direct invite and WebRTC loopback targets passed. The site and layout
+  checks passed, regeneration resolved all 195 sites, and the installed-resource check
+  verified both palette names in all 123 model packs and preserved the stock ActorInfo entries.
+- The Windows replays used copied saves and Vulkan at 30 FPS in Tah Muhl Shrine. Both games
+  used 1280x720, 75% render scale, a 1400 MiB VRAM budget and Vulkan heap copy off. The host
+  used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon Graphics (25.10.30.02).
+- The visibility probe in `build/m25-outfit-check-vi7rb00n/` shows the Hylian Trousers
+  covering the base leg meshes at idle and in motion. Removing the trousers restored those
+  meshes while the remote Link, tunic, hood and axe stayed active. The later color probe
+  showed that seeking the palette after creation could reuse the receiver's textures for
+  the same model. The current build selects the palette during the native load.
+- The mixed-outfit visibility probe in `build/m25-outfit-check-8m17funu/` kept the Climber's
+  Bandanna, Ancient Cuirass and Stealth Tights visible through movement, a standing jump
+  and rejoin.
+- The current build's replay in `build/m25-outfit-check-msabxl_r/` shows the host's yellow
+  Hylian Tunic beside the client's undyed tunic, on both screens under the same shrine
+  lighting. The remote yellow tunic and the body mask survived movement, a jump, and rejoin.
+  Equipping the undyed copy through the host inventory then changed the remote tunic to the
+  default palette while the same Link and the other pieces stayed active. Compare
+  `client/build/remote-rejoin.png` and `client/build/remote-dye-changed.png`.
+- Rebuild the ignored `build/m25_build_outfit_native_fixture.py` and run
+  `build/m25_run_outfit_check.py` with the matching gamelib to repeat the Windows checks.
+  Linux validation remains on the owner's list.
 
 ## M2.5 remote movement and standing-jump playback
 

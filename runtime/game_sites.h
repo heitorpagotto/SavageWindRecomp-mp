@@ -78,6 +78,12 @@
     X(mp_anim_play) \
     X(mp_anim_current) \
     X(mp_anim_string) \
+    X(mp_armor_visibility) \
+    X(mp_armor_dye) \
+    X(mp_armor_dye_key) \
+    X(mp_armor_load) \
+    X(mp_armor_texture_frame) \
+    X(mp_armor_material_frame) \
     X(mp_health_current) \
     X(mp_weather_current) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
