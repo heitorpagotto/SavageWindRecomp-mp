@@ -1,8 +1,8 @@
 # Repository and upstream context
 
-## Snapshot
+## Branch and baseline
 
-- Working branch `multiplayer/windows-test`, source checkpoint `9fb424b`.
+- Working branch `multiplayer/windows-test`. See the [current handoff](HANDOFF.md) for the latest documented checkpoint.
 - Historical upstream baseline `f488af7`. The bootstrap is `2b9a27c` and the synthetic lobby is `11ed467`.
 - Fork remote is `origin`. Identify the current upstream release and inspect the branch before updating it.
 

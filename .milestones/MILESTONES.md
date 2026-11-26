@@ -1,6 +1,6 @@
 # Milestone ledger
 
-Last reviewed 2026-11-23. Status values are `complete`, `partial`, `not started`, and `blocked`.
+Last reviewed 2026-11-26. Status values include `complete`, `in progress`, `partial`, `not started`, and `blocked`.
 Completion requires demonstrated acceptance criteria. Synthetic, build, network, and gameplay evidence have distinct scopes.
 
 ## M0 — Protocol and session foundation
@@ -104,9 +104,10 @@ wall approach and mantle, grounded lock-on dodges and backflips with landing cli
 knockdown and fall-damage recovery clips, and gliding with a passive canopy that banks with
 Link during turns. Grounded locomotion and equipment share buffered playback, and standing jumps
 start at the sampled animation phase. Default hair and equipped armor use skinned models that follow
-the remote proxy. Material tint and body mesh masking remain open.
+the remote proxy. Protocol 7 adds native dye indices and body masking. Representative
+dye and masking cases passed in two Windows games at 30 FPS. [Appearance evidence](testing/appearance.md#m25-armor-colors-and-base-skin-clipping)
 The rest of the equipment and animation catalog and overhead names are open. See the
-[playback handoff](HANDOFF.md#m25-remote-movement-and-standing-jump-playback) and
+[playback handoff](handoff/playback.md#m25-remote-movement-and-standing-jump-playback) and
 [animation backlog](NEXT.md#remaining-animation-work).
 
 Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped
@@ -236,7 +237,7 @@ Status **not started**. The owner can run these checks independently of M2.5 and
   Links are visible in the same supported area and reappear after peers reunite following Slate travel.
   Record both logs and player locations if either peer fails to reappear within the supported range.
 
-See the [test record](TESTING.md#m2-acceptance-follow-up) for the four-game soak, Windows ZIP, and Linux
+See the [test record](testing/m2.md#m2-acceptance-follow-up) for the four-game soak, Windows ZIP, and Linux
 build and loopback results.
 
 ## Dependency order

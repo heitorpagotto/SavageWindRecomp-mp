@@ -10,7 +10,7 @@ require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 Defined in `mods/multiplayer/protocol.h`:
 
-- `SWMP_PROTOCOL_VERSION = 6`
+- `SWMP_PROTOCOL_VERSION = 7`
 - `SWMP_MAX_PEERS = 8`
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
@@ -84,7 +84,7 @@ Each gear-pose bit requires a nonzero revision and limits each offset axis to ±
 pose with the reliable record for the same peer and revision. The nocked arrow and bow animation state require a
 bow pose. The arrow shares the offset bound. A phase requires an activation ID. The host preserves the owning
 game's sample time when relaying a peer's snapshot. The direct invite text format is independent of the packet
-version. Lobby traffic uses protocol 6 and admission requires matching source fingerprints.
+version. Lobby traffic uses protocol 7 and admission requires matching source fingerprints.
 
 ## Session state
 
@@ -176,10 +176,11 @@ it from missing health. Damage authority and death handling belong to M3.
 The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe and Traveler's
 Sword, Spear and Claymore in category zero, Wooden and Soldier's Shields in category one, and
 Traveler's and Soldier's Bows in category two. The window thread advances the equipment
-revision when any identity changes. EQUIPMENT carries a one-byte peer, a four-byte revision, three
-identity bytes in weapon, shield and bow order, and three four-byte armor model IDs in head, torso and
-legs order. The host accepts updates for the connection's own peer,
-relays them, and sends cached revisions after WELCOME. Identity and membership
+revision when an identity or dye changes. EQUIPMENT carries a one-byte peer, a four-byte revision, three
+identity bytes in weapon, shield and bow order, three four-byte armor model IDs in head, torso and
+legs order, and three dye bytes in the same slot order. Dye 0 selects the undyed palette. The
+codec accepts dyes 0–15 and requires zero dye for an absent model. The host accepts updates for the
+connection's own peer, relays them, and sends cached revisions after WELCOME. Identity and membership
 share the ordered control channel. Peer removal clears the cached identity and position before slot reuse.
 
 The virtual RomFS gives each gear variant a passive prop profile with dummy physics and a model list from
@@ -196,7 +197,9 @@ share the model use one ID. The virtual RomFS builds skinned actors from the pas
 shares the animation archive with the Link proxy. Each piece is placed at Link's playback
 root and starts the same clip with the matching phase and blend. A zero head ID selects the default
 hair. A zero top or bottom ID displays the Link proxy's base body. The resolver checks model IDs
-against the receiving game's catalog.
+against the receiving game's catalog. The receiver selects the dye palette during native model
+loading. A dye change reloads the affected slot, and native `HideMaterialGroup` rules mask the base
+body under active pieces. [Appearance checkpoints](handoff/appearance.md)
 
 Landing uses action ID 5. IDs 6–11 select large-sword draw, first swing, finishing swing, spin, drawn idle
 and stow for the axe and claymore. IDs 49–69 add the sword and spear actions and the charge follow-ups
@@ -227,8 +230,7 @@ travel in the same position snapshot.
 The receiver plays one clip per action change. Standing ShieldGuard transitions to and from Idle
 or SwordReady blend over four native animation frames. The first playback float controls the
 blend, and the second controls the starting phase. Parry and hit reactions use the engine default.
-Exact clip
-progress, blends and repeated activations of the same state remain open.
+Exact clip progress, blends and repeated activations outside the tracked standing jump remain open.
 
 Action IDs 76–85 pair takeoff and landing clips for the native Step and StepLand states.
 They cover neutral, left, right, forward and backward motion. The sender captures Link's

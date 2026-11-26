@@ -1,28 +1,29 @@
-# Savage Wind Multiplayer milestone index
+# Savage Wind Multiplayer milestones
 
-Savage Wind Multiplayer is a native, compile-in feature for the Windows and Linux/Vulkan builds of this fork.
-The product target is an eight-player, host-authoritative cooperative campaign on BOTW Switch 1.9.0.
-The project owner will manually bring in new Savage Wind releases. Keep the multiplayer core isolated and the
-integration points small so each update can be built and verified on both platforms.
+Native eight-player co-op for BOTW Switch 1.9.0 on Windows and Linux/Vulkan.
 
-M0 is complete for synthetic scope. The owner accepted M1 after joining a Linux host from Windows and Linux.
-M2 is complete. It implements native remote Link animation and area-aware presence on the main field and
-in shrines. Windows travel and a four-game soak passed. [M7](MILESTONES.md#m7--deferred-manual-validation)
-tracks the deferred eight-game soak, Linux AppImage check, and mixed-platform visibility and travel.
-[M2.5](MILESTONES.md#m25--time-weather-and-full-link-synchronization) follows M2 and covers host time and
-weather and full player equipment and animation sync.
-See the [session handoff](HANDOFF.md), [M2 handoff](M2_POSITION_HANDOFF.md), and [test record](TESTING.md)
-for the current results.
+Start with the [current handoff](HANDOFF.md). Open [next work](NEXT.md) when
+choosing a task, then use the row for that task to find earlier investigations
+or test evidence.
 
-## Read in this order
+| Topic | Implementation checkpoints | Verification evidence |
+| --- | --- | --- |
+| Armor, dyes, and body visibility | [Appearance](handoff/appearance.md) | [Appearance tests](testing/appearance.md) |
+| Movement, jitter, and clip phase | [Playback](handoff/playback.md) | [Playback tests](testing/playback.md) |
+| Melee weapons and passive gear | [Equipment](handoff/equipment.md) | [Equipment tests](testing/equipment.md) |
+| Shields, bows, and arrows | [Shield and bow](handoff/shield-bow.md) | [Shield and bow tests](testing/shield-bow.md) |
+| Swimming, climbing, gliding, dodges, and hits | [Traversal and reactions](handoff/traversal.md) | [Traversal tests](testing/traversal.md) |
+| Host clock, weather, and join/leave notices | [Environment](handoff/environment.md) | [Environment tests](testing/environment.md) |
+| Presence, range, shrines, and travel | [M2 checkpoints](handoff/m2.md), [Plateau research](M2_POSITION_HANDOFF.md) | [M2 tests](testing/m2.md) |
+| Lobby, invites, and platform builds | [Direct invites](DIRECT_MULTIPLAYER_HANDOFF.md), [Build compatibility](handoff/builds.md) | [Build recipes and test matrix](TESTING.md) |
 
-1. [Session handoff](HANDOFF.md) for the current checkpoint, matching Windows launch path, and open reports.
-   See the [direct multiplayer handoff](DIRECT_MULTIPLAYER_HANDOFF.md) for the invite flow and security findings
-   and the [native multiplayer handoff](NATIVE_MULTIPLAYER_HANDOFF.md) for the migration history.
-2. [Project charter](PROJECT.md) and [milestone ledger](MILESTONES.md) for goals and acceptance criteria.
-3. [Architecture](ARCHITECTURE.md) and [decisions](DECISIONS.md) for boundaries and rationale.
-4. [Repository map](REPOSITORY.md) and [implementation notes](IMPLEMENTATION.md) for the current source.
-5. [Testing](TESTING.md), [next work](NEXT.md), and [state](state.json) for evidence and remaining work.
+- For scope and acceptance criteria, see the [charter](PROJECT.md) and [milestone ledger](MILESTONES.md).
+- For design and source locations, see [architecture](ARCHITECTURE.md), [decisions](DECISIONS.md),
+  the [repository map](REPOSITORY.md), and the [implementation reference](IMPLEMENTATION.md).
+- For structured status, see [state.json](state.json). Earlier records include the
+  [native migration](NATIVE_MULTIPLAYER_HANDOFF.md) and [November 25 state snapshot](history/state-2026-11-25.json).
 
-At each checkpoint, update the handoff, milestone status, verification record, implementation notes, and state
-snapshot where relevant. Read [AGENTS.md](../AGENTS.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) before editing code.
+At a checkpoint, refresh the handoff and save reusable findings and evidence
+in the relevant topic files. Update next work, the ledger, and structured
+status when their facts change.
+Read [AGENTS.md](../AGENTS.md) and [CONTRIBUTING.md](../CONTRIBUTING.md) before making changes.

@@ -1,51 +1,31 @@
-# Resume guide and next work
+# Next multiplayer work
 
-M2 is complete. The first [M2.5](MILESTONES.md#m25--time-weather-and-full-link-synchronization) slice
-adds host time and weather sync and admission notifications. See the [handoff](HANDOFF.md#m25-first-slice)
-for verification and remaining environment cases. The [shield and animation checkpoint](HANDOFF.md#m25-shield-axe-idle-and-crouch)
-covers independent axe and shield slots and the new axe idle, stow, guard and crouch clips. The
-[bow checkpoint](HANDOFF.md#m25-travelers-bow) covers the third rigid gear slot and its standing actions.
-The [traversal checkpoint](HANDOFF.md#m25-swimming-and-climbing) covers swimming and upward wall climbing.
-The [wall climbing checkpoint](HANDOFF.md#m25-directional-wall-climbing) covers directional climbing,
-wall approach and mantling. The [gliding checkpoint](HANDOFF.md#m25-gliding) covers deployment,
-neutral flight, falling and landing. The [climbing jump checkpoint](HANDOFF.md#m25-directional-climbing-jumps)
-covers lateral, upward and upward-diagonal jumps. The [banking checkpoint](HANDOFF.md#m25-glide-banking)
-covers coordinated tilt of Link and the canopy while steering. The
-[swim checkpoint](HANDOFF.md#m25-swim-stroke-selection) covers slow and fast strokes during free
-swimming. The [lock-on checkpoint](HANDOFF.md#m25-lock-on-swimming) covers directional strokes
-when targeting. The [clip progress probe](HANDOFF.md#m25-animation-clip-progress-probe) found readable
-frame counters and a normalized clip start argument. The
-[playback checkpoint](HANDOFF.md#m25-remote-movement-and-standing-jump-playback)
-uses those for standing jumps and addresses movement jitter and sprinting gear separation. The
-[weapon family checkpoint](HANDOFF.md#m25-weapon-families) covers standing sword, spear, and
-large-sword actions. The [shield and bow checkpoint](HANDOFF.md#m25-shield-and-bow-follow-up)
-records the grounded clips, native guard-hit check, and passive rig's upper-slot limitation.
-The [bowstring checkpoint](HANDOFF.md#m25-bowstring-animation) records native bow playback and
-the protocol 3 snapshot field. The [arrow checkpoint](HANDOFF.md#m25-nocked-arrow-variants-and-rapid-reload)
-adds all six inventory arrow types and verifies rapid reload. The [grounded dodge checkpoint](HANDOFF.md#m25-grounded-dodges)
-verifies neutral, forward and sideways steps and the backflip. The
-[reactions checkpoint](HANDOFF.md#m25-hit-reactions-and-knockdown-recovery) covers native medium hits,
-knockdowns, tumbling and standing back up. The [fall-damage checkpoint](HANDOFF.md#m25-fall-damage-recovery)
-covers native hard landings and their recovery. The
-[appearance checkpoint](HANDOFF.md#m25-hair-and-equipped-armor) covers default hair and the
-equipped head, upper and lower models.
-Continue under the [owner's work order](HANDOFF.md#m25-animation-work-order).
-The [dependency findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) apply to distribution.
+Continue M2.5 from the [current checkpoint](HANDOFF.md). The latest Windows replay
+verified representative armor dyes and body masking at 30 FPS. The next animation
+checks are native light and directional hits and water/ledge transitions, followed
+by broader phase and rate sampling.
 
 ## Remaining animation work
 
+The table follows the owner's work order. Windows validation can run during
+Appearance. The owner will validate Linux manually and report issues.
+
 | Stage | Work still open |
 | --- | --- |
-| 1. Weapons | Standing draw, idle, stow, chains, charge and recovery verified for representative sword, spear and large-sword weapons. Moving and airborne variants and exact blends remain open. |
-| 2. Shield and bow | Soldier's variants, standing guard and blends, parry, hit and break, and one-handed sword with shield are verified. Grounded bow playback includes bowstring draw and release, all six nocked inventory arrow types, and rapid reload. Airborne aim needs layers. See the [shield and bow handoff](HANDOFF.md#m25-shield-and-bow-follow-up) and [arrow checkpoint](HANDOFF.md#m25-nocked-arrow-variants-and-rapid-reload). |
-| 3. Traversal and reactions | Grounded dodges, medium hits, knockdown recovery and fall-damage recovery have Windows coverage. Verify light and directional hits, moving-target swimming, native swim and glide blends, hand placement, and transitions involving water and ledges. |
-| 4. Playback | Standing jumps carry phase and activation IDs. Extend phase and rate sampling across verified clips and check late join and recovery under real packet loss. Add layered playback and transition blends where the proxy rig supports them. |
-| 5. Appearance | Default hair and skinned armor models follow the proxy. Match native material tint and body mesh masking, extend attachment checks across clips, and verify DLC assets and area travel. The owner will validate Linux manually later. |
+| 1. Weapons | Moving and airborne variants, exact blends, and more equipment identities. [Melee checkpoints](handoff/equipment.md) |
+| 2. Shield and bow | Airborne aim needs layered playback. Extend attachment checks, including the brief offset seen in backflips. [Shield and bow checkpoints](handoff/shield-bow.md), [backflip evidence](testing/traversal.md#m25-grounded-dodges) |
+| 3. Traversal and reactions | Check native light and directional hits, moving-target swimming, swim and glide blends, hand placement, and water/ledge transitions. [Traversal checkpoints](handoff/traversal.md) |
+| 4. Playback | Extend phase and rate beyond standing jumps. Check late join and recovery under real packet loss. Add layers and transition blends where the proxy rig supports them. [Playback checkpoints](handoff/playback.md) |
+| 5. Appearance | Broaden dye and masking coverage beyond the tested outfits. Check helmet variants, cloth, DLC, attachment alignment across clips, and travel. [Appearance checkpoints](handoff/appearance.md) |
 
-The next appearance work is to fix armor colors and base skin clipping. [Handoff](HANDOFF.md#m25-armor-colors-and-base-skin-clipping)
+## Other open work
 
-Networked damage and enemy ownership remain under [M3](MILESTONES.md#m3--combat-enemies-and-pvp).
-
-The owner can run [M7 manual validation](MILESTONES.md#m7--deferred-manual-validation) separately. See the
-[handoff](HANDOFF.md#m2-acceptance-follow-up) for the matching build and the
-[test record](TESTING.md#m2-acceptance-follow-up) for the current evidence.
+- For environment sync, verify mixed game progression and native Linux and mixed-platform
+  behavior. Evaluate overhead names separately.
+  [Environment notes](handoff/environment.md), [environment tests](testing/environment.md)
+- M7 tracks the deferred M2 manual tests.
+  [Acceptance criteria](MILESTONES.md#m7--deferred-manual-validation), [M2 evidence](testing/m2.md#m2-acceptance-follow-up)
+- Networked damage and enemy ownership are M3 work. [M3 acceptance criteria](MILESTONES.md#m3--combat-enemies-and-pvp)
+- For distribution and the unresolved host direction, see the
+  [dependency findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) and
+  [build compatibility notes](handoff/builds.md).

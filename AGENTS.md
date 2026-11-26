@@ -2,6 +2,18 @@ Savage Wind Recomp
 
 Read CONTRIBUTING.md before making changes.
 
+## Resuming milestone work
+
+When asked to continue multiplayer implementation, start with
+[the current handoff](.milestones/HANDOFF.md). Read [next work](.milestones/NEXT.md)
+only if the request leaves the task or priority open. Use the
+[topic index](.milestones/README.md) to locate any additional context you need.
+
+Read only the relevant sections of the linked implementation notes and test
+evidence. Consult historical handoffs, milestone criteria, or state snapshots
+only when they answer a specific question for the task. Avoid bulk-reading
+`.milestones/` and confirm implementation details in the source you are changing.
+
 ## Shell commands with RTK
 
 Always invoke supported shell commands through `rtk` in this project, even

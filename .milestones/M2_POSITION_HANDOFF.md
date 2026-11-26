@@ -6,8 +6,8 @@ position slice of M2 works in the open lobby and after START. The Plateau proxy 
 player's idle, movement and jump states to native clips. The owner accepted M2 and deferred the
 remaining manual tests to [M7](MILESTONES.md#m7--deferred-manual-validation).
 
-For the current shrine identity and range tests, see the [latest handoff](HANDOFF.md#m2-shrine-identity-and-native-actor-retry).
-The [visibility follow-up](HANDOFF.md#m2-visibility-follow-up) records the earlier Slate travel tests.
+For the current shrine identity and range tests, see the [latest handoff](handoff/m2.md#m2-shrine-identity-and-native-actor-retry).
+The [visibility follow-up](handoff/m2.md#m2-visibility-follow-up) records the earlier Slate travel tests.
 
 ## Implementation
 
@@ -64,7 +64,7 @@ The [visibility follow-up](HANDOFF.md#m2-visibility-follow-up) records the earli
   in both directions and repeated the inventory, area and lifecycle checks with regenerated gamelib
   `34aa482dae306a0d`. A separate `run_anim_capacity.py` fixture rendered all seven remote Link actors
   in one game through START and disconnect. Both used the actual direct WebRTC flow. See the
-  [animation test record](TESTING.md#m2-plateau-animation-check) for settings and results.
+  [animation test record](testing/m2.md#m2-plateau-animation-check) for settings and results.
 - `build/m2-probe/build_health_live.py` and `build/m2-probe/run_health_live.py` tested health
   observation with gamelib `e640fd858dc0d033`. The installed-data regeneration is in ignored
   `build/m2-health-generated/`, and the linked app and library are in `build/m2-health-build/`.
