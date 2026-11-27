@@ -764,6 +764,9 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_HORSE_BOW_BACK_AIM] = ACTION(RideBowBackAim, "Bow_Attack_Charge", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_HORSE_BOW_BACK_SHOOT] = ACTION(RideBowBackShoot, "Bow_Attack_Shoot", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_HORSE_BOW_END] = ACTION(RideBowEnd, "Bow_Attack_Horse_End", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_WATER_DIVE] = ACTION(WaterDive, "Swim_Dive_St", "WaterDiveJump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_WATER_SURFACE] = ACTION(WaterSurface, "Swim_Dive_High_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWIM_JUMP] = ACTION(SwimJump, "Swim_Jump_St", "SwimJump", PROXY_GEAR_NONE),
 };
 
 static const ProxyAction horse_actions[] = {
@@ -874,9 +877,12 @@ SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family
 
 SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, SwmpGearSet gear,
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                         bool shield_raised, float draw_duration) {
+                                         bool shield_raised, float clip_duration) {
     if (!strcmp(state, "WallDashSt")) return SWMP_PROXY_CLIMB_ENTER;
     if (!strcmp(state, "WallOff")) return SWMP_PROXY_CLIMB_RELEASE;
+    if (!strcmp(state, "SwimJumpSt")) return SWMP_PROXY_SWIM_JUMP;
+    // The 1.9.0 SwimWait selector plays a 24-frame surfacing clip after a dive.
+    if (!strcmp(state, "SwimWait") && clip_duration == 24.0f) return SWMP_PROXY_WATER_SURFACE;
     // Reactions still play if the shield has no visual alias or was destroyed by the hit.
     if (!strcmp(state, "GuardJust")) return SWMP_PROXY_SHIELD_PARRY;
     if (!strcmp(state, "GuardFailHit")) return SWMP_PROXY_SHIELD_HIT;
@@ -904,9 +910,9 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
     if (!strcmp(state, "WeaponEquipOn")) {
         // BOTW 1.9.0 shares this state, but uses 16-, 20-, and 32-frame clips
         // for shield, bow, and melee draws. A stowed weapon can move during a bow draw.
-        if (draw_duration == 16.0f && gear.id[SWMP_GEAR_SHIELD]) return SWMP_PROXY_SHIELD_DRAW;
-        if (draw_duration == 20.0f && gear.id[SWMP_GEAR_BOW]) return SWMP_PROXY_BOW_DRAW;
-        if (draw_duration == 32.0f) return weapon->draw;
+        if (clip_duration == 16.0f && gear.id[SWMP_GEAR_SHIELD]) return SWMP_PROXY_SHIELD_DRAW;
+        if (clip_duration == 20.0f && gear.id[SWMP_GEAR_BOW]) return SWMP_PROXY_BOW_DRAW;
+        if (clip_duration == 32.0f) return weapon->draw;
         return SWMP_PROXY_IDLE;
     }
     // Native Wait covers both stowed and drawn idle.
@@ -1203,6 +1209,7 @@ uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size)
         {SWMP_PROXY_CLIMB_JUMP_UP_RIGHT, ROOT_TRANSLATION},
         {SWMP_PROXY_CLIMB_JUMP_UP_LEFT, ROOT_TRANSLATION},
         {SWMP_PROXY_CLIMB_JUMP_LEFT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_MANTLE, ROOT_TRANSLATION},
     };
     return in_place_animation(src, size, out_size, proxy_actions, root_motion, sizeof root_motion / sizeof *root_motion);
 }

@@ -1,5 +1,14 @@
 # Current multiplayer handoff
 
+## M2.5 ledge mantle and water transitions
+
+- **Implemented** Wall mantles use the sender's clip phase and the replicated position for the climb onto the ledge.
+  Dive, resurfacing, and swim jump have separate playback clips.
+  [Implementation notes](handoff/traversal.md#m25-ledge-mantle-and-water-transitions)
+- **Tested** Two Windows peers replayed a wall mantle from its sampled phase at 30 and 60 FPS caps. At the 60 FPS
+  cap, a fixture sent all three water actions and the receiver played the expected clips. Native activation is open.
+  [Settings and evidence](testing/traversal.md#m25-ledge-mantle-and-water-transitions)
+
 ## M2.5 player names and map markers
 
 - **Implemented** Remote Links display their lobby names above their heads. Both Multiplayer settings screens
@@ -66,15 +75,15 @@ Checkpoint `e45852a` on `multiplayer/windows-test`, 2026-11-27. M2.5 is in progr
   Windows peers at 30 and 60 FPS. The 30 FPS runs also covered near
   drops, put-away, Boomerang drop and flight, and peer departure.
   [Settings and evidence](testing/equipment.md#m25-held-materials-and-item-releases)
-- **Next** Native light and directional hit reactions, water transitions, and ledges.
+- **Next** Native light and directional hit reactions, plus the remaining water and ledge cases.
   [Next work](NEXT.md)
 
 ## Matching Windows build
 
 Both peers need matching protocol 12 builds. The local launcher is
-`build/m25-indicators/Play-M25-Indicators.cmd` for BOTW 1.9.0. It uses gamelib
+`build/m25-transition/Play-M25-Transitions.cmd` for BOTW 1.9.0. It uses gamelib
 `be47daf941612328` from `build/m25-warp-sync` and reports source ID
-`e23d9da2d9f577a29d59a045c5dd57b4a2fd61d4`.
+`d6da39095b48bfb4be4e1ce7168fd0a7784cf4e9`.
 [Build compatibility](../docs/build-windows-and-appimage.md#multiplayer-build-compatibility)
 
 Linux gameplay and mixed-platform validation are tracked in [M7](MILESTONES.md#m7--deferred-manual-validation).

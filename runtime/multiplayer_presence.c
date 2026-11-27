@@ -396,6 +396,8 @@ static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap
         [SWMP_PROXY_LADDER_UP_END] = 32, [SWMP_PROXY_LADDER_DOWN_START] = 41, [SWMP_PROXY_LADDER_DOWN] = 12,
         [SWMP_PROXY_LADDER_DOWN_END] = 9, [SWMP_PROXY_LADDER_JUMP] = 34, [SWMP_PROXY_LADDER_LAND] = 14,
         [SWMP_PROXY_POLE_MOUNT] = 24, [SWMP_PROXY_POLE_HOLD] = 48, [SWMP_PROXY_WARP_DEPART] = 96,
+        [SWMP_PROXY_CLIMB_MANTLE] = 24, [SWMP_PROXY_WATER_DIVE] = 30,
+        [SWMP_PROXY_WATER_SURFACE] = 24, [SWMP_PROXY_SWIM_JUMP] = 30,
         [SWMP_PROXY_HORSE_SWORD_RIGHT] = 24, [SWMP_PROXY_HORSE_SWORD_LEFT] = 24,
         [SWMP_PROXY_HORSE_LSWORD_RIGHT] = 36, [SWMP_PROXY_HORSE_LSWORD_LEFT] = 36,
         [SWMP_PROXY_HORSE_SPEAR_RIGHT] = 24, [SWMP_PROXY_HORSE_SPEAR_LEFT] = 24,
@@ -504,7 +506,8 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     local_throw.releasing = releasing;
     float clip_duration = 0;
     bool putting = !strcmp(state, "GrabPut");
-    if ((releasing || charging || putting || !strcmp(state, "WeaponEquipOn")) && !strcmp(g_game_version, "1.9.0")) {
+    if ((releasing || charging || putting || !strcmp(state, "WeaponEquipOn") || !strcmp(state, "SwimWait")) &&
+        !strcmp(g_game_version, "1.9.0")) {
         float frame, duration;
         if (animation_frame(controller, heap_size, &frame, &duration)) clip_duration = duration;
     }
@@ -1606,7 +1609,7 @@ static void update_proxy(Cpu *cpu, uint64_t actor, Placeholder *slot, const Pose
     // The native swimmer places its model higher than the actor root. The standalone clips
     // need that lift to reach the waterline. Keep the sampled root for gear and range.
     bool swimming = pose->action == SWMP_PROXY_SWIM_WAIT || pose->action == SWMP_PROXY_SWIM_MOVE ||
-        pose->action == SWMP_PROXY_SWIM_DASH ||
+        pose->action == SWMP_PROXY_SWIM_DASH || pose->action == SWMP_PROXY_WATER_SURFACE ||
         (pose->action >= SWMP_PROXY_SWIM_FAST && pose->action <= SWMP_PROXY_SWIM_LOCK_RIGHT);
     float lift = swimming ? 1.65f : 0;
     if (!slot->visible || lift != slot->model_lift || !same_pose(&slot->applied, pose)) {

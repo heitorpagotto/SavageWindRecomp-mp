@@ -1,5 +1,15 @@
 # Traversal, dodges, and reactions
 
+## M2.5 ledge mantle and water transitions
+
+- The native 1.9.0 `ClimbEd` track lasts 24 frames. Link's sampled position rises and advances during the
+  track, so the remote mantle removes the stock clip's root translation and starts at the transmitted phase.
+  The mantle still uses the representative straight-ledge clip.
+- Native `WaterDiveJump`, `SwimJumpSt`, and `SwimJump` select dedicated dive and jump clips. The 24-frame
+  `SwimWait` variant selects the dive surfacing clip, and the ordinary 30-frame wait selects swim idle.
+  Surfacing uses the same model lift as swim idle.
+- See the [test record](../testing/traversal.md#m25-ledge-mantle-and-water-transitions).
+
 ## M2.5 riding and mounted combat
 
 - On 1.9.0 the sender reads the native horse attachment during mounted

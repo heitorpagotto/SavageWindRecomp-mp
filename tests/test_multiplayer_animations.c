@@ -40,6 +40,18 @@ int main(void) {
                   SWMP_PROXY_POLE_HOLD);
     expect_action(swmp_proxy_sample_action("Warp", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_WARP_DEPART);
+    expect_action(swmp_proxy_sample_action("ClimbEd", "", gear, NULL, NULL, false, 24),
+                  SWMP_PROXY_CLIMB_MANTLE);
+    expect_action(swmp_proxy_sample_action("WaterDiveJump", "", gear, NULL, NULL, false, 30),
+                  SWMP_PROXY_WATER_DIVE);
+    expect_action(swmp_proxy_sample_action("SwimWait", "", gear, NULL, NULL, false, 24),
+                  SWMP_PROXY_WATER_SURFACE);
+    expect_action(swmp_proxy_sample_action("SwimWait", "", gear, NULL, NULL, false, 30),
+                  SWMP_PROXY_SWIM_WAIT);
+    expect_action(swmp_proxy_sample_action("SwimJumpSt", "", gear, NULL, NULL, false, 30),
+                  SWMP_PROXY_SWIM_JUMP);
+    expect_action(swmp_proxy_sample_action("SwimJump", "", gear, NULL, NULL, false, 30),
+                  SWMP_PROXY_SWIM_JUMP);
     gear.id[SWMP_GEAR_SHIELD] = 0;
     expect_action(swmp_proxy_sample_action("GuardBreak", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_SHIELD_BREAK);

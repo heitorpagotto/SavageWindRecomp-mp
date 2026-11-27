@@ -1,5 +1,21 @@
 # Traversal, dodges, and reactions
 
+## M2.5 ledge mantle and water transitions
+
+- The Windows UCRT64 build and four multiplayer test targets passed. The installed-resource check resolved
+  the three water clips and the mantle clip and confirmed that the mantle's vertical and forward root curves
+  were neutralized in the proxy archive. The gamelib ID matched `be47daf941612328`.
+- On two Windows Vulkan peers at 30 FPS in BOTW 1.9.0, the water entry and exit route used ordinary swim
+  and walk states. The following wall climb reached native `ClimbEd` at a height of 177.98 m. Link's position
+  rose to 179.76 m during the mantle. The receiver started `ClimbMantle` at playback phase 0.03 and returned
+  to idle at 179.76 m. The observers used 960x540, 50% render scale, 1400 MiB VRAM budget and Vulkan heap copy
+  off. The host used an RTX 4050 Laptop GPU (610.88), and the client used AMD Radeon Graphics (25.10.30.02).
+  Logs and the receiver capture are in `build/m25-transition-53v5go64/`.
+- The same route at a 60 FPS cap started the remote mantle at phase 0.04. A fixture sent the dive, surfacing,
+  and swim-jump actions through the normal snapshot path. The receiver's controller entered all three states.
+  The client measured 55–60 FPS during the captures. The ordinary jump and high fall into the pond did not
+  trigger the special native transitions. Logs and captures are in `build/m25-transition-t6ry8l9p/`.
+
 ## M2.5 riding and mounted combat
 
 - The Windows UCRT64 app linked. Multiplayer core, animation selector,

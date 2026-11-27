@@ -243,13 +243,16 @@ typedef enum {
     SWMP_PROXY_HORSE_BOW_BACK_AIM,
     SWMP_PROXY_HORSE_BOW_BACK_SHOOT,
     SWMP_PROXY_HORSE_BOW_END,
+    SWMP_PROXY_WATER_DIVE,
+    SWMP_PROXY_WATER_SURFACE,
+    SWMP_PROXY_SWIM_JUMP,
     SWMP_PROXY_ACTION_COUNT,
 } SwmpProxyAction;
 
 const char *swmp_proxy_action_name(SwmpProxyAction action);
 SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, SwmpGearSet gear,
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                         bool shield_raised, float draw_duration);
+                                         bool shield_raised, float clip_duration);
 SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family, float clip_duration);
 SwmpProxyAction swmp_proxy_carry_action(SwmpProxyAction action, unsigned count);
 const char *swmp_horse_gait_name(SwmpHorseGait gait);

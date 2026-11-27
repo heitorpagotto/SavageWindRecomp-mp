@@ -1,8 +1,8 @@
 # Next multiplayer work
 
 Continue M2.5 from the [current checkpoint](HANDOFF.md). The next animation checks are native light
-and directional hits and the remaining water and ledge transitions, followed by
-broader phase and rate sampling.
+and directional hits, native dive and swim-jump activation, and shore pull-ups, followed by broader
+phase and rate sampling.
 
 ## Remaining animation work
 
@@ -13,7 +13,7 @@ Appearance. The owner will validate Linux manually and report issues.
 | --- | --- |
 | 1. Weapons | Moving and airborne throw animations, exact blends, broader projectile coverage, and special weapon effects. [Item and melee checkpoints](handoff/equipment.md#m25-held-materials-and-item-releases) |
 | 2. Shield and bow | Airborne aim needs layered playback. Broaden shield coverage to surf turns and slope variants. Extend attachment checks, including the brief offset seen in backflips. [Shield and bow checkpoints](handoff/shield-bow.md), [backflip evidence](testing/traversal.md#m25-grounded-dodges) |
-| 3. Traversal and reactions | Check native light and directional hits, moving-target swimming, swim and glide blends, hand placement, and water/ledge transitions. [Traversal checkpoints](handoff/traversal.md) |
+| 3. Traversal and reactions | Check native light and directional hits, moving-target swimming, swim and glide blends, native dive and swim-jump activation, shore pull-ups, and different ledge hand placements. [Traversal checkpoints](handoff/traversal.md) |
 | 4. Playback | Extend phase and rate beyond standing jumps. Check late join and recovery under real packet loss. Add layers and transition blends where the proxy rig supports them. [Playback checkpoints](handoff/playback.md) |
 | 5. Appearance | Broaden dye and masking coverage beyond the tested outfits. Check helmet variants, cloth, DLC, attachment alignment across clips, and travel. [Appearance checkpoints](handoff/appearance.md) |
 
