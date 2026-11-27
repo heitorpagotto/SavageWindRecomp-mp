@@ -22,7 +22,8 @@ Appearance. The owner will validate Linux manually and report issues.
 - For environment sync, verify mixed game progression and native Linux and mixed-platform
   behavior.
   [Environment notes](handoff/environment.md), [environment tests](testing/environment.md)
-- Verify player indicators on Linux and across native Slate travel.
+- Verify player indicators on Linux. The Windows Slate fast-travel result is in the
+  [player indicator test record](testing/m2.md#m25-player-names-and-map-markers).
   [M2.5 acceptance criteria](MILESTONES.md#m25--time-weather-and-full-link-synchronization)
 - M7 tracks the deferred M2 manual tests.
   [Acceptance criteria](MILESTONES.md#m7--deferred-manual-validation), [M2 evidence](testing/m2.md#m2-acceptance-follow-up)

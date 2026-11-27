@@ -9,6 +9,9 @@
   AppMap pan and zoom and the newest replicated positions.
 - **Tested** Two Windows peers displayed each other's names at 30 and 60 FPS caps. A peer's map marker followed a
   position change beyond proxy range, moved with native zoom and pan, and disappeared on disconnect.
+  In a 30 FPS Slate fast-travel replay, the host's map hid the client during loading and showed the marker
+  at the Great Plateau Tower waypoint after arrival in the same lobby. The traveler reopened the map and
+  saw the host's marker.
   [Settings and evidence](testing/m2.md#m25-player-names-and-map-markers)
 
 ## M2.5 riding and mounted combat
