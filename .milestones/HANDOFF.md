@@ -1,29 +1,54 @@
 # Current multiplayer handoff
 
+## M2.5 running and traversal playback
+
+- **Implemented** Remote run and sprint use the sender's gait phase to keep
+  Link and his armor closer to the sampled motion of stowed gear. The proxy's
+  swim dash, swim turns, wall steps and wall jumps now take movement from
+  snapshots on the axes previously duplicated by the animation.
+  [Implementation notes](handoff/playback.md#m25-running-and-traversal-playback)
+- **Tested** Two Windows peers at 30 FPS on BOTW 1.9.0 played fast forward
+  swimming, both turns, the swim dash, and upward and rightward wall jumps.
+  Run and sprint also played at 30, 60, 90, and 120 FPS caps. The peers
+  ran below the two highest caps. The Windows app and four multiplayer
+  test targets passed.
+  [Settings and evidence](testing/playback.md#m25-running-and-traversal-playback)
+
+## M2.5 fast travel and narrow climbs
+
+- **Implemented** Slate fast-travel departure and arrival, including the
+  native blue particles and the dissolve on Link and attached gear. Remote
+  Link also plays the one-handed pole hold and ladder mount, climb, wait,
+  descent, and dismount animations.
+  [Implementation notes](handoff/traversal.md#m25-fast-travel-and-narrow-climbs)
+- **Tested** on two Windows peers at 30 FPS in BOTW 1.9.0. At Great Plateau
+  Tower, the observer saw the traveler depart, reappear at the waypoint,
+  and return to idle in the same lobby. Separate replays verified the
+  one-handed hold at a conifer tip and alternating ladder steps in Gerudo
+  Canyon. The Windows build and multiplayer tests passed.
+  [Settings and evidence](testing/traversal.md#m25-fast-travel-and-narrow-climbs)
+
 ## M2.5 held materials and item releases
 
-Checkpoint 2026-11-27 on `multiplayer/windows-test`, based on `1a334d2`.
-M2 is accepted. M2.5 remains in progress.
+Checkpoint `e45852a` on `multiplayer/windows-test`, 2026-11-27. M2.5 is in progress.
 
-- **Implemented** carrying and release animations for inventory materials,
-  up to five held materials, and visual playback for supported dropped
-  and thrown items. Both peers need the matching protocol 10 build.
+- **Implemented** carry and release animations, up to five held material
+  models, and visual playback of supported drops and throws.
   [Implementation notes](handoff/equipment.md#m25-held-materials-and-item-releases)
-- **Verified** mixed materials while standing and walking, near and far
-  releases, put-away, an inventory axe drop, weapon flight, and cleanup
-  on peer departure in two Windows games.
+- **Tested** carry, far tosses, an axe drop, and spear flight on two
+  Windows peers at 30 and 60 FPS. The 30 FPS runs also covered near
+  drops, put-away, Boomerang drop and flight, and peer departure.
   [Settings and evidence](testing/equipment.md#m25-held-materials-and-item-releases)
-- **Resume** with native light and directional reactions or the remaining water and ledge transitions.
+- **Next** Native light and directional hit reactions, water transitions, and ledges.
   [Next work](NEXT.md)
 
 ## Matching Windows build
 
-Use the local `build/m25-items/Play-M25-Items.cmd` on both peers when available.
-It uses BOTW 1.9.0, x86-64-v3 gamelib `e5c3dd1133f2953b`, multiplayer source ID
-`75cde0dc3d74275165f1328d4228c6cbc2768b2e`, and release label `0.6.0-alpha.6-0.1.0-mp`.
-See the [build guide](../docs/build-windows-and-appimage.md#multiplayer-build-compatibility)
-for source matching and use copied saves and separate settings for tests.
+Both peers need matching protocol 11 builds. The local launcher is
+`build/m25-playback-fix/Play-M25-Playback.cmd` for BOTW 1.9.0. It uses gamelib
+`be47daf941612328` from `build/m25-warp-sync` and reports source ID
+`e9d4f4d26a0d1aec984cc63a36b3e8bdd083f2c0`.
+[Build compatibility](../docs/build-windows-and-appimage.md#multiplayer-build-compatibility)
 
-The owner will validate Linux manually. [M7](MILESTONES.md#m7--deferred-manual-validation)
-tracks the eight-game soak, Linux AppImage, and mixed-platform visibility and travel.
-See the [topic index](README.md) for earlier checkpoints.
+Linux gameplay and mixed-platform validation are tracked in [M7](MILESTONES.md#m7--deferred-manual-validation).
+Earlier checkpoints are in the [topic index](README.md).

@@ -30,6 +30,16 @@ int main(void) {
                   SWMP_PROXY_SHIELD_HIT);
     expect_action(swmp_proxy_sample_action("SurfingSlide", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_SURF_RIDE);
+    expect_action(swmp_proxy_sample_action("LadderWait", "", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_LADDER_WAIT);
+    expect_action(swmp_proxy_sample_action("LadderUp", "", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_LADDER_UP);
+    expect_action(swmp_proxy_sample_action("LadderDown", "", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_LADDER_DOWN);
+    expect_action(swmp_proxy_sample_action("ClimbTreeTopSharp", "", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_POLE_HOLD);
+    expect_action(swmp_proxy_sample_action("Warp", "", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_WARP_DEPART);
     gear.id[SWMP_GEAR_SHIELD] = 0;
     expect_action(swmp_proxy_sample_action("GuardBreak", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_SHIELD_BREAK);

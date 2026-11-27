@@ -1,5 +1,24 @@
 # Movement and animation playback
 
+## M2.5 running and traversal playback
+
+- Stowed equipment follows the sender's sampled transforms while the proxy
+  plays a standalone gait. At 30 FPS, one native run advanced 1.22 animation
+  frames per update while the remote clip advanced 0.97. The sprint
+  difference was larger. The sender now includes the phase when the active run
+  or sprint track is 24 frames. Playback interpolates across the loop boundary
+  and re-aligns the body and skinned armor when drift exceeds two animation
+  frames. This uses the existing normalized start argument. It still makes
+  discrete corrections and uses the existing protocol 11 snapshot fields.
+- The swim dash had 5.5 m of authored forward motion and the upward wall jump
+  had 2.7 m of vertical motion. Applying these on top of networked positions
+  displaced the body from its independently placed shield. The proxy archive
+  now removes planar travel from the swim dash, planar travel and yaw from the
+  four swim turns, and translation from the wall step and jump clips. Swim
+  height and limb motion are retained. Native Link uses the installed archive.
+- See the [test record](../testing/playback.md#m25-running-and-traversal-playback)
+  for measurements, capture paths, and the remaining coverage.
+
 ## M2.5 remote movement and standing-jump playback
 
 - The passive proxy played locomotion clips whose Root bone included forward translation. The

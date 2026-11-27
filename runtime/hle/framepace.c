@@ -93,7 +93,8 @@ bool framepace_in_event(void) { return in_event(); }
 
 // The active event's name ("Demo014_0"): the event's name string, a char pointer at +0x68 to its buffer at +0x74
 // (found with a probe on the new game's opening, Demo169_0). "" when there is none or it isn't in the heap.
-static const char *event_name(void) {
+const char *framepace_event_name(void) {
+    if (!g_site.event_mgr) return "";
     uint64_t evt = *(uint64_t *)(uintptr_t)g_site.event_mgr;
     uint64_t ev = evt ? *(uint64_t *)(uintptr_t)(evt + 0x1d2b8) : 0;
     if (!ev) return "";
@@ -133,7 +134,7 @@ static bool event_at_30(void) {
     static uint64_t last;
     uint64_t evt = *(uint64_t *)(uintptr_t)g_site.event_mgr;
     uint64_t ev = evt ? *(uint64_t *)(uintptr_t)(evt + 0x1d2b8) : 0;
-    const char *name = event_name();
+    const char *name = framepace_event_name();
     bool hold = false;
     for (size_t i = 0; i < sizeof events_at_30 / sizeof *events_at_30; i++)
         if (!strcmp(name, events_at_30[i].name) && link_near(events_at_30[i].x, events_at_30[i].z, events_at_30[i].r))
@@ -326,7 +327,7 @@ static void load_watch(uint64_t t) {
     uint64_t at = (uint64_t)(first + 120 * dumps) * 1000000000ull;
     if (dumps < 2 && t - since >= at) {
         LOG("[load-watch] the loading screen has been up for %d s (event %s): the game's threads\n",
-            (int)((t - since) / 1000000000ull), event_name());
+            (int)((t - since) / 1000000000ull), framepace_event_name());
         kernel_dump_threads();
         dumps++;
     }

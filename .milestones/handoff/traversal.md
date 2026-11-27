@@ -161,3 +161,18 @@
   `build/m25_traversal_route.txt` for the pond and masonry wall near Oman Au Shrine. It loads
   `build/m25-build/traversal-probe/savagewind.exe` with isolated settings and saves.
   See the [test record](../testing/traversal.md#m25-swimming-and-climbing).
+
+## M2.5 fast travel and narrow climbs
+
+- Ladder states select the installed mount, wait, climb, descent, and exit
+  clips. The upward state advances between alternating foot clips when the
+  native animation frame wraps. A narrow tree or pole top uses
+  `ClimbTreeEdSharp` for the mount and `ClimbTreeTopSharp` for the hold.
+- Fast travel out uses the native `Warp` clip. Fast travel in uses the
+  `Demo005_1` event because the skeletal state is a standing pose. The
+  receiver applies the replicated native dissolve to Link and attached gear
+  and plays the corresponding ELink effect on the proxy. Origin observers
+  finish buffered departure samples while the traveling peer loads.
+- The proxy's ActorInfo entry uses Link's installed ELink user. Setting
+  the ActorLink entry alone left the proxy's XLink component unallocated.
+- [Settings and evidence](../testing/traversal.md#m25-fast-travel-and-narrow-climbs)

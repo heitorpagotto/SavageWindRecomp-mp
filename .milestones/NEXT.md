@@ -11,7 +11,7 @@ Appearance. The owner will validate Linux manually and report issues.
 
 | Stage | Work still open |
 | --- | --- |
-| 1. Weapons | Moving and airborne variants, exact blends, thrown projectile flight, and special weapon effects. [Melee checkpoints](handoff/equipment.md) |
+| 1. Weapons | Moving and airborne throw animations, exact blends, broader projectile coverage, and special weapon effects. [Item and melee checkpoints](handoff/equipment.md#m25-held-materials-and-item-releases) |
 | 2. Shield and bow | Airborne aim needs layered playback. Broaden shield coverage to surf turns and slope variants. Extend attachment checks, including the brief offset seen in backflips. [Shield and bow checkpoints](handoff/shield-bow.md), [backflip evidence](testing/traversal.md#m25-grounded-dodges) |
 | 3. Traversal and reactions | Check native light and directional hits, moving-target swimming, swim and glide blends, hand placement, and water/ledge transitions. [Traversal checkpoints](handoff/traversal.md) |
 | 4. Playback | Extend phase and rate beyond standing jumps. Check late join and recovery under real packet loss. Add layers and transition blends where the proxy rig supports them. [Playback checkpoints](handoff/playback.md) |

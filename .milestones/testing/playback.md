@@ -1,5 +1,39 @@
 # Movement and animation playback
 
+## M2.5 running and traversal playback
+
+- The Windows UCRT64 app linked. Multiplayer core, animation selector,
+  direct invite, and WebRTC loopback passed. A local archive check verified
+  all 26 selected 1.9.0 clips, compared the resulting bytes with the expected
+  root-channel edits, and rejected a truncated archive. A scratch playback
+  fixture checked phase interpolation across the loop and held samples
+  at buffer underrun and teleport boundaries. The matching gamelib ID
+  was `be47daf941612328`.
+- Two Windows 1.9.0 Vulkan peers used copied saves, direct WebRTC,
+  960x540 at 50% render scale, a 1400 MiB VRAM budget, and heap copy off.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD
+  Radeon Graphics (25.10.30.02). The baseline at 30 FPS recorded a native
+  run advancing about 1.22 animation frames per update and the proxy
+  advancing about 0.97. See `build/m25-playback-before-run-s484awee/`.
+- At 30 FPS near Oman Au Shrine, `build/m25-playback-final-all-ncyyv0dz/`
+  recorded fast forward swimming, slow and fast turns in both directions,
+  swim dash, and upward and rightward wall jumps on the receiving Link.
+  The swim dash advanced about 4 m with zero backwards steps along the
+  traced forward axis. The climb-jump trace reproduced a small dip already
+  present in the sender's position near the top of the jump. Receiver
+  captures `swim-dash.png` and `climb-jump.png` are in `client/build/`.
+  In the same run, the median phase error between corrections was 0.92
+  animation frames across 39 receiving updates with a valid gait phase.
+- The matching source ID in the handoff played Run and Dash at 30, 60, 90,
+  and 120 FPS caps on the same receiving proxy. At the 30 and 60 caps both
+  peers reached the cap. Median logged host/client FPS at the 90 and 120
+  caps were 81/78 and 76/70. Across 220 receiving updates with a valid
+  gait phase between corrections, the median error was 1.00 animation
+  frame and the 95th percentile was 1.92. See
+  `build/m25-playback-caps-wnvfi2p8/`.
+- Playback tests used local peers. Packet loss, mixed platforms, and visual
+  smoothness of the discrete gait corrections over longer runs remain open.
+
 ## M2.5 remote movement and standing-jump playback
 
 - The Windows Vulkan pair used 1.9.0 gamelib `13365c313591b27e` in Tah Muhl Shrine.

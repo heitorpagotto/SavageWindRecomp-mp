@@ -161,10 +161,10 @@ enum {
     HELD_MATERIALS_AT = SHIELD_ANIMATION_AT + 1,
     ITEM_POSES_AT = HELD_MATERIALS_AT + 1,
     ITEM_POSE_SIZE = 18,
+    WARP_AMOUNT_AT = ITEM_POSES_AT + ITEM_POSE_SIZE * SWMP_ITEM_SLOTS,
 };
 
-_Static_assert(ITEM_POSES_AT + ITEM_POSE_SIZE * SWMP_ITEM_SLOTS == SWMP_PLAYER_SNAPSHOT_SIZE,
-               "snapshot size must include all item slots");
+_Static_assert(WARP_AMOUNT_AT + 1 == SWMP_PLAYER_SNAPSHOT_SIZE, "snapshot size must include the warp amount");
 
 static bool pose_offset_valid(const SwmpGearPose *pose) {
     for (unsigned i = 0; i < 3; i++) {
@@ -225,6 +225,7 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     put32(out + SAMPLED_MS_AT, s->sampled_ms);
     out[SHIELD_ANIMATION_AT] = s->shield_animation;
     out[HELD_MATERIALS_AT] = s->held_materials;
+    out[WARP_AMOUNT_AT] = s->warp_amount;
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
         const SwmpItemPose *item = &s->items[i];
         if (!!item->model != !!item->instance || (item->model && !s->area_id)) return false;
@@ -260,6 +261,7 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .animation_phase = data[ANIMATION_PHASE_AT],
         .sampled_ms = get32(data + SAMPLED_MS_AT),
         .held_materials = data[HELD_MATERIALS_AT],
+        .warp_amount = data[WARP_AMOUNT_AT],
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);

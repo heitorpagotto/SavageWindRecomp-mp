@@ -14,7 +14,7 @@
 #include <math.h>
 
 // Per slot: native creation request, retained actor index, temporary ordinary actor link.
-enum { INDEX_OFFSET = 0x10, LINK_OFFSET = 0x20, SLOT_SIZE = 0x40, PLAYBACK_SAMPLES = 8 };
+enum { INDEX_OFFSET = 0x10, LINK_OFFSET = 0x20, SLOT_SIZE = 0x40, PLAYBACK_SAMPLES = 8, RUNNING_FRAMES = 24 };
 static const uint64_t retry_ns = UINT64_C(1000000000);
 static const uint64_t request_ns = UINT64_C(10000000000);
 static const uint64_t snapshot_ns = SWMP_POSITION_INTERVAL_MS * UINT64_C(1000000);
@@ -40,14 +40,20 @@ typedef struct {
 } RemotePlayback;
 
 typedef struct {
+    uint64_t event;
+    uint32_t id;
+} EffectHandle;
+
+typedef struct {
     uint64_t generation, deadline;
     Pose applied;
     float model_lift;
-    SwmpProxyAction animation;
+    SwmpProxyAction animation, warp_action;
     uint8_t animation_activation;
     uint64_t animation_started;
     float animation_phase, animation_blend;
-    uint8_t armor_visible;
+    EffectHandle warp_effect;
+    uint8_t armor_visible, warp_amount;
     bool retained, visible, proxy;
 } Placeholder;
 
@@ -105,6 +111,12 @@ static int16_t local_motion_yaw, local_glide_roll;
 static uint8_t local_jump_activation;
 static bool local_jumping;
 static float local_jump_frame;
+static struct {
+    SwmpProxyAction action;
+    float frame;
+    uint8_t activation;
+    bool right_foot;
+} local_traversal;
 typedef struct {
     SwmpGearFamily family;
     bool releasing;
@@ -125,6 +137,7 @@ RT_ON_RESET(multiplayer_presence_reset) {
     local_motion_at = 0;
     local_jump_activation = 0;
     local_jumping = false;
+    memset(&local_traversal, 0, sizeof local_traversal);
     local_throw = (ThrowState){0};
     local_armor_at = 0;
     memset(&local_armor, 0, sizeof local_armor);
@@ -324,6 +337,20 @@ static bool animation_frame(uint64_t controller, uint64_t heap_size, float *fram
     return *duration > 0 && *duration < 1600 && *frame >= 0 && *frame <= *duration;
 }
 
+static bool running_action(SwmpProxyAction action) {
+    return action == SWMP_PROXY_RUN || action == SWMP_PROXY_DASH;
+}
+
+static void sample_running_phase(uint64_t actor, uint64_t heap_size, SwmpPlayerSnapshot *sample) {
+    uint64_t controller = animation_controller(actor, heap_size);
+    float frame, duration;
+    // The native Move blend can expose a short transition track before the 24-frame gait.
+    if (controller && animation_frame(controller, heap_size, &frame, &duration) && duration == RUNNING_FRAMES) {
+        sample->animation_activation = 1;
+        sample->animation_phase = 1 + (uint8_t)lroundf(frame * (254.0f / duration));
+    }
+}
+
 static void sample_jump_phase(uint64_t controller, uint64_t heap_size, SwmpPlayerSnapshot *sample) {
     // The 1.9.0 standing Jump uses a single ten-frame track in the base slot.
     float frame, duration;
@@ -334,6 +361,32 @@ static void sample_jump_phase(uint64_t controller, uint64_t heap_size, SwmpPlaye
     local_jumping = true;
     sample->animation_activation = local_jump_activation;
     if (frame >= 0) sample->animation_phase = 1 + (uint8_t)lroundf(frame * 25.4f);
+}
+
+static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap_size,
+                                              SwmpProxyAction action, SwmpPlayerSnapshot *sample) {
+    static const uint8_t durations[SWMP_PROXY_ACTION_COUNT] = {
+        [SWMP_PROXY_LADDER_READY] = 6, [SWMP_PROXY_LADDER_WAIT] = 48, [SWMP_PROXY_LADDER_UP] = 8,
+        [SWMP_PROXY_LADDER_UP_END] = 32, [SWMP_PROXY_LADDER_DOWN_START] = 41, [SWMP_PROXY_LADDER_DOWN] = 12,
+        [SWMP_PROXY_LADDER_DOWN_END] = 9, [SWMP_PROXY_LADDER_JUMP] = 34, [SWMP_PROXY_LADDER_LAND] = 14,
+        [SWMP_PROXY_POLE_MOUNT] = 24, [SWMP_PROXY_POLE_HOLD] = 48, [SWMP_PROXY_WARP_DEPART] = 96,
+    };
+    bool changed = local_traversal.action != action;
+    local_traversal.action = action;
+    if (!durations[action]) return action;
+    float frame, duration;
+    bool has_frame = animation_frame(controller, heap_size, &frame, &duration) && duration == durations[action];
+    bool restarted = !changed && has_frame && frame + 0.5f < local_traversal.frame;
+    if (changed || restarted || (has_frame && local_traversal.frame < 0)) {
+        if (!++local_traversal.activation) ++local_traversal.activation;
+        if (action == SWMP_PROXY_LADDER_UP)
+            local_traversal.right_foot = restarted && !local_traversal.right_foot;
+    }
+    if (has_frame || changed) local_traversal.frame = has_frame ? frame : -1;
+    sample->animation_activation = local_traversal.activation;
+    if (has_frame) sample->animation_phase = 1 + (uint8_t)lroundf(frame * (254.0f / duration));
+    if (action == SWMP_PROXY_LADDER_UP && local_traversal.right_foot) return SWMP_PROXY_LADDER_UP_RIGHT;
+    return action;
 }
 
 static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, SwmpGearSet gear,
@@ -711,6 +764,7 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         local_yaw = 0;
         local_motion_at = 0;
         local_jumping = false;
+        local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
         local_pouch_at = 0;
         local_armor_at = 0;
@@ -730,6 +784,29 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     unsigned count = container ? LD32(container + 0x6c) : 0;
     sample.action = sample_action(cpu, actor, heap_size, *gear, weapon_pose, bow_pose, shield_raised,
                                   count <= SWMP_HELD_MATERIAL_LIMIT ? count : 0, now, &sample);
+    if (!strcmp(g_game_version, "1.9.0")) {
+        if (g_site.mp_warp_amount) {
+            const char *event = framepace_event_name();
+            bool arriving = !strcmp(event, "Demo005_1");
+            if (arriving || sample.action == SWMP_PROXY_WARP_DEPART || !strcmp(event, "Demo005_0")) {
+                float amount;
+                memcpy(&amount, (const void *)(uintptr_t)(actor + 0x4f4), sizeof amount);
+                // The native demo also explicitly hides Link at the ends of the dissolve.
+                if (LD32(actor + 0x518) & 0x20) amount = 1;
+                if (amount >= 0 && amount <= 1) sample.warp_amount = (uint8_t)lroundf(amount * 255);
+            }
+            if (arriving) {
+                sample.action = SWMP_PROXY_WARP_ARRIVE;
+                sample.animation_activation = sample.animation_phase = 0;
+            } else if (sample.warp_amount && sample.action != SWMP_PROXY_WARP_DEPART) {
+                // Airborne travel can begin the dissolve without entering the standing Warp state.
+                sample.action = SWMP_PROXY_WARP_DEPART;
+                sample.animation_activation = sample.animation_phase = 0;
+            }
+        }
+        uint64_t controller = animation_controller(actor, heap_size);
+        if (controller) sample.action = sample_traversal_phase(controller, heap_size, sample.action, &sample);
+    }
     // The bow starts drawing and finishes releasing independently of Link's upper-body state.
     if (bow) sample.bow_animation = sample_bow_animation(cpu, bow, heap_size);
     if (shield) sample.shield_animation = sample_shield_animation(cpu, shield, heap_size);
@@ -756,6 +833,8 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         if (sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD) sample.action = SWMP_PROXY_SWIM_WAIT;
         if (sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD) sample.action = SWMP_PROXY_SHIELD_GUARD;
     }
+    if (!strcmp(g_game_version, "1.9.0") && running_action(sample.action) && !sample.held_materials)
+        sample_running_phase(actor, heap_size, &sample);
     if (g_site.mp_health_current) {
         uint32_t life = (uint32_t)call(cpu, g_site.mp_health_current, info, 0, 0);
         if (life <= UINT16_MAX) {
@@ -923,7 +1002,7 @@ static SwmpGearPose interpolate_gear(const SwmpGearPose *a, const SwmpGearPose *
     return pose;
 }
 
-static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms, Pose *pose) {
+static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms, Pose *pose, bool *interpolating) {
     PlaybackSample *samples = slot->samples;
     unsigned first = 0;
     while (first + 1 < slot->count && samples[first + 1].play_at <= now_ms) first++;
@@ -945,6 +1024,7 @@ static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms,
     // A teleport is shown at its snapshot boundary.
     if (distance_sq > 9 || a->phase_id != b->phase_id) return result;
 
+    *interpolating = true;
     float t = (float)(now_ms - samples[0].play_at) / (float)(samples[1].play_at - samples[0].play_at);
     for (unsigned i = 0; i < 3; i++) pose->position[i] += t * (target.position[i] - pose->position[i]);
     pose->yaw = remainderf(pose->yaw + t * remainderf(target.yaw - pose->yaw, 2 * pi), 2 * pi);
@@ -957,8 +1037,17 @@ static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms,
             result.arrow_pose = interpolate_gear(&a->arrow_pose, &b->arrow_pose, t);
     }
     if (a->action == b->action && a->animation_activation == b->animation_activation &&
-        a->animation_phase && b->animation_phase)
-        result.animation_phase = (uint8_t)lroundf(a->animation_phase + t * (b->animation_phase - a->animation_phase));
+        a->animation_phase && b->animation_phase) {
+        float delta = b->animation_phase - a->animation_phase;
+        if (running_action(a->action)) {
+            float phase = (a->animation_phase - 1) + t * remainderf(delta, 254.0f);
+            result.animation_phase = 1 + (uint8_t)lroundf(fmodf(phase + 254.0f, 254.0f));
+        } else {
+            result.animation_phase = (uint8_t)lroundf(a->animation_phase + t * delta);
+        }
+    }
+    if (a->action == b->action)
+        result.warp_amount = (uint8_t)lroundf(a->warp_amount + t * (b->warp_amount - a->warp_amount));
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
         SwmpItemPose *item = &result.items[i];
         const SwmpItemPose *next = &b->items[i];
@@ -1154,6 +1243,19 @@ static void update_items(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
 }
 
 static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames, float phase);
+
+static void set_warp_amount(Cpu *source, uint64_t actor, uint8_t amount) {
+    if (!g_site.mp_warp_amount || !heap_object(actor, kernel_heap_size(), 0x4f8)) return;
+    uint32_t bits;
+    float value = amount / 255.0f;
+    memcpy(&bits, &value, sizeof bits);
+    if (LD32(actor + 0x4f4) == bits) return;
+    Cpu cpu = *source;
+    cpu.x[0] = actor;
+    cpu.v[0] = bits;
+    guest_call(&cpu, g_site.mp_warp_amount);
+}
+
 static uint64_t appearance_model(uint64_t actor, uint64_t heap_size) {
     if (!heap_object(actor, heap_size, 0x4e8)) return 0;
     uint64_t model = LD64(actor + 0x4e0);
@@ -1241,6 +1343,7 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
         uint64_t actor = resolve(cpu, addr);
         bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
         if (active) {
+            set_warp_amount(cpu, actor, link->warp_amount);
             if (skinned)
                 move_actor(cpu, actor, &link->applied, link->model_lift);
             else if (id == SWMP_PARAGLIDER_ASSET)
@@ -1248,7 +1351,8 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
             else
                 move_gear(cpu, actor, &link->applied, &slot->pose);
             uint8_t activation = skinned ? link->animation_activation : 0;
-            if (animation && (slot->animation != animation || slot->animation_activation != activation)) {
+            if (animation && (slot->animation != animation || slot->animation_activation != activation ||
+                              (skinned && link->animation_started == now))) {
                 float blend = skinned && slot->animation && link->animation_started == now ? link->animation_blend : -1.0f;
                 float phase = skinned ? link->animation_phase : -1.0f;
                 if (play_animation(cpu, actor, animation, blend, phase)) {
@@ -1347,6 +1451,42 @@ static bool same_pose(const Pose *a, const Pose *b) {
     return a->yaw == b->yaw && a->roll == b->roll && !memcmp(a->position, b->position, sizeof a->position);
 }
 
+static void update_warp_effect(Cpu *source, uint64_t actor, Placeholder *slot, const SwmpPlayerSnapshot *sample) {
+    SwmpProxyAction action = sample->action;
+    if (action != SWMP_PROXY_WARP_DEPART && action != SWMP_PROXY_WARP_ARRIVE) action = SWMP_PROXY_IDLE;
+    slot->warp_amount = action == SWMP_PROXY_IDLE ? 0 : sample->warp_amount;
+    set_warp_amount(source, actor, slot->warp_amount);
+    if (!g_site.mp_warp_effect_key || slot->warp_action == action) return;
+    slot->warp_action = action;
+    Cpu cpu = *source;
+    cpu.sp -= 0x60;
+    uint64_t handle = cpu.sp + 0x20;
+    uint64_t heap_size = kernel_heap_size();
+    if (heap_object(slot->warp_effect.event, heap_size, 0x38)) {
+        ST64(handle, slot->warp_effect.event);
+        ST32(handle + 8, slot->warp_effect.id);
+        call(&cpu, g_site.mp_warp_effect_fade, handle, 0, 0);
+    }
+    slot->warp_effect = (EffectHandle){0};
+
+    if (action == SWMP_PROXY_IDLE || !heap_object(actor, heap_size, 0x570)) return;
+    const char *key = action == SWMP_PROXY_WARP_DEPART ? "Demo005_0_warp" : "Demo005_1_warp_appear";
+    uint64_t xlink = LD64(actor + 0x568);
+    if (!heap_object(xlink, heap_size, 0x50)) return;
+    uint64_t elink = LD64(xlink + 0x48);
+    if (!heap_object(elink, heap_size, 0xd8)) return;
+    uint64_t name = cpu.sp + 0x30;
+    memcpy((void *)(uintptr_t)name, key, strlen(key) + 1);
+    ST64(cpu.sp, g_site.mp_warp_effect_key + 0x10);
+    ST64(cpu.sp + 8, 0);
+    ST64(cpu.sp + 16, 0);
+    if (!(call(&cpu, g_site.mp_warp_effect_lookup, elink, cpu.sp, name) & 1)) return;
+    ST64(handle, 0);
+    ST32(handle + 8, 0);
+    call(&cpu, g_site.mp_warp_effect_emit, elink, cpu.sp, handle);
+    slot->warp_effect = (EffectHandle){LD64(handle), LD32(handle + 8)};
+}
+
 static void update_proxy(Cpu *cpu, uint64_t actor, Placeholder *slot, const Pose *pose) {
     // The native swimmer places its model higher than the actor root. The standalone clips
     // need that lift to reach the waterline. Keep the sampled root for gear and range.
@@ -1363,7 +1503,8 @@ static void update_proxy(Cpu *cpu, uint64_t actor, Placeholder *slot, const Pose
     }
 }
 
-static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, const SwmpPlayerSnapshot *sample) {
+static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, const SwmpPlayerSnapshot *sample,
+                       bool interpolating) {
     Placeholder *slot = &slots[peer];
     uint64_t addr = storage + peer * SLOT_SIZE;
     if (slot->retained) {
@@ -1371,17 +1512,34 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
         bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
         if (active && slot->proxy) {
             update_proxy(cpu, actor, slot, pose);
+            update_warp_effect(cpu, actor, slot, sample);
             SwmpProxyAction action = swmp_proxy_carry_action(pose->action, sample->held_materials);
-            uint8_t activation = pose->action == SWMP_PROXY_JUMP ? sample->animation_activation : 0;
+            uint8_t activation = sample->animation_activation;
+            if (!activation && slot->animation == action && running_action(action))
+                activation = slot->animation_activation;
             slot->animation_phase = -1.0f;
-            if (slot->animation != action || slot->animation_activation != activation) {
+            bool changed = slot->animation != action || slot->animation_activation != activation;
+            float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f :
+                action == SWMP_PROXY_HOLD_PROP ? 1.0f : -1.0f;
+            bool correct_phase = !changed && interpolating && running_action(action) && phase >= 0;
+            if (!changed && (correct_phase || fs_multiplayer_armor_catalog())) {
+                uint64_t heap_size = kernel_heap_size();
+                uint64_t controller = animation_controller(actor, heap_size);
+                float frame, duration;
+                bool have_frame = controller && animation_frame(controller, heap_size, &frame, &duration);
+                if (have_frame)
+                    slot->animation_phase = frame / duration;
+                // The stowed gear follows the sender's gait. Correct meaningful drift in the
+                // body and armor together while letting the native controller play between samples.
+                correct_phase = correct_phase && have_frame && duration == RUNNING_FRAMES &&
+                    fabsf(remainderf(frame - phase * duration, duration)) > 2.0f;
+            }
+            if (changed || correct_phase) {
                 SwmpProxyAction from = slot->animation, to = action;
                 // Standing Link's shield keeps moving for several updates around the guard state edge.
                 bool raise = to == SWMP_PROXY_SHIELD_GUARD && (from == SWMP_PROXY_IDLE || from == SWMP_PROXY_SWORD_READY);
                 bool lower = from == SWMP_PROXY_SHIELD_GUARD && (to == SWMP_PROXY_IDLE || to == SWMP_PROXY_SWORD_READY);
-                float blend_frames = raise || lower ? 4.0f : -1.0f;
-                float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f :
-                    to == SWMP_PROXY_HOLD_PROP ? 1.0f : -1.0f;
+                float blend_frames = correct_phase ? 0.0f : raise || lower ? 4.0f : -1.0f;
                 if (play_animation(cpu, actor, swmp_proxy_action_name(to), blend_frames, phase)) {
                     slot->animation = to;
                     slot->animation_activation = activation;
@@ -1389,12 +1547,6 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
                     slot->animation_phase = phase;
                     slot->animation_blend = blend_frames;
                 }
-            } else if (fs_multiplayer_armor_catalog()) {
-                uint64_t heap_size = kernel_heap_size();
-                uint64_t controller = animation_controller(actor, heap_size);
-                float frame, duration;
-                if (controller && animation_frame(controller, heap_size, &frame, &duration))
-                    slot->animation_phase = frame / duration;
             }
         }
         call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
@@ -1467,6 +1619,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
     if (changed) {
         local_motion_at = 0;
         local_jumping = false;
+        local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
         local_pouch_at = 0;
         local_armor_at = 0;
@@ -1479,6 +1632,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         local = (SwmpPlayerSnapshot){0};
         player = 0;
         local_jumping = false;
+        local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
         local_pouch_at = 0;
         memset(equipped, 0, sizeof equipped);
@@ -1513,28 +1667,39 @@ void rt_mp_presence_tick(Cpu *cpu) {
         bool has_pose = context && generation && position->snapshot.area_id == local.area_id &&
             swmp_position_fresh(position, now_ms) && valid_position(pose.position);
         RemotePlayback *track = &playback[peer];
-        bool reset_playback = changed || world_changed || track->generation != generation || !has_pose;
+        bool reset_playback = changed || world_changed || track->generation != generation;
+        // A scene load withdraws the source pose immediately. Finish the departure
+        // samples already buffered at the origin before retiring its proxy.
+        bool departing = false;
+        if (!has_pose && !reset_playback && slot->visible && track->count) {
+            const PlaybackSample *last = &track->samples[track->count - 1];
+            departing = last->snapshot.action == SWMP_PROXY_WARP_DEPART &&
+                now_ms < last->play_at + SWMP_POSITION_INTERVAL_MS;
+        }
+        reset_playback |= !has_pose && !departing;
         if (reset_playback) {
             track->generation = generation;
             track->count = 0;
             update_items(cpu, peer, now, 0, &local, NULL, NULL);
         }
         float distance_sq = has_pose ? distance_squared(&local, &pose) : INFINITY;
+        SwmpPlayerSnapshot sample = {0};
+        bool interpolating = false;
+        if (has_pose || departing) {
+            if (has_pose) queue_playback(track, position, now_ms);
+            sample = sample_playback(track, now_ms, &pose, &interpolating);
+            update_items(cpu, peer, now, context, &local, &sample, &pose);
+            if (departing) distance_sq = distance_squared(&local, &pose);
+        }
         float radius = slot->generation == generation ? retain_radius : spawn_radius;
         bool desired = context && distance_sq <= radius * radius;
-        SwmpPlayerSnapshot sample = {0};
-        if (has_pose) {
-            queue_playback(track, position, now_ms);
-            sample = sample_playback(track, now_ms, &pose);
-            update_items(cpu, peer, now, context, &local, &sample, &pose);
-        }
         if (slot->generation && (changed || world_changed || slot->generation != generation || !desired)) {
             const char *reason = changed || slot->generation != generation ? "roster changed" :
                 !context ? "local world unavailable" : world_changed ? "local world changed" :
                 !has_pose ? "remote position unavailable" : "out of range";
             retire(cpu, peer, now, reason);
         } else if (slot->generation) {
-            poll_actor(cpu, peer, now, &pose, &sample);
+            poll_actor(cpu, peer, now, &pose, &sample, interpolating);
             update_gear(cpu, peer, now, context, &sample, &roster.equipment[peer], pose.action);
         } else if (desired && now >= slot->deadline) {
             uint64_t addr = storage + peer * SLOT_SIZE;

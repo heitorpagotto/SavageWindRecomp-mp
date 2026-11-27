@@ -1,5 +1,29 @@
 # Traversal, dodges, and reactions
 
+## M2.5 fast travel and narrow climbs
+
+- The Windows app and matching game library built, and the multiplayer
+  core, animation selector, direct invite, and WebRTC loopback tests passed.
+  The site and layout fixtures passed. A local resource check resolved all
+  14 new clips and verified the proxy's ELink user in ActorInfo.
+- Two Windows Vulkan peers played at 30 FPS on BOTW 1.9.0 with copied
+  saves, 960x540 at 50% scale, a 1400 MiB VRAM budget, and heap copy off. The
+  host used an RTX 4050 Laptop GPU (610.88) and the client used AMD Radeon
+  Graphics (25.10.30.02).
+- At Great Plateau Tower the client used the Slate to travel from the
+  platform back to its waypoint. The host played WarpDepart and spawned
+  the native departure particles before retiring the proxy during loading.
+  The proxy reappeared at the waypoint with WarpArrive, the arrival beam,
+  and the dissolve, then returned to Idle in the same lobby. The run used
+  protocol 11 and source ID `7a3f089202feeea00d81f3dba0a6ef38bfbd0f31`.
+  See `build/m25-sync-warp-re9_tumn/`.
+- The Gerudo Canyon ladder replay covered mounting, alternating upward
+  steps, holding, descending, and dismounting. The tree north of the
+  Shrine of Resurrection replayed PoleMount and PoleHold on the receiving
+  controller. The final warp build also captured the hold from the
+  receiving peer in `build/m25-sync-warp-re9_tumn/client/build/pole-hold.png`.
+  Ladder traces and captures are in `build/m25-sync-ladder-zimy8996/`.
+
 ## M2.5 wall release
 
 - The Windows app linked. The standalone multiplayer core, direct invite,

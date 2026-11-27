@@ -4,19 +4,19 @@
   "repository": {
     "branch": "multiplayer/windows-test",
     "base_commit": "1a334d2",
-    "checkpoint_commit": null
+    "checkpoint_commit": "e45852a"
   },
   "project": {
     "name": "Savage Wind Multiplayer",
-    "protocol_version": 10,
+    "protocol_version": 11,
     "target_game_version": "1.9.0",
     "max_players": 8,
     "maintained_platforms": [
       "Windows",
       "Linux/Vulkan"
     ],
-    "feature_version": "0.1.0",
-    "release_version": "0.6.0-alpha.6-0.1.0-mp"
+    "feature_version": "0.1.1",
+    "release_version": "0.6.0-alpha.6-0.1.1-mp"
   },
   "active_milestone": "M2.5",
   "milestones": [

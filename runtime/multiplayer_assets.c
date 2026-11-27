@@ -10,6 +10,7 @@
 
 static const char template_actor[] = "Obj_RockGray_A_M_01";
 static const char link_model[] = "Link";
+static const char link_elink[] = "Player_GameRom";
 
 #define VISUAL(slot, source, model, actor, label, bundle) {slot, model, actor, label, \
     "Actor/Pack/" source ".sbactorpack", bundle, "Actor/Pack/" actor ".sbactorpack", \
@@ -336,6 +337,18 @@ static uint32_t lookup_string(const Byml *b, BymlNode table, const char *name) {
     return UINT32_MAX;
 }
 
+static void set_alias_elink(uint8_t *actor, uint32_t count, uint32_t key, uint32_t user) {
+    // ActorInfo dictionaries are ordered by key index.
+    uint8_t *entry = actor + 4, *end = entry + 8 * count;
+    while (entry < end && (read32(entry) & 0xffffff) < key) entry += 8;
+    if (entry == end || (read32(entry) & 0xffffff) != key) {
+        memmove(entry + 8, entry, (size_t)(end - entry));
+        write32(actor, ((count + 1) << 8) | DICT);
+    }
+    write32(entry, ((uint32_t)STRING << 24) | key);
+    write32(entry + 4, user);
+}
+
 static bool add_actor_aliases(Byml *b, ActorAlias *alias, unsigned count) {
     ActorTable t;
     if (!actor_table(b, &t)) return false;
@@ -390,17 +403,23 @@ static bool add_actor_aliases(Byml *b, ActorAlias *alias, unsigned count) {
     }
     if (ok) ok = remap_string_refs(b, read32(b->data + 12), DICT, indices, t.strings.count, visited, 0);
     free(visited);
+    uint32_t elink_key = lookup_string(b, t.keys, "elink");
+    uint32_t elink_user = lookup_string(b, t.strings, link_elink);
     for (unsigned i = 0; ok && i < count; i++) {
         uint32_t folder_index = lookup_string(b, t.strings, alias[i].folder);
         uint32_t model_index = lookup_string(b, t.strings, alias[i].model);
         size_t actor_size = 4 + 8 * stock.count;
-        uint8_t *actor = append(b, actor_size);
+        // Native XLink creates its ELink instance using ActorInfo's user name.
+        bool link_effect = elink_key != UINT32_MAX && elink_user != UINT32_MAX &&
+            !strcmp(alias[i].name, SWMP_PROXY_ACTOR);
+        uint8_t *actor = append(b, actor_size + (link_effect ? 8 : 0));
         if (!actor || folder_index == UINT32_MAX || model_index == UINT32_MAX) { ok = false; break; }
         memcpy(actor, stock.head, actor_size);
         write32(actor + (name - stock.head), alias[i].name_index);
         write32(actor + (folder - stock.head), indices[folder_index]);
         write32(actor + (model - stock.head), indices[model_index]);
         write32(actor + (heap - stock.head), alias[i].heap_size);
+        if (link_effect) set_alias_elink(actor, stock.count, elink_key, indices[elink_user]);
         alias[i].actor_offset = (uint32_t)(actor - b->data);
     }
     free(indices);
@@ -705,6 +724,20 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_WALK_HOLD_MANY] = ACTION(WalkHoldMany, "Lift_Lift_Pouch_Many", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_RUN_HOLD_FEW] = ACTION(RunHoldFew, "Lift_Lift_Pouch_Few", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_RUN_HOLD_MANY] = ACTION(RunHoldMany, "Lift_Lift_Pouch_Many", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_READY] = ACTION(LadderReady, "Ladder_Up_Ready_St", "LadderUpReadySt", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_WAIT] = ACTION(LadderWait, "Ladder_Wait_FootL", "LadderWait", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_UP] = ACTION(LadderUp, "Ladder_Up_FootL", "LadderUp", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_UP_RIGHT] = ACTION(LadderUpRight, "Ladder_Up_FootR", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_UP_END] = ACTION(LadderUpEnd, "Ladder_Up_Ed_FootL", "LadderUpEd", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_DOWN_START] = ACTION(LadderDownStart, "Ladder_Down_St", "LadderDownSt", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_DOWN] = ACTION(LadderDown, "Ladder_Down", "LadderDown", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_DOWN_END] = ACTION(LadderDownEnd, "Ladder_Down_Ed_FootL", "LadderDownEd", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_JUMP] = ACTION(LadderJump, "Ladder_Jump_FootL", "LadderJump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_LADDER_LAND] = ACTION(LadderLand, "Ladder_DownToWait", "LadderLand", PROXY_GEAR_NONE),
+    [SWMP_PROXY_POLE_MOUNT] = ACTION(PoleMount, "Climb_Tree_Ed_Sharp", "ClimbTreeEdSharp", PROXY_GEAR_NONE),
+    [SWMP_PROXY_POLE_HOLD] = ACTION(PoleHold, "Climb_Tree_Top_Sharp_FootL", "ClimbTreeTopSharp", PROXY_GEAR_NONE),
+    [SWMP_PROXY_WARP_DEPART] = ACTION(WarpDepart, "Demo_Warp_Nml", "Warp", PROXY_GEAR_NONE),
+    [SWMP_PROXY_WARP_ARRIVE] = ACTION(WarpArrive, "Nml_Wait", NULL, PROXY_GEAR_NONE),
 };
 #undef ACTION
 
@@ -995,8 +1028,14 @@ static bool animation_name(uint8_t *raw, size_t size, const uint8_t *field, cons
     return str && !memcmp(str + 2, name, length);
 }
 
-static bool remove_planar_root(uint8_t *raw, size_t size, const uint8_t *clip) {
-    // These locomotion clips use Root as the first bone with an explicit base transform.
+enum {
+    ROOT_X = 1, ROOT_Y = 2, ROOT_Z = 4, ROOT_YAW = 8,
+    ROOT_PLANAR = ROOT_X | ROOT_Z,
+    ROOT_TRANSLATION = ROOT_PLANAR | ROOT_Y,
+};
+
+static bool remove_root_motion(uint8_t *raw, size_t size, const uint8_t *clip, unsigned motion) {
+    // These clips use Root as the first bone with an explicit base transform.
     uint8_t *bone = animation_offset(raw, size, clip + 0x30, 0x28);
     if (!bone || !animation_name(raw, size, bone, "Root") || bone[0x1c] != 3 || bone[0x1d] != 6)
         return false;
@@ -1008,23 +1047,53 @@ static bool remove_planar_root(uint8_t *raw, size_t size, const uint8_t *clip) {
     for (unsigned i = 0; i < curve_count; i++) {
         uint8_t *curve = curves + i * 0x30;
         uint32_t target = read32(curve + 0x14);
-        if (target == 0x10 || target == 0x18) {
-            // X and Z translations already come from snapshots. Zero the curve's
-            // scale, offset and loop delta while retaining bob and limb motion.
+        if ((target == 0x10 && (motion & ROOT_X)) ||
+            (target == 0x14 && (motion & ROOT_Y)) ||
+            (target == 0x18 && (motion & ROOT_Z)) ||
+            (target == 0x24 && (motion & ROOT_YAW))) {
+            // Snapshots already carry this movement. Zero the curve's scale, offset and loop delta.
             memset(curve + 0x20, 0, 3 * sizeof(float));
             changed = true;
         }
     }
-    write32(base + 0x1c, 0);
-    write32(base + 0x24, 0);
+    if (motion & ROOT_X) write32(base + 0x1c, 0);
+    if (motion & ROOT_Y) write32(base + 0x20, 0);
+    if (motion & ROOT_Z) write32(base + 0x24, 0);
+    if (motion & ROOT_YAW) write32(base + 0x10, 0);
     return changed;
 }
 
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size) {
-    static const SwmpProxyAction locomotion[] = {
-        SWMP_PROXY_WALK, SWMP_PROXY_RUN, SWMP_PROXY_DASH, SWMP_PROXY_CROUCH_MOVE,
-        SWMP_PROXY_SHIELD_WALK_FORWARD, SWMP_PROXY_SHIELD_WALK_BACK,
-        SWMP_PROXY_SHIELD_WALK_LEFT, SWMP_PROXY_SHIELD_WALK_RIGHT,
+    static const struct {
+        SwmpProxyAction action;
+        unsigned motion;
+    } root_motion[] = {
+        {SWMP_PROXY_WALK, ROOT_PLANAR},
+        {SWMP_PROXY_RUN, ROOT_PLANAR},
+        {SWMP_PROXY_DASH, ROOT_PLANAR},
+        {SWMP_PROXY_CROUCH_MOVE, ROOT_PLANAR},
+        {SWMP_PROXY_SHIELD_WALK_FORWARD, ROOT_PLANAR},
+        {SWMP_PROXY_SHIELD_WALK_BACK, ROOT_PLANAR},
+        {SWMP_PROXY_SHIELD_WALK_LEFT, ROOT_PLANAR},
+        {SWMP_PROXY_SHIELD_WALK_RIGHT, ROOT_PLANAR},
+        {SWMP_PROXY_SWIM_DASH, ROOT_PLANAR},
+        {SWMP_PROXY_SWIM_SLOW_LEFT, ROOT_PLANAR | ROOT_YAW},
+        {SWMP_PROXY_SWIM_SLOW_RIGHT, ROOT_PLANAR | ROOT_YAW},
+        {SWMP_PROXY_SWIM_FAST_LEFT, ROOT_PLANAR | ROOT_YAW},
+        {SWMP_PROXY_SWIM_FAST_RIGHT, ROOT_PLANAR | ROOT_YAW},
+        {SWMP_PROXY_CLIMB_MOVE, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_RIGHT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_UP_RIGHT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_UP_LEFT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_LEFT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_DOWN_LEFT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_DOWN, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_DOWN_RIGHT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_JUMP, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_JUMP_RIGHT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_JUMP_UP_RIGHT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_JUMP_UP_LEFT, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_JUMP_LEFT, ROOT_TRANSLATION},
     };
     if (!src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
     size_t n;
@@ -1040,13 +1109,13 @@ uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size)
     for (unsigned i = 0; i < count; i++) {
         const uint8_t *clip = clips + i * 0x60;
         if (memcmp(clip, "FSKA", 4)) goto invalid;
-        for (unsigned j = 0; j < sizeof locomotion / sizeof *locomotion; j++) {
-            if (!animation_name(raw, n, clip + 0x10, proxy_actions[locomotion[j]].clip)) continue;
-            if ((found & (1u << j)) || !remove_planar_root(raw, n, clip)) goto invalid;
+        for (unsigned j = 0; j < sizeof root_motion / sizeof *root_motion; j++) {
+            if (!animation_name(raw, n, clip + 0x10, proxy_actions[root_motion[j].action].clip)) continue;
+            if ((found & (1u << j)) || !remove_root_motion(raw, n, clip, root_motion[j].motion)) goto invalid;
             found |= 1u << j;
         }
     }
-    if (found != (1u << (sizeof locomotion / sizeof *locomotion)) - 1) goto invalid;
+    if (found != (1u << (sizeof root_motion / sizeof *root_motion)) - 1) goto invalid;
     *out_size = n;
     return raw;
 invalid:
@@ -1114,6 +1183,15 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t 
         sarc_find(raw, n, stock_model_list, &data, &ms, &me) >= 0) {
         size_t link_size, model_size;
         uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ASUser", SWMP_PROXY_ACTOR, &link_size);
+        if (link) {
+            size_t effect_size;
+            uint8_t *effect_link = proxy_actor_link(link, link_size, "ElinkUser", link_elink, &effect_size);
+            if (effect_link) {
+                free(link);
+                link = effect_link;
+                link_size = effect_size;
+            }
+        }
         uint8_t *model = proxy_model_list(raw + data + ms, me - ms, link_model, link_model, NULL, &model_size);
         if (link && model) {
             out = animated_proxy_pack(SWMP_PROXY_ACTOR, (PackFile){proxy_link, link, link_size},

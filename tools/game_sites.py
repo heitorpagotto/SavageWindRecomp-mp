@@ -69,12 +69,26 @@ MP_ARMOR_SITES = ('mp_armor_visibility', 'mp_armor_dye', 'mp_armor_dye_key',
 MP_HEALTH_SITES = ('mp_health_current',)
 MP_WEATHER_SITES = ('mp_weather_current',)
 MP_ITEM_SITES = ('mp_material_manager', 'mp_item_drop_ready')
+MP_WARP_SITES = ('mp_warp_amount', 'mp_warp_effect_key', 'mp_warp_effect_lookup',
+                 'mp_warp_effect_emit', 'mp_warp_effect_fade')
 STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_ARMOR_SITES +
-                   MP_HEALTH_SITES + MP_WEATHER_SITES + MP_ITEM_SITES)
+                   MP_HEALTH_SITES + MP_WEATHER_SITES + MP_ITEM_SITES + MP_WARP_SITES)
 MP_ANIMATION_PLAY = ('90000008/9f00001f 1e3e1001 1e204100 f9400108/ffc003ff 910003e1 aa1503e0 '
                      '2a1403e2 2a1303e3 52800024 91004108 a9005be8 94000000/fc000000')
 
 SITES = [
+    # The warp demo updates the model dissolve and creates an ELink event on the actor.
+    Site('mp_warp_amount', 'code', 'bd44f401 1e202020 54000100 f9427001 bd04f400 b40000a1 '
+         '90000008/9f00001f 91000108/ffc003ff f9400100 14000000/fc000000', 0),
+    Site('mp_warp_effect_key', 'got', '90000008/9f00001f aa1403e0 f9400108/ffc003ff 3900a3ff '
+         '91004108 a901ffe8 f9401e68 f9400d08 d63f0100 f9402262 910063e1 aa1503e0 '
+         '94000000/fc000000 2a1f03f4', 2),
+    Site('mp_warp_effect_lookup', 'call', '3900a3ff 91004108 a901ffe8 f9401e68 f9400d08 d63f0100 '
+         'f9402262 910063e1 aa1503e0 94000000/fc000000 2a1f03f4', 9),
+    Site('mp_warp_effect_emit', 'call', '360002a0 910063e1 910023e2 f90007ff aa1403e0 b90013ff '
+         '94000000/fc000000 f94007e8 b4000188 b9402109 b94013ea', 6),
+    Site('mp_warp_effect_fade', 'call', '910003e0 94000000/fc000000 17ffffcf 910003e0 2a1f03e1 '
+         '94000000/fc000000 17ffffdc', 1),
     # Experimental dual binding cells. Every pattern must match; no KNOWN fallback.
     Site('opt_two_redraw', 'code', 'd10103ff a9017bfd a90257f6 a9034ff4 910043fd 90000009/9f00001f 91000129/ffc003ff b9405008', 0),
     Site('opt_two_select', 'code', 'b976b008 7100051f 5400000b/ff00001f a9be7bfd a9014ff4 910003fd 9000000b/9f00001f 9100016b/ffc003ff', 0),
@@ -460,6 +474,7 @@ OPTIONAL_GROUPS = [
     MP_HEALTH_SITES,
     MP_WEATHER_SITES,
     MP_ITEM_SITES,
+    MP_WARP_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
     ('quick_drop_tick', 'quick_drop_actor_call', 'player_drop_forbidden', 'actor_info_lookup',
      'actor_info_has_tag', 'pouch_discard', 'player_equipment', 'pouch_default_name',
@@ -554,6 +569,11 @@ KNOWN = {
         'mp_weather_current': 0x7001431c3c,
         'mp_material_manager': 0x7001e0c828,
         'mp_item_drop_ready': 0x7000b25b94,
+        'mp_warp_amount': 0x70015270a4,
+        'mp_warp_effect_key': 0x7001bc3280,
+        'mp_warp_effect_lookup': 0x7000f51274,
+        'mp_warp_effect_emit': 0x7000f3fc24,
+        'mp_warp_effect_fade': 0x7000675e8c,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,

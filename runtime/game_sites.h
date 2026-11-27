@@ -88,6 +88,11 @@
     X(mp_weather_current) \
     X(mp_material_manager) \
     X(mp_item_drop_ready) \
+    X(mp_warp_amount) \
+    X(mp_warp_effect_key) \
+    X(mp_warp_effect_lookup) \
+    X(mp_warp_effect_emit) \
+    X(mp_warp_effect_fade) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {
