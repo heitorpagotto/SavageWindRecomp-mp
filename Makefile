@@ -967,6 +967,18 @@ multiplayer-demo: $(B)/multiplayer_demo
 
 .PHONY: test-multiplayer multiplayer-demo
 
+MP_ANIMATION_SRC := runtime/multiplayer_assets.c runtime/services/archive.c
+$(B)/test_multiplayer_animations: tests/test_multiplayer_animations.c $(MP_ANIMATION_SRC) \
+                                 runtime/multiplayer_assets.h runtime/services/archive.h $(MP_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror -DSW_MULTIPLAYER -Iruntime -Imods/multiplayer $(DEPINC) \
+	      -o $@ $(filter %.c,$^) $(if $(DEPS),-L$(DEPS)/lib) -lz
+
+test-multiplayer-animations: $(B)/test_multiplayer_animations
+	$(B)/test_multiplayer_animations
+
+.PHONY: test-multiplayer-animations
+
 ifneq ($(filter windows linux,$(PLATFORM)),)
 MP_RTC_TEST := $(B)/test_multiplayer_webrtc$(if $(filter windows,$(PLATFORM)),.exe)
 $(MP_RTC_TEST): tests/test_multiplayer_webrtc.c mods/multiplayer/webrtc.c $(filter-out %/mock_transport.c,$(MP_CORE)) $(MP_HEADERS)

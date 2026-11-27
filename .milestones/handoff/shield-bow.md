@@ -1,5 +1,31 @@
 # Shields, bows, and arrows
 
+## M2.5 bow draw and shield model playback
+
+- The stowed spear can briefly move into the drawn-height range before the
+  bow reaches Link's hand. Shared `WeaponEquipOn` now uses the native base
+  clip length to distinguish shield (16), bow (20), and melee (32) draws.
+- Each of the 33 installed shields uses the common stand, guard, hit, and
+  surf actions. The four shields with their own clips keep their native AS
+  resources in the passive alias and follow the sender's model animation.
+- Protocol 9 includes the shield model animation in the player snapshot and
+  requires a matching shield pose and equipment revision.
+  [Verification](../testing/shield-bow.md#m25-bow-draw-and-shield-model-playback)
+
+## M2.5 raised-shield movement, reactions, and surfing
+
+- Standing guard and parry were already synced. Native `MoveAttention` fell back
+  to Idle while moving with the shield raised. The sender now selects one of
+  four in-place lock-on walk clips from displacement in Link's facing frame.
+- Guard detection uses the native shield pose even for shields outside the
+  passive model catalog. Parry, hit, and break use their native action states,
+  so the body reaction can play when the model is unavailable or already broken.
+- Shield surfing now has mount, slide, jump, airborne, land, dismount, stumble,
+  and failed-start mappings. Supported shields follow their sampled native
+  transforms under Link's feet. Surf turns and slope-specific variants use
+  representative clips.
+  [Windows verification](../testing/shield-bow.md#m25-raised-shield-movement-reactions-and-surfing)
+
 ## M2.5 shield and bow follow-up
 
 - Added the Soldier's Shield and Soldier's Bow as passive aliases in their existing

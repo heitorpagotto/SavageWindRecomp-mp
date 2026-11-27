@@ -297,6 +297,7 @@ void swmp_lobby_send_state(SwmpLobby *l, const SwmpPlayerSnapshot *local,
         sample->nocked_arrow = SWMP_ARROW_NONE;
         sample->bow_animation = SWMP_BOW_ANIM_NONE;
     }
+    if (!(sample->flags & SWMP_PLAYER_SHIELD_POSE)) sample->shield_animation = SWMP_SHIELD_ANIM_NONE;
 
     uint8_t data[SWMP_PACKET_HEADER_SIZE + SWMP_ENVIRONMENT_SIZE + SWMP_MAX_PEERS * SWMP_PLAYER_SNAPSHOT_SIZE];
     size_t size = 0;

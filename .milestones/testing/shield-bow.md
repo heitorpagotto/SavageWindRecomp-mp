@@ -1,5 +1,64 @@
 # Shields, bows, and arrows
 
+## M2.5 bow draw and shield model playback
+
+- The baseline Windows trace in `build/m25-bow-shield-probe-1m4oec3b/`
+  reproduced the false SpearDraw at the start of a 20-frame bow draw.
+  The stowed spear crossed the old hand-height threshold while the bow was
+  still on Link's back.
+- The Windows build, animation selector regression, multiplayer core,
+  direct invite, and WebRTC loopback checks passed. Changed sources
+  cross-compiled for Linux x86-64. The installed-resource check covered
+  guard, hit, and surfing selectors for all 33 shields, the complete
+  animation lists for the four animated shields, and all 111 body clip
+  references. [Implementation notes](../handoff/shield-bow.md#m25-bow-draw-and-shield-model-playback)
+- Two Windows Vulkan games on the Plateau used BOTW 1.9.0, gamelib
+  `baf44255c0bc3428`, protocol 9, and source ID
+  `3165585c9f0b927300f035404b4ae74ac0e1d650`. Both used scratch saves,
+  960x540 at 50% scale, a 1400 MiB VRAM budget, and Vulkan heap copy off.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client AMD Radeon
+  Graphics (25.10.30.02).
+- `build/m25-bow-shield-live-kp4u2aj6/` verified `Weapon_Shield_038`
+  and `Weapon_Shield_014` at measured 30 FPS with GPU overlap off. Both
+  shields played their own Off, WeaponEquipOn, On, and WeaponEquipOff states
+  while Link guarded and parried. Each custom bow drew, aimed, and released
+  without a melee draw on the receiver. A subsequent spear draw still played.
+  Rejoin restored the equipped shields and Off state on both peers.
+- `build/m25-bow-shield-live-gzn5p2xc/` repeated the same checks for
+  `Weapon_Shield_013` and `Weapon_Shield_015`. The 90 and 120 FPS caps
+  measured about 76/84 and 64/62 FPS on the host/client at the sample points.
+  An earlier 60 FPS trial logged a Vulkan device timeout after verifying
+  shield playback. The 30 FPS replay completed.
+- The local scripts are `build/m25-bow-shield-build/build_fixture.py`,
+  `verify_live.py`, and `verify_resources.py`.
+
+## M2.5 raised-shield movement, reactions, and surfing
+
+- The Windows app, multiplayer core, direct invite, and WebRTC loopback
+  checks passed. The installed-resource check resolved all 110 clips,
+  verified the eight in-place locomotion curves, and checked the guard and
+  surf selectors even with no shield model ID.
+- The Soh Kofi Shrine replay in `build/m25-shield-verified-2dv3wmq7/`
+  relayed native `GuardFailHit` as ShieldHit and returned to ShieldGuard
+  on the same Link and Soldier's Shield at 30 FPS.
+- The Plateau replay in `build/m25-shield-verified-bvyi315y/` relayed standing
+  guard, parry, and a right sidestep with the shield raised, followed by return
+  to guard. Host/client rates were about 30/30, 60/56, 90/84, and 97/88 at
+  the 30, 60, 90, and 120 FPS caps.
+- The 30 FPS Plateau surf replay in `build/m25-shield-verified-w3od6_p1/`
+  played mount, airborne, landing, slide, and dismount in order. One Link and
+  one Soldier's Shield stayed active while the shield pose moved under the rider.
+  Shorter trials could skip the brief landing or slide between snapshots.
+  Surf jump, stagger, and the other mapped variants passed the resource and
+  selector checks. Their gameplay coverage remains open.
+- Both Windows games used BOTW 1.9.0, protocol 7, gamelib `baf44255c0bc3428`,
+  multiplayer source ID `782adcd4d14ef19d9d1f63ba1bb5bf426780426c`,
+  Vulkan at 960x540 and 50% scale, a 1400 MiB VRAM budget, Vulkan heap copy
+  off, and scratch saves. The host used an RTX 4050 Laptop GPU (610.88) and
+  the client AMD Radeon Graphics (25.10.30.02).
+- The ignored scripts are `build/m25-shield-sync-build/build_fixture.py`,
+  `verify.py`, and `verify_surf.py`.
+
 ## M2.5 nocked arrow variants and rapid reload
 
 - The Windows Vulkan scratch games in Tah Muhl Shrine used BOTW 1.9.0, gamelib

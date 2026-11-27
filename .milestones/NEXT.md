@@ -1,9 +1,8 @@
 # Next multiplayer work
 
-Continue M2.5 from the [current checkpoint](HANDOFF.md). The latest Windows replay
-verified representative armor dyes and body masking at 30 FPS. The next animation
-checks are native light and directional hits and water/ledge transitions, followed
-by broader phase and rate sampling.
+Continue M2.5 from the [current checkpoint](HANDOFF.md). The next animation checks are native light
+and directional hits and the remaining water and ledge transitions, followed by
+broader phase and rate sampling.
 
 ## Remaining animation work
 
@@ -12,8 +11,8 @@ Appearance. The owner will validate Linux manually and report issues.
 
 | Stage | Work still open |
 | --- | --- |
-| 1. Weapons | Moving and airborne variants, exact blends, and more equipment identities. [Melee checkpoints](handoff/equipment.md) |
-| 2. Shield and bow | Airborne aim needs layered playback. Extend attachment checks, including the brief offset seen in backflips. [Shield and bow checkpoints](handoff/shield-bow.md), [backflip evidence](testing/traversal.md#m25-grounded-dodges) |
+| 1. Weapons | Moving and airborne variants, exact blends, thrown projectile flight, and special weapon effects. [Melee checkpoints](handoff/equipment.md) |
+| 2. Shield and bow | Airborne aim needs layered playback. Broaden shield coverage to surf turns and slope variants. Extend attachment checks, including the brief offset seen in backflips. [Shield and bow checkpoints](handoff/shield-bow.md), [backflip evidence](testing/traversal.md#m25-grounded-dodges) |
 | 3. Traversal and reactions | Check native light and directional hits, moving-target swimming, swim and glide blends, hand placement, and water/ledge transitions. [Traversal checkpoints](handoff/traversal.md) |
 | 4. Playback | Extend phase and rate beyond standing jumps. Check late join and recovery under real packet loss. Add layers and transition blends where the proxy rig supports them. [Playback checkpoints](handoff/playback.md) |
 | 5. Appearance | Broaden dye and masking coverage beyond the tested outfits. Check helmet variants, cloth, DLC, attachment alignment across clips, and travel. [Appearance checkpoints](handoff/appearance.md) |

@@ -95,12 +95,16 @@ Acceptance criteria:
 ## M2.5 — Time, weather, and full Link synchronization
 
 Status **in progress**. The first slice implements host time and weather sync and admission notifications.
-The equipment slices add passive weapon, shield and bow slots and reliable identities. New native clips cover
-landing, standing draw, attacks, charge and stow for three melee families, shield guard blends and reactions,
+Protocol 8 extends the passive weapon, shield and bow slots to the installed numbered
+equipment catalog. [Equipment checkpoint](handoff/equipment.md#m25-installed-weapon-catalog)
+New native clips cover
+landing, standing draw, attacks, charge and stow for three melee families,
+grounded throw wind-up, aim and release with one- and two-handed boomerang catches, shield guard blends and reactions,
 crouch, and grounded bow draw, reload, aim, release and stow with native bowstring playback
 and passive nocked visuals for all six inventory arrow types,
+raised-shield movement and shield surfing,
 slow and fast swimming with turns, directional targeting strokes, directional wall climbing and jumps,
-wall approach and mantle, grounded lock-on dodges and backflips with landing clips, hit,
+wall approach, mantle and release, grounded lock-on dodges and backflips with landing clips, hit,
 knockdown and fall-damage recovery clips, and gliding with a passive canopy that banks with
 Link during turns. Grounded locomotion and equipment share buffered playback, and standing jumps
 start at the sampled animation phase. Default hair and equipped armor use skinned models that follow

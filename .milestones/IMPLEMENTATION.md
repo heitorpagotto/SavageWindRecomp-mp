@@ -10,12 +10,12 @@ require a supported 1.9.0 gamelib with the presence and actor lifecycle sites.
 
 Defined in `mods/multiplayer/protocol.h`:
 
-- `SWMP_PROTOCOL_VERSION = 7`
+- `SWMP_PROTOCOL_VERSION = 9`
 - `SWMP_MAX_PEERS = 8`
 - `SWMP_HOST_PEER = 0`
 - `SWMP_UNASSIGNED_PEER = 255`
 - `SWMP_PACKET_HEADER_SIZE = 32`
-- `SWMP_PLAYER_SNAPSHOT_SIZE = 100`
+- `SWMP_PLAYER_SNAPSHOT_SIZE = 101`
 - `SWMP_MAX_PAYLOAD_SIZE = 65536`
 
 Wire integers are big-endian/network byte order.
@@ -79,12 +79,14 @@ lobby currently sends and accepts control packets with zero flags.
 | 84 | 6 | nocked arrow X/Y/Z offset relative to Link's yaw, signed 16-bit millimetres |
 | 90 | 6 | nocked arrow pitch/yaw/roll relative to Link's yaw, signed 16-bit turn fractions |
 | 96 | 4 | low 32 bits of the owning game's monotonic sample time in milliseconds |
+| 100 | 1 | shield model animation state, zero if unavailable |
 
 Each gear-pose bit requires a nonzero revision and limits each offset axis to ±3000 mm. The receiver pairs the
 pose with the reliable record for the same peer and revision. The nocked arrow and bow animation state require a
-bow pose. The arrow shares the offset bound. A phase requires an activation ID. The host preserves the owning
+bow pose. Shield model animation requires a shield pose. The arrow shares the offset bound.
+A phase requires an activation ID. The host preserves the owning
 game's sample time when relaying a peer's snapshot. The direct invite text format is independent of the packet
-version. Lobby traffic uses protocol 7 and admission requires matching source fingerprints.
+version. Lobby traffic uses protocol 9 and admission requires matching source fingerprints.
 
 ## Session state
 
@@ -173,12 +175,16 @@ it from missing health. Damage authority and death handling belong to M3.
 
 ## M2.5 passive gear and expanded actions
 
-The 1.9.0 guest thread uses the native equipment getter to sample the Woodcutter's Axe and Traveler's
-Sword, Spear and Claymore in category zero, Wooden and Soldier's Shields in category one, and
-Traveler's and Soldier's Bows in category two. The window thread advances the equipment
-revision when an identity or dye changes. EQUIPMENT carries a one-byte peer, a four-byte revision, three
-identity bytes in weapon, shield and bow order, three four-byte armor model IDs in head, torso and
-legs order, and three dye bytes in the same slot order. Dye 0 selects the undyed palette. The
+The 1.9.0 guest thread uses the native equipment getter for melee, shields, and bows.
+The installed ActorInfo catalog and actor packs supply passive visuals for numbered
+sword, large-sword, spear, shield, and bow actors with models. Melee animations use
+the native weapon family. Bows and shields with their own clips use their native
+AS lists and model animation states.
+The window thread advances the equipment revision when an identity or dye changes.
+EQUIPMENT carries a one-byte peer, a four-byte revision, three big-endian 16-bit
+identities in weapon, shield and bow order, three four-byte armor model IDs in head, torso and
+legs order, and three dye bytes in the same slot order. The gear identity is the
+family number multiplied by 1000 plus the stock actor's numeric suffix. Dye 0 selects the undyed palette. The
 codec accepts dyes 0–15 and requires zero dye for an absent model. The host accepts updates for the
 connection's own peer, relays them, and sends cached revisions after WELCOME. Identity and membership
 share the ordered control channel. Peer removal clears the cached identity and position before slot reuse.
@@ -207,14 +213,23 @@ for all three families. Native CutS3 and CutS4 reuse the same spear clip as CutS
 IDs to start each thrust independently. The measured hand-height band for each supported weapon detects
 drawn idle and gates the shared WeaponEquipOn state. The receiver plays a representative clip for
 each native action. IDs 12 and 13 add
-crouch idle and movement. ID 14 selects shield guard when the native WaitAttention state accompanies
-a forward shield pose. IDs 15–17 use the local upper-body state at layer 1, slot 1 to select reload,
-aim and release for both bows. IDs 70–72 map native parry, guard hit and guard break when a supported
-shield is equipped. Native shield destruction can precede GuardBreak by an update. The sender
-uses shield presence in the previous two snapshot intervals to identify the start of the reaction,
-keeps the action for the duration of GuardBreak, and publishes shield removal normally.
-IDs 73 and 74 cover grounded bow draw and stow. The sender uses the bow's position beside Link
-to distinguish the shared WeaponEquipOn state and the stow transition through WaitAttentionUpper.
+crouch idle and movement. ID 14 selects shield guard when a native standing lock-on state
+accompanies a forward shield pose. IDs 97–100 select four in-place lock-on walks when
+moving with a raised shield. IDs 15–17 use the local upper-body state at layer 1, slot 1
+to select reload, aim and release for both bows. IDs 70–72 map native parry, guard hit
+and guard break independently of shield model availability. Native shield destruction
+can precede GuardBreak. The sender publishes shield removal normally.
+IDs 101–109 cover shield surfing. The sample stream already carries the
+shield's native relative pose, including its placement under Link during the ride.
+IDs 73 and 74 cover grounded bow draw and stow. During shared WeaponEquipOn, the
+native base track uses 16 frames for shield draw, 20 for bow draw, and 32 for melee draw
+in 1.9.0. ID 110 is the shield draw. Bow stow still uses the bow's position beside Link
+during WaitAttentionUpper.
+IDs 111–121 cover grounded weapon throws. The base track length distinguishes
+wind-up from held aim. The sender retains the melee family across the release
+even when the equipment actor disappears. The one- and two-handed catch clips
+follow WeaponThrowCatch on the upper-body slot. The usual equipment revision
+controls held-model removal and restoration.
 ID 75 selects the held-bow idle when the bow sits low and in front of Link in WaitAttentionUpper.
 During BowReload or BowAim, the 1.9.0 sender samples the attached arrow actor's identity
 and matrix from the equipped bow. It uses the same yaw-relative format as gear. Each of the
@@ -256,6 +271,7 @@ jump. IDs 36–39 add right, up-right, up-left and left. During native ClimbJump
 for at least 6 cm of displacement in the wall plane or falls back to the upward clip after about
 100 ms. It keeps the selected action for that jump so turning, release and landing motion do
 not restart the clip. The new action values fit in the existing snapshot.
+ID 96 selects the wall-release clip for native WallOff before falling or landing.
 Applying the standalone swim clips at the sampled root left the model submerged. The receiver lifts
 the Link model for all swim clips while gear and range continue to use the sampled root.
 

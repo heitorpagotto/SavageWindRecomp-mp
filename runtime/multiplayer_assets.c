@@ -15,18 +15,9 @@ static const char link_model[] = "Link";
 #define VISUAL(slot, source, model, actor, label, bundle) {slot, model, actor, label, \
     "Actor/Pack/" source ".sbactorpack", bundle, "Actor/Pack/" actor ".sbactorpack", \
     "Actor/ActorLink/" actor ".bxml", source, "Actor/ModelList/" source ".bmodellist"}
-#define GEAR(slot, model, actor, label) VISUAL(slot, model, model, actor, label, NULL)
 #define ARROW(type, source, model, actor, label) \
     [SWMP_ARROW_ASSET_BASE + SWMP_ARROW_##type] = VISUAL(SWMP_NOCKED_ARROW_SLOT, source, model, actor, label, "Pack/TitleBG.pack")
 const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
-    [SWMP_GEAR_WOODCUTTERS_AXE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_032", "SwmpRemoteAxe", "axe"),
-    [SWMP_GEAR_WOODEN_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_001", "SwmpRemoteShield", "shield"),
-    [SWMP_GEAR_TRAVELERS_BOW] = GEAR(SWMP_GEAR_BOW, "Weapon_Bow_001", "SwmpRemoteBow", "bow"),
-    [SWMP_GEAR_TRAVELERS_SWORD] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Sword_001", "SwmpRemoteSword", "sword"),
-    [SWMP_GEAR_TRAVELERS_SPEAR] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Spear_001", "SwmpRemoteSpear", "spear"),
-    [SWMP_GEAR_TRAVELERS_CLAYMORE] = GEAR(SWMP_GEAR_WEAPON, "Weapon_Lsword_001", "SwmpRemoteClaymore", "claymore"),
-    [SWMP_GEAR_SOLDIERS_SHIELD] = GEAR(SWMP_GEAR_SHIELD, "Weapon_Shield_002", "SwmpRemoteSoldierShield", "soldier shield"),
-    [SWMP_GEAR_SOLDIERS_BOW] = GEAR(SWMP_GEAR_BOW, "Weapon_Bow_002", "SwmpRemoteSoldierBow", "soldier bow"),
     [SWMP_PARAGLIDER_ASSET] = VISUAL(SWMP_PARAGLIDER_SLOT, "PlayerStole2", "Item_Parastole2",
                                     "SwmpRemoteGlider", "glider", "Pack/TitleBG.pack"),
     ARROW(NORMAL, "NormalArrow", "Weapon_Arrow_001", "SwmpRemoteArrow", "nocked arrow"),
@@ -37,7 +28,6 @@ const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
     ARROW(ANCIENT, "AncientArrow", "Weapon_Arrow_007", "SwmpRemoteAncientArrow", "nocked ancient arrow"),
 };
 #undef ARROW
-#undef GEAR
 #undef VISUAL
 
 static uint32_t read32(const uint8_t *at) {
@@ -154,13 +144,95 @@ static const char *actor_string(const Byml *b, const ActorTable *t, BymlNode act
     return ref ? string_at(b, t->strings, read32(ref)) : NULL;
 }
 
+static const struct {
+    const char *prefix;
+    const char *profile;
+    SwmpGearSlot slot;
+} gear_families[SWMP_GEAR_FAMILY_COUNT] = {
+    [SWMP_GEAR_FAMILY_SWORD] = {"Weapon_Sword_", "WeaponSmallSword", SWMP_GEAR_WEAPON},
+    [SWMP_GEAR_FAMILY_LSWORD] = {"Weapon_Lsword_", "WeaponLargeSword", SWMP_GEAR_WEAPON},
+    [SWMP_GEAR_FAMILY_SPEAR] = {"Weapon_Spear_", "WeaponSpear", SWMP_GEAR_WEAPON},
+    [SWMP_GEAR_FAMILY_SHIELD] = {"Weapon_Shield_", "WeaponShield", SWMP_GEAR_SHIELD},
+    [SWMP_GEAR_FAMILY_BOW] = {"Weapon_Bow_", "WeaponBow", SWMP_GEAR_BOW},
+};
+
+static uint16_t gear_identity(const char *name) {
+    if (!name || strncmp(name, "Weapon_", 7)) return SWMP_GEAR_NONE;
+    for (unsigned i = 1; i < SWMP_GEAR_FAMILY_COUNT; i++) {
+        const char *prefix = gear_families[i].prefix;
+        size_t length = strlen(prefix);
+        if (strncmp(name, prefix, length)) continue;
+        const char *suffix = name + length;
+        if (strspn(suffix, "0123456789") != 3 || suffix[3]) return SWMP_GEAR_NONE;
+        unsigned variant = (suffix[0] - '0') * 100 + (suffix[1] - '0') * 10 + suffix[2] - '0';
+        return variant ? (uint16_t)(i * SWMP_GEAR_VARIANTS + variant) : SWMP_GEAR_NONE;
+    }
+    return SWMP_GEAR_NONE;
+}
+
+uint16_t swmp_gear_identity(SwmpGearSlot slot, const char *name) {
+    uint16_t id = gear_identity(name);
+    return id && gear_families[swmp_gear_family(id)].slot == slot ? id : SWMP_GEAR_NONE;
+}
+
+static bool resource_name(const char *name, size_t capacity) {
+    return name && *name && strlen(name) < capacity &&
+        name[strspn(name, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")] == 0;
+}
+
+static int compare_gear_models(const void *a, const void *b) {
+    return (int)((const SwmpGearModel *)a)->id - (int)((const SwmpGearModel *)b)->id;
+}
+
+bool swmp_gear_catalog(const uint8_t *src, size_t size, SwmpGearCatalog *out) {
+    size_t n;
+    uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
+    out->count = 0;
+    if (!raw) return false;
+    Byml b = {.data = raw, .original_size = n};
+    ActorTable t;
+    if (n > 16 * 1024 * 1024 || !actor_table(&b, &t)) {
+        free(raw);
+        return false;
+    }
+    for (unsigned i = 0; i < t.actors.count && out->count < SWMP_MAX_GEAR_MODELS; i++) {
+        BymlNode actor = actor_entry(&b, &t, i);
+        const char *name = actor_string(&b, &t, actor, "name");
+        uint16_t id = gear_identity(name);
+        if (!id) continue;
+        const char *profile = actor_string(&b, &t, actor, "profile");
+        if (!profile || strcmp(profile, gear_families[swmp_gear_family(id)].profile)) continue;
+        const char *folder = actor_string(&b, &t, actor, "bfres");
+        const char *model = actor_string(&b, &t, actor, "mainModel");
+        SwmpGearModel *asset = &out->models[out->count];
+        // The native model list can describe multiple units without a mainModel entry.
+        if (!model) model = folder;
+        if (!resource_name(folder, sizeof asset->folder) || !resource_name(model, sizeof asset->model)) continue;
+        *asset = (SwmpGearModel){.id = id};
+        snprintf(asset->actor, sizeof asset->actor, "SwmpGear%04x", (unsigned)id);
+        memcpy(asset->name, name, strlen(name) + 1);
+        memcpy(asset->folder, folder, strlen(folder) + 1);
+        memcpy(asset->model, model, strlen(model) + 1);
+        out->count++;
+    }
+    qsort(out->models, out->count, sizeof out->models[0], compare_gear_models);
+    for (unsigned i = 1; i < out->count; i++) {
+        if (out->models[i-1].id != out->models[i].id) continue;
+        // An ambiguous installed actor table must not give one identity two visuals.
+        out->count = 0;
+        free(raw);
+        return false;
+    }
+    free(raw);
+    return true;
+}
+
 static const char *const default_armor_names[SWMP_ARMOR_SLOTS] = {
     "Armor_Default_Head", "Armor_Default_Upper", "Armor_Default_Lower",
 };
 
 static bool armor_resource_name(const char *name, size_t capacity) {
-    return name && !strncmp(name, "Armor_", 6) && strlen(name) < capacity &&
-        name[strspn(name, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")] == 0;
+    return name && !strncmp(name, "Armor_", 6) && resource_name(name, capacity);
 }
 
 bool swmp_armor_catalog(const uint8_t *src, size_t size, SwmpArmorCatalog *out) {
@@ -358,14 +430,14 @@ static bool add_actor_aliases(Byml *b, ActorAlias *alias, unsigned count) {
 }
 
 uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_mask,
-                              const SwmpArmorCatalog *armor, size_t *out_size) {
+                              const SwmpGearCatalog *gear, const SwmpArmorCatalog *armor, size_t *out_size) {
     size_t n;
     uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
     if (!raw || n < 16 || n > 16 * 1024 * 1024) {
         free(raw);
         return NULL;
     }
-    ActorAlias aliases[SWMP_VISUAL_ASSET_COUNT + SWMP_MAX_ARMOR_MODELS] = {
+    ActorAlias aliases[SWMP_VISUAL_ASSET_COUNT + SWMP_MAX_GEAR_MODELS + SWMP_MAX_ARMOR_MODELS] = {
         {.name = SWMP_PROXY_ACTOR, .folder = link_model, .model = link_model, .heap_size = 2 * 1024 * 1024},
     };
     unsigned count = 1;
@@ -374,6 +446,11 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_ma
         const SwmpGearAsset *a = &swmp_gear_assets[i];
         aliases[count++] = (ActorAlias){.name = a->actor, .folder = a->model, .model = a->model,
                                         .heap_size = 256 * 1024};
+    }
+    for (unsigned i = 0; gear && i < gear->count; i++) {
+        const SwmpGearModel *a = &gear->models[i];
+        if (a->ready) aliases[count++] = (ActorAlias){.name = a->actor, .folder = a->folder,
+            .model = a->model, .heap_size = 256 * 1024};
     }
     for (unsigned i = 0; armor && i < armor->model_count; i++) {
         const SwmpArmorAsset *a = &armor->models[i];
@@ -479,12 +556,11 @@ static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
 }
 
 typedef enum {
-    PROXY_GEAR_NONE,
-    PROXY_GEAR_LSWORD,
-    PROXY_GEAR_SWORD,
-    PROXY_GEAR_SPEAR,
-    PROXY_GEAR_BOW,
-    PROXY_GEAR_SHIELD,
+    PROXY_GEAR_NONE = SWMP_GEAR_FAMILY_NONE,
+    PROXY_GEAR_LSWORD = SWMP_GEAR_FAMILY_LSWORD,
+    PROXY_GEAR_SWORD = SWMP_GEAR_FAMILY_SWORD,
+    PROXY_GEAR_SPEAR = SWMP_GEAR_FAMILY_SPEAR,
+    PROXY_GEAR_BOW = SWMP_GEAR_FAMILY_BOW,
 } ProxyGear;
 
 typedef struct {
@@ -501,7 +577,7 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_DASH] = ACTION(Dash, "Nml_Move_Dash", "Dash", PROXY_GEAR_NONE),
     [SWMP_PROXY_RUN] = ACTION(Run, "Nml_Move_Run", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_LAND] = ACTION(Land, "Nml_Wait_Land", "Land", PROXY_GEAR_NONE),
-    [SWMP_PROXY_AXE_DRAW] = ACTION(AxeDraw, "Equip_Lsword_On_Natural", "WeaponEquipOn", PROXY_GEAR_LSWORD),
+    [SWMP_PROXY_AXE_DRAW] = ACTION(AxeDraw, "Equip_Lsword_On_Natural", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_AXE_SWING] = ACTION(AxeSwing, "Lsword_Attack_S1", "CutS1", PROXY_GEAR_LSWORD),
     [SWMP_PROXY_AXE_FINISH] = ACTION(AxeFinish, "Lsword_Attack_SF", "CutSF", PROXY_GEAR_LSWORD),
     [SWMP_PROXY_AXE_SPIN] = ACTION(AxeSpin, "Lsword_Attack_Charge", "CutCharge", PROXY_GEAR_LSWORD),
@@ -544,14 +620,14 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_SWIM_LOCK_BACK] = ACTION(SwimLockBack, "Swim_Lockon_Move_B", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SWIM_LOCK_LEFT] = ACTION(SwimLockLeft, "Swim_Lockon_Move_L", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SWIM_LOCK_RIGHT] = ACTION(SwimLockRight, "Swim_Lockon_Move_R", NULL, PROXY_GEAR_NONE),
-    [SWMP_PROXY_SWORD_DRAW] = ACTION(SwordDraw, "Equip_Sword_On_Natural", "WeaponEquipOn", PROXY_GEAR_SWORD),
+    [SWMP_PROXY_SWORD_DRAW] = ACTION(SwordDraw, "Equip_Sword_On_Natural", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SWORD_READY] = ACTION(SwordReady, "A_Pose_Sword_Wait", NULL, PROXY_GEAR_SWORD),
     [SWMP_PROXY_SWORD_STOW] = ACTION(SwordStow, "Equip_Sword_Off_Natural", "WeaponEquipOff", PROXY_GEAR_SWORD),
     [SWMP_PROXY_SWORD_SWING] = ACTION(SwordSwing, "Sword_Attack_S1", "CutS1", PROXY_GEAR_SWORD),
     [SWMP_PROXY_SWORD_CHAIN_2] = ACTION(SwordChain2, "Sword_Attack_S2", "CutS2", PROXY_GEAR_SWORD),
     [SWMP_PROXY_SWORD_CHAIN_3] = ACTION(SwordChain3, "Sword_Attack_S3", "CutS3", PROXY_GEAR_SWORD),
     [SWMP_PROXY_SWORD_FINISH] = ACTION(SwordFinish, "Sword_Attack_SF", "CutSF", PROXY_GEAR_SWORD),
-    [SWMP_PROXY_SPEAR_DRAW] = ACTION(SpearDraw, "Equip_Spear_On_Natural", "WeaponEquipOn", PROXY_GEAR_SPEAR),
+    [SWMP_PROXY_SPEAR_DRAW] = ACTION(SpearDraw, "Equip_Spear_On_Natural", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SPEAR_READY] = ACTION(SpearReady, "A_Pose_Spear_Wait", NULL, PROXY_GEAR_SPEAR),
     [SWMP_PROXY_SPEAR_STOW] = ACTION(SpearStow, "Equip_Spear_Off_Natural", "WeaponEquipOff", PROXY_GEAR_SPEAR),
     [SWMP_PROXY_SPEAR_THRUST] = ACTION(SpearThrust, "Spear_Attack_S1", "CutS1", PROXY_GEAR_SPEAR),
@@ -566,9 +642,9 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_SPEAR_CHARGE_READY] = ACTION(SpearChargeReady, "Spear_Charge_Wait", "CutChargeWait", PROXY_GEAR_SPEAR),
     [SWMP_PROXY_SPEAR_CHARGE] = ACTION(SpearCharge, "Spear_Attack_Charge_Rush", "CutCharge", PROXY_GEAR_SPEAR),
     [SWMP_PROXY_SPEAR_CHARGE_FINISH] = ACTION(SpearChargeFinish, "Spear_Attack_SF", "CutChargeF", PROXY_GEAR_SPEAR),
-    [SWMP_PROXY_SHIELD_PARRY] = ACTION(ShieldParry, "Shield_Guard_Just", "GuardJust", PROXY_GEAR_SHIELD),
-    [SWMP_PROXY_SHIELD_HIT] = ACTION(ShieldHit, "Shield_Guard_Hit", "GuardFailHit", PROXY_GEAR_SHIELD),
-    [SWMP_PROXY_SHIELD_BREAK] = ACTION(ShieldBreak, "Shield_Guard_Break", "GuardBreak", PROXY_GEAR_SHIELD),
+    [SWMP_PROXY_SHIELD_PARRY] = ACTION(ShieldParry, "Shield_Guard_Just", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_HIT] = ACTION(ShieldHit, "Shield_Guard_Hit", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_BREAK] = ACTION(ShieldBreak, "Shield_Guard_Break", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_BOW_DRAW] = ACTION(BowDraw, "Equip_Bow_On_Natural", NULL, PROXY_GEAR_BOW),
     [SWMP_PROXY_BOW_STOW] = ACTION(BowStow, "Equip_Bow_Off_Natural", NULL, PROXY_GEAR_BOW),
     [SWMP_PROXY_BOW_READY] = ACTION(BowReady, "Bow_Lockon_Wait", NULL, PROXY_GEAR_BOW),
@@ -592,6 +668,32 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_TUMBLE_LAND] = ACTION(TumbleLand, "Rolldown_D", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_HARD_LAND] = ACTION(HardLand, "Nml_Damage_Land", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_HARD_LAND_RECOVER] = ACTION(HardLandRecover, "Nml_Damage_Land_Stand", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_RELEASE] = ACTION(ClimbRelease, "Climb_WallOff_ToWait_FootL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_WALK_FORWARD] = ACTION(ShieldWalkForward, "Nml_Lockon_Walk_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_WALK_BACK] = ACTION(ShieldWalkBack, "Nml_Lockon_Walk_B", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_WALK_LEFT] = ACTION(ShieldWalkLeft, "Nml_Lockon_Walk_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_WALK_RIGHT] = ACTION(ShieldWalkRight, "Nml_Lockon_Walk_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_MOUNT] = ACTION(SurfMount, "Shield_Board_ON", "SurfingOn", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_MOUNT_GLIDE] = ACTION(SurfMountGlide, "Shield_Board_ON_Para", "SurfingOnPara", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_RIDE] = ACTION(SurfRide, "Shield_Board_Go2", "SurfingSlide", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_JUMP] = ACTION(SurfJump, "Shield_Board_Jump", "SurfingJump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_AIR] = ACTION(SurfAir, "Shield_Board_Fall_Loop", "SurfingAir", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_LAND] = ACTION(SurfLand, "Shield_Board_Land", "SurfingLand", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_DISMOUNT] = ACTION(SurfDismount, "Shield_Board_OFF", "SurfingOff", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_STAGGER] = ACTION(SurfStagger, "Shield_Board_Stagger_Slope_0", "SurfingStagger", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_FAILED] = ACTION(SurfFailed, "Shield_Board_Go_NG", "SurfingNG", PROXY_GEAR_NONE),
+    [SWMP_PROXY_SHIELD_DRAW] = ACTION(ShieldDraw, "Equip_Shield_On", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_THROW_WINDUP] = ACTION(SwordThrowWindup, "Sword_Throw_Charge", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LSWORD_THROW_WINDUP] = ACTION(LargeSwordThrowWindup, "Lsword_Throw_Charge", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SPEAR_THROW_WINDUP] = ACTION(SpearThrowWindup, "Spear_Throw_Charge", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_THROW_AIM] = ACTION(SwordThrowAim, "Sword_Throw_Charge_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LSWORD_THROW_AIM] = ACTION(LargeSwordThrowAim, "Lsword_Throw_Charge_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SPEAR_THROW_AIM] = ACTION(SpearThrowAim, "Spear_Throw_Charge_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_THROW_RELEASE] = ACTION(SwordThrowRelease, "Sword_Throw_Throw", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LSWORD_THROW_RELEASE] = ACTION(LargeSwordThrowRelease, "Lsword_Throw_Throw", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SPEAR_THROW_RELEASE] = ACTION(SpearThrowRelease, "Spear_Throw_Throw", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_THROW_CATCH] = ACTION(SwordThrowCatch, "Sword_Throw_Catch", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LSWORD_THROW_CATCH] = ACTION(LargeSwordThrowCatch, "Lsword_Throw_Catch", NULL, PROXY_GEAR_NONE),
 };
 #undef ACTION
 
@@ -600,23 +702,57 @@ const char *swmp_proxy_action_name(SwmpProxyAction action) {
 }
 
 typedef struct {
-    ProxyGear family;
-    SwmpProxyAction ready;
+    SwmpProxyAction draw, ready;
     int min_hand_y, max_hand_y;
 } WeaponAnimation;
 
-static const WeaponAnimation weapon_animations[SWMP_GEAR_COUNT] = {
-    [SWMP_GEAR_WOODCUTTERS_AXE] = {PROXY_GEAR_LSWORD, SWMP_PROXY_AXE_READY, 550, 1050},
-    [SWMP_GEAR_TRAVELERS_CLAYMORE] = {PROXY_GEAR_LSWORD, SWMP_PROXY_AXE_READY, 550, 1050},
-    [SWMP_GEAR_TRAVELERS_SWORD] = {PROXY_GEAR_SWORD, SWMP_PROXY_SWORD_READY, 550, 1050},
+static const WeaponAnimation weapon_animations[SWMP_GEAR_FAMILY_COUNT] = {
+    [SWMP_GEAR_FAMILY_LSWORD] = {SWMP_PROXY_AXE_DRAW, SWMP_PROXY_AXE_READY, 550, 1050},
+    [SWMP_GEAR_FAMILY_SWORD] = {SWMP_PROXY_SWORD_DRAW, SWMP_PROXY_SWORD_READY, 550, 1050},
     // The spear hangs lower than the other weapons even when drawn.
-    [SWMP_GEAR_TRAVELERS_SPEAR] = {PROXY_GEAR_SPEAR, SWMP_PROXY_SPEAR_READY, 525, 950},
+    [SWMP_GEAR_FAMILY_SPEAR] = {SWMP_PROXY_SPEAR_DRAW, SWMP_PROXY_SPEAR_READY, 525, 950},
 };
+
+SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family, float clip_duration) {
+    static const struct {
+        SwmpProxyAction windup, aim, release, catch_action;
+    } throws[SWMP_GEAR_FAMILY_COUNT] = {
+        [SWMP_GEAR_FAMILY_SWORD] = {SWMP_PROXY_SWORD_THROW_WINDUP, SWMP_PROXY_SWORD_THROW_AIM,
+                                   SWMP_PROXY_SWORD_THROW_RELEASE, SWMP_PROXY_SWORD_THROW_CATCH},
+        [SWMP_GEAR_FAMILY_LSWORD] = {SWMP_PROXY_LSWORD_THROW_WINDUP, SWMP_PROXY_LSWORD_THROW_AIM,
+                                    SWMP_PROXY_LSWORD_THROW_RELEASE, SWMP_PROXY_LSWORD_THROW_CATCH},
+        [SWMP_GEAR_FAMILY_SPEAR] = {SWMP_PROXY_SPEAR_THROW_WINDUP, SWMP_PROXY_SPEAR_THROW_AIM,
+                                   SWMP_PROXY_SPEAR_THROW_RELEASE, SWMP_PROXY_IDLE},
+    };
+    if ((unsigned)family >= SWMP_GEAR_FAMILY_COUNT) return SWMP_PROXY_IDLE;
+    if (!strcmp(state, "WeaponThrowCharge")) {
+        // The native controller keeps this state while the 36-frame aim loop plays.
+        return clip_duration == 36.0f ? throws[family].aim : throws[family].windup;
+    }
+    if (!strcmp(state, "WeaponThrowCatch")) return throws[family].catch_action;
+    if (!strcmp(state, "WeaponThrow")) {
+        // Some implements swing on the throw input instead of leaving the hand.
+        if (family == SWMP_GEAR_FAMILY_SWORD && clip_duration == 21.0f) return SWMP_PROXY_SWORD_SWING;
+        if (family == SWMP_GEAR_FAMILY_LSWORD && clip_duration == 60.0f) return SWMP_PROXY_AXE_SWING;
+        return throws[family].release;
+    }
+    return SWMP_PROXY_IDLE;
+}
 
 SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, SwmpGearSet gear,
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                         bool shield_raised) {
+                                         bool shield_raised, float draw_duration) {
     if (!strcmp(state, "WallDashSt")) return SWMP_PROXY_CLIMB_ENTER;
+    if (!strcmp(state, "WallOff")) return SWMP_PROXY_CLIMB_RELEASE;
+    // Reactions still play if the shield has no visual alias or was destroyed by the hit.
+    if (!strcmp(state, "GuardJust")) return SWMP_PROXY_SHIELD_PARRY;
+    if (!strcmp(state, "GuardFailHit")) return SWMP_PROXY_SHIELD_HIT;
+    if (!strcmp(state, "GuardBreak")) return SWMP_PROXY_SHIELD_BREAK;
+    if (!strncmp(state, "Surfing", 7)) {
+        if (!strcmp(state, "SurfingOnFall")) return SWMP_PROXY_SURF_MOUNT;
+        for (unsigned i = SWMP_PROXY_SURF_MOUNT; i <= SWMP_PROXY_SURF_FAILED; i++)
+            if (!strcmp(state, proxy_actions[i].native)) return (SwmpProxyAction)i;
+    }
     if (!strcmp(state, "Step")) return SWMP_PROXY_STEP;
     if (!strcmp(state, "StepLand")) return SWMP_PROXY_STEP_LAND;
     if (!strcmp(state, "BackJump")) return SWMP_PROXY_BACK_JUMP;
@@ -630,18 +766,27 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
     if (!strcmp(state, "SlippingDownLand")) return SWMP_PROXY_TUMBLE_LAND;
     if (!strcmp(state, "LandDamage")) return SWMP_PROXY_HARD_LAND;
     if (!strcmp(state, "LandDamageStand")) return SWMP_PROXY_HARD_LAND_RECOVER;
-    unsigned id = gear.id[SWMP_GEAR_WEAPON];
-    const WeaponAnimation *weapon = &weapon_animations[id < SWMP_GEAR_COUNT ? id : SWMP_GEAR_NONE];
-    // The attachment height disambiguates native Wait and filters WeaponEquipOn for a bow draw.
-    bool weapon_drawn = weapon_pose && weapon->family &&
+    SwmpGearFamily family = swmp_gear_family(gear.id[SWMP_GEAR_WEAPON]);
+    const WeaponAnimation *weapon = &weapon_animations[family];
+    if (!strcmp(state, "WeaponEquipOn")) {
+        // BOTW 1.9.0 shares this state, but uses 16-, 20-, and 32-frame clips
+        // for shield, bow, and melee draws. A stowed weapon can move during a bow draw.
+        if (draw_duration == 16.0f && gear.id[SWMP_GEAR_SHIELD]) return SWMP_PROXY_SHIELD_DRAW;
+        if (draw_duration == 20.0f && gear.id[SWMP_GEAR_BOW]) return SWMP_PROXY_BOW_DRAW;
+        if (draw_duration == 32.0f) return weapon->draw;
+        return SWMP_PROXY_IDLE;
+    }
+    // Native Wait covers both stowed and drawn idle.
+    bool weapon_drawn = weapon_pose && weapon->ready &&
         weapon_pose->offset_mm[1] >= weapon->min_hand_y && weapon_pose->offset_mm[1] <= weapon->max_hand_y;
-    bool drawing = !strcmp(state, "WeaponEquipOn");
     bool attention = !strcmp(state, "WaitAttention");
+    if (shield_raised && !strcmp(state, "MoveAttention")) return SWMP_PROXY_SHIELD_WALK_FORWARD;
+    if (shield_raised && (attention || !strcmp(state, "TurnAttention") || !strcmp(state, "LookAroundAttention")))
+        return SWMP_PROXY_SHIELD_GUARD;
     if (gear.id[SWMP_GEAR_BOW] && bow_pose) {
         const int16_t *bow = bow_pose->offset_mm;
         // The bow passes Link's left side on its way between the back and aiming pose.
         bool at_side = bow[0] >= 150 && bow[1] <= 1000;
-        if (drawing && at_side) return SWMP_PROXY_BOW_DRAW;
         if (attention && !strcmp(upper, "WaitAttentionUpper")) {
             if (at_side) return SWMP_PROXY_BOW_STOW;
             // After release, WaitAttentionUpper holds the bow low and in front of Link.
@@ -655,12 +800,9 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
         if (action->gear == PROXY_GEAR_BOW) {
             if (!gear.id[SWMP_GEAR_BOW]) continue;
             name = upper;
-        } else if (action->gear == PROXY_GEAR_SHIELD) {
-            if (!gear.id[SWMP_GEAR_SHIELD]) continue;
-        } else if (action->gear && (action->gear != weapon->family || (drawing && !weapon_drawn))) continue;
+        } else if (action->gear && (unsigned)action->gear != family) continue;
         if (!strcmp(name, action->native)) return (SwmpProxyAction)i;
     }
-    if (shield_raised && attention) return SWMP_PROXY_SHIELD_GUARD;
     if (weapon_drawn && (attention || !strcmp(state, "Wait"))) return weapon->ready;
     return SWMP_PROXY_IDLE;
 }
@@ -816,6 +958,8 @@ static bool remove_planar_root(uint8_t *raw, size_t size, const uint8_t *clip) {
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size) {
     static const SwmpProxyAction locomotion[] = {
         SWMP_PROXY_WALK, SWMP_PROXY_RUN, SWMP_PROXY_DASH, SWMP_PROXY_CROUCH_MOVE,
+        SWMP_PROXY_SHIELD_WALK_FORWARD, SWMP_PROXY_SHIELD_WALK_BACK,
+        SWMP_PROXY_SHIELD_WALK_LEFT, SWMP_PROXY_SHIELD_WALK_RIGHT,
     };
     if (!src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
     size_t n;
@@ -940,60 +1084,115 @@ done:
     return out;
 }
 
-uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
-                        const uint8_t *gear, size_t gear_size, size_t *out_size) {
-    static const char *const glider_anim[] = {
-        "Actor/ASList/PlayerStole.baslist", "Actor/AS/PlayerStole_Open.bas",
-    };
-    static const char *const bow_anim[] = {
-        "Actor/ASList/Bow.baslist", "Actor/AS/Bow_Draw.bas", "Actor/AS/Bow_Equiped.bas",
-        "Actor/AS/Bow_Hold.bas", "Actor/AS/Bow_Null.bas", "Actor/AS/Bow_SelfCameraPause.bas",
-        "Actor/AS/Bow_Shoot.bas",
-    };
+static const char *gear_user(uint8_t *link, size_t size, const char *key) {
+    const uint8_t *param = aamp_param(link, size, key, 20);
+    if (!param) return NULL;
+    size_t offset = (size_t)(param - link) + (read32(param + 4) & 0xffffff) * 4;
+    if (offset >= size) return NULL;
+    const char *value = (const char *)link + offset;
+    return memchr(value, 0, size - offset) && resource_name(value, 48) ? value : NULL;
+}
+
+// Keep the native AS list and its clip names together. Some shields and bows use
+// a custom list whose clips mix the item's name and shared resource names.
+static unsigned gear_animations(PackFile *files, unsigned capacity, const char *alias, const char *user,
+                                const uint8_t *archive, size_t size) {
+    char source[80];
+    snprintf(source, sizeof source, "Actor/ASList/%s.baslist", user);
+    uint32_t data, start, end;
+    if (sarc_find(archive, size, source, &data, &start, &end) < 0) return 0;
+    files[0] = (PackFile){alias, archive + data + start, end - start};
+    unsigned count = 1;
+    int nodes = sarc_count(archive, size);
+    for (int i = 0; i < nodes; i++) {
+        const char *name;
+        const uint8_t *clip;
+        size_t length;
+        if (!sarc_node(archive, size, i, &name, &clip, &length) || !name || strncmp(name, "Actor/AS/", 9))
+            continue;
+        size_t name_length = strlen(name);
+        if (name_length < 14 || strcmp(name + name_length - 4, ".bas")) continue;
+        if (count == capacity) return 0;
+        files[count++] = (PackFile){name, clip, length};
+    }
+    // Ordinary shields share an empty EquipItemCommon list.
+    return count > 1 ? count : 0;
+}
+
+static uint8_t *gear_pack(const SwmpGearAsset *asset, const char *native,
+                          const uint8_t *src, size_t size, const uint8_t *gear, size_t gear_size,
+                          size_t *out_size, bool *animated) {
+    if (animated) *animated = false;
     size_t n, gn;
     uint8_t *raw = src ? yaz0_unpack(src, size, &n) : NULL;
     uint8_t *model = gear ? yaz0_unpack(gear, gear_size, &gn) : NULL;
     uint8_t *out = NULL;
     uint32_t data, ls, le, model_data, ms, me;
+    const char *model_user = asset->model_user, *model_list = asset->model_list;
+    const char *anim_user = asset->slot == SWMP_PARAGLIDER_SLOT ? "PlayerStole" : NULL;
+    char native_list[80];
+    if (native && model) {
+        char native_link[80];
+        snprintf(native_link, sizeof native_link, "Actor/ActorLink/%s.bxml", native);
+        uint32_t start, end;
+        if (sarc_find(model, gn, native_link, &model_data, &start, &end) < 0) goto done;
+        uint8_t *link = model + model_data + start;
+        model_user = gear_user(link, end - start, "ModelUser");
+        if (!model_user) goto done;
+        snprintf(native_list, sizeof native_list, "Actor/ModelList/%s.bmodellist", model_user);
+        model_list = native_list;
+        if (asset->slot == SWMP_GEAR_BOW || asset->slot == SWMP_GEAR_SHIELD)
+            anim_user = gear_user(link, end - start, "ASUser");
+    }
     // Keep the prop profile and dummy physics so the visual stays out of pickup, inventory and hit processing.
-    if (raw && model && sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
-        sarc_find(model, gn, asset->model_list, &model_data, &ms, &me) >= 0) {
+    if (raw && model && model_list && sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
+        sarc_find(model, gn, model_list, &model_data, &ms, &me) >= 0) {
         size_t link_size;
-        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", asset->model_user, &link_size);
+        uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ModelUser", model_user, &link_size);
         if (link) {
-            PackFile files[2 + sizeof bow_anim / sizeof *bow_anim] = {
+            enum { BASE_FILES = 2, MAX_ANIMATION_FILES = 32 };
+            PackFile files[BASE_FILES + MAX_ANIMATION_FILES] = {
                 {asset->actor_link, link, link_size},
-                {asset->model_list, model + model_data + ms, me - ms},
+                {model_list, model + model_data + ms, me - ms},
             };
-            unsigned count = 2;
+            unsigned count = BASE_FILES;
             char alias_list[80];
-            bool glider = asset->slot == SWMP_PARAGLIDER_SLOT;
-            const char *const *anim = glider ? glider_anim : bow_anim;
-            unsigned clips = glider ? sizeof glider_anim / sizeof *glider_anim :
-                asset->slot == SWMP_GEAR_BOW ? sizeof bow_anim / sizeof *bow_anim : 0;
-            if (clips) {
+            if (anim_user) {
                 snprintf(alias_list, sizeof alias_list, "Actor/ASList/%s.baslist", asset->actor);
-                for (unsigned i = 0; i < clips; i++) {
-                    uint32_t start, end;
-                    if (sarc_find(model, gn, anim[i], &model_data, &start, &end) < 0) break;
-                    files[count++] = (PackFile){i ? anim[i] : alias_list, model + model_data + start, end - start};
-                }
-                uint8_t *animated = count == 2 + clips ?
+                unsigned animation_count = gear_animations(files + BASE_FILES, MAX_ANIMATION_FILES,
+                                                           alias_list, anim_user, model, gn);
+                uint8_t *linked = animation_count ?
                     proxy_actor_link(link, link_size, "ASUser", asset->actor, &link_size) : NULL;
-                if (animated) {
+                if (linked) {
                     free(link);
-                    link = animated;
+                    link = linked;
                     files[0] = (PackFile){asset->actor_link, link, link_size};
-                } else {
-                    count = 2;
+                    count += animation_count;
                 }
             }
-            if (!glider || count > 2) out = pack_files(files, count, out_size);
+            if (asset->slot != SWMP_PARAGLIDER_SLOT || count > BASE_FILES)
+                out = pack_files(files, count, out_size);
+            if (out && animated) *animated = count > BASE_FILES;
             free(link);
         }
     }
+done:
     free(model);
     free(raw);
     return out;
+}
+
+uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
+                        const uint8_t *gear, size_t gear_size, size_t *out_size) {
+    return gear_pack(asset, NULL, src, size, gear, gear_size, out_size, NULL);
+}
+
+uint8_t *swmp_gear_model_pack(SwmpGearModel *asset, const uint8_t *src, size_t size,
+                              const uint8_t *gear, size_t gear_size, size_t *out_size) {
+    char actor_link[80];
+    snprintf(actor_link, sizeof actor_link, "Actor/ActorLink/%s.bxml", asset->actor);
+    SwmpGearAsset visual = {.slot = gear_families[swmp_gear_family(asset->id)].slot,
+                            .actor = asset->actor, .actor_link = actor_link};
+    return gear_pack(&visual, asset->name, src, size, gear, gear_size, out_size, &asset->animated);
 }
 #endif

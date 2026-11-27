@@ -68,11 +68,14 @@ static uint64_t local_motion_at;
 static float local_motion_pos[3];
 static SwmpProxyAction local_motion_state, local_motion_action;
 static int16_t local_motion_yaw, local_glide_roll;
-static uint64_t local_shield_at;
-static bool local_shield_break;
 static uint8_t local_jump_activation;
 static bool local_jumping;
 static float local_jump_frame;
+typedef struct {
+    SwmpGearFamily family;
+    bool releasing;
+} ThrowState;
+static ThrowState local_throw;
 static uint64_t local_armor_at;
 static struct {
     uint32_t model[SWMP_ARMOR_SLOTS];
@@ -86,10 +89,9 @@ RT_ON_RESET(multiplayer_presence_reset) {
     applied_clock_at = 0;
     local_yaw = 0;
     local_motion_at = 0;
-    local_shield_at = 0;
-    local_shield_break = false;
     local_jump_activation = 0;
     local_jumping = false;
+    local_throw = (ThrowState){0};
     local_armor_at = 0;
     memset(&local_armor, 0, sizeof local_armor);
     memset(slots, 0, sizeof slots);
@@ -148,7 +150,9 @@ static void retire_gear(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t retry_at
     GearActor *slot = &gear_slots[kind][peer];
     release_actor(cpu, gear_storage[kind] + peer * SLOT_SIZE, slot->retained);
     const SwmpArmorAsset *armor = kind >= SWMP_FIRST_ARMOR_SLOT ? find_armor(kind - SWMP_FIRST_ARMOR_SLOT, slot->gear) : NULL;
-    const char *label = kind < SWMP_FIRST_ARMOR_SLOT ? swmp_gear_assets[slot->gear].label : armor ? armor->model : "armor";
+    const SwmpGearModel *equipment = kind < SWMP_GEAR_SLOTS ? fs_multiplayer_gear_model(slot->gear) : NULL;
+    const char *label = armor ? armor->model : equipment ? equipment->name :
+        kind >= SWMP_GEAR_SLOTS && kind < SWMP_FIRST_ARMOR_SLOT ? swmp_gear_assets[slot->gear].label : "equipment";
     LOG("[multiplayer] remote %s %s for peer %u\n", label,
         slot->visible ? "removed" : "request retired", peer);
     *slot = (GearActor){.deadline = retry_at};
@@ -224,6 +228,24 @@ static SwmpBowAnimation sample_bow_animation(Cpu *cpu, uint64_t bow, uint64_t he
     return SWMP_BOW_ANIM_NONE;
 }
 
+static const char *const shield_animation_names[SWMP_SHIELD_ANIM_COUNT] = {
+    [SWMP_SHIELD_ANIM_OFF] = "Off",
+    [SWMP_SHIELD_ANIM_ON] = "On",
+    [SWMP_SHIELD_ANIM_EQUIP_ON] = "WeaponEquipOn",
+    [SWMP_SHIELD_ANIM_EQUIP_OFF] = "WeaponEquipOff",
+    [SWMP_SHIELD_ANIM_TRANSFORM] = "Transform",
+    [SWMP_SHIELD_ANIM_FOLD] = "FoldTransform",
+};
+
+static SwmpShieldAnimation sample_shield_animation(Cpu *cpu, uint64_t shield, uint64_t heap_size) {
+    uint64_t controller = g_site.mp_anim_current ? animation_controller(shield, heap_size) : 0;
+    if (!controller) return SWMP_SHIELD_ANIM_NONE;
+    const char *state = animation_state(cpu, controller, 0, 0);
+    for (unsigned i = SWMP_SHIELD_ANIM_OFF; i < SWMP_SHIELD_ANIM_COUNT; i++)
+        if (!strcmp(state, shield_animation_names[i])) return i;
+    return SWMP_SHIELD_ANIM_NONE;
+}
+
 static bool animation_frame(uint64_t controller, uint64_t heap_size, float *frame, float *duration) {
     uint64_t layer = LD64(controller + 0x08);
     if (!heap_object(layer, heap_size, 0xd8)) return false;
@@ -248,14 +270,13 @@ static void sample_jump_phase(uint64_t controller, uint64_t heap_size, SwmpPlaye
     if (frame >= 0) sample->animation_phase = 1 + (uint8_t)lroundf(frame * 25.4f);
 }
 
-static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, uint64_t now, SwmpGearSet gear,
+static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, SwmpGearSet gear,
                                      const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
                                      bool shield_raised, SwmpPlayerSnapshot *sample) {
     uint64_t controller = g_site.mp_anim_current ? animation_controller(actor, heap_size) : 0;
     if (!controller) {
-        local_shield_at = 0;
-        local_shield_break = false;
         local_jumping = false;
+        local_throw = (ThrowState){0};
         return SWMP_PROXY_IDLE;
     }
     const char *state = animation_state(cpu, controller, 0, 0);
@@ -263,15 +284,30 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
         sample_jump_phase(controller, heap_size, sample);
     else
         local_jumping = false;
-    bool has_shield = gear.id[SWMP_GEAR_SHIELD] != SWMP_GEAR_NONE;
-    // The native shield can disappear one update before the controller enters GuardBreak.
-    bool recent_shield = local_shield_at && now - local_shield_at <= 2 * snapshot_ns;
-    local_shield_break = !has_shield && (local_shield_break || recent_shield) && !strcmp(state, "GuardBreak");
-    if (has_shield) local_shield_at = now;
-    if (local_shield_break) return SWMP_PROXY_SHIELD_BREAK;
-    // Standing bow actions play in the upper-body slot over the native WaitAttention state.
-    const char *upper = gear.id[SWMP_GEAR_BOW] ? animation_state(cpu, controller, 1, 1) : "";
-    return swmp_proxy_sample_action(state, upper, gear, weapon_pose, bow_pose, shield_raised);
+    SwmpGearFamily family = swmp_gear_family(gear.id[SWMP_GEAR_WEAPON]);
+    bool releasing = !strcmp(state, "WeaponThrow");
+    bool charging = !strcmp(state, "WeaponThrowCharge");
+    // The equipment actor detaches early in the release. Keep its animation family
+    // until the base state changes, including when the throw starts with an empty slot.
+    if (!releasing || (!local_throw.releasing && family)) local_throw.family = family;
+    local_throw.releasing = releasing;
+    float clip_duration = 0;
+    if ((releasing || charging || !strcmp(state, "WeaponEquipOn")) && !strcmp(g_game_version, "1.9.0")) {
+        float frame, duration;
+        if (animation_frame(controller, heap_size, &frame, &duration)) clip_duration = duration;
+    }
+    if (releasing || charging || !strcmp(state, "WeaponThrowCatch")) {
+        SwmpProxyAction action = swmp_proxy_throw_action(state, local_throw.family, clip_duration);
+        if (action != SWMP_PROXY_IDLE) return action;
+    }
+    // Bow actions and boomerang catches can play over the native WaitAttention state.
+    bool can_catch = (family == SWMP_GEAR_FAMILY_SWORD || family == SWMP_GEAR_FAMILY_LSWORD) &&
+        !strcmp(state, "WaitAttention");
+    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch ? animation_state(cpu, controller, 1, 1) : "";
+    if (can_catch && !strcmp(upper, "WeaponThrowCatch")) {
+        return swmp_proxy_throw_action(upper, family, 0);
+    }
+    return swmp_proxy_sample_action(state, upper, gear, weapon_pose, bow_pose, shield_raised, clip_duration);
 }
 
 static float motion_right(float dx, float dz) {
@@ -369,16 +405,15 @@ static SwmpProxyAction swim_motion(float speed, float turn) {
     return fast ? SWMP_PROXY_SWIM_FAST : SWMP_PROXY_SWIM_MOVE;
 }
 
-static SwmpProxyAction swim_lock_direction(float dx, float dz) {
+static SwmpProxyAction lock_direction(float dx, float dz, const SwmpProxyAction actions[4]) {
     float yaw = local_yaw * (pi / 32768.0f);
     float forward = sinf(yaw) * dx + cosf(yaw) * dz;
     float right = motion_right(dx, dz);
-    bool sideways = local_motion_action == SWMP_PROXY_SWIM_LOCK_LEFT ||
-        local_motion_action == SWMP_PROXY_SWIM_LOCK_RIGHT;
+    bool sideways = local_motion_action == actions[2] || local_motion_action == actions[3];
     // Keep the previous axis near a diagonal, while still selecting the current sign.
     if (fabsf(right) > fabsf(forward) * (sideways ? 0.8f : 1.25f))
-        return right > 0 ? SWMP_PROXY_SWIM_LOCK_RIGHT : SWMP_PROXY_SWIM_LOCK_LEFT;
-    return forward >= 0 ? SWMP_PROXY_SWIM_LOCK_FORWARD : SWMP_PROXY_SWIM_LOCK_BACK;
+        return actions[right > 0 ? 3 : 2];
+    return actions[forward >= 0 ? 0 : 1];
 }
 
 static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxyAction state) {
@@ -386,12 +421,20 @@ static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxy
         SWMP_PROXY_CLIMB_RIGHT, SWMP_PROXY_CLIMB_UP_RIGHT, SWMP_PROXY_CLIMB_MOVE, SWMP_PROXY_CLIMB_UP_LEFT,
         SWMP_PROXY_CLIMB_LEFT, SWMP_PROXY_CLIMB_DOWN_LEFT, SWMP_PROXY_CLIMB_DOWN, SWMP_PROXY_CLIMB_DOWN_RIGHT,
     };
+    static const SwmpProxyAction swim_lock[] = {
+        SWMP_PROXY_SWIM_LOCK_FORWARD, SWMP_PROXY_SWIM_LOCK_BACK, SWMP_PROXY_SWIM_LOCK_LEFT, SWMP_PROXY_SWIM_LOCK_RIGHT,
+    };
+    static const SwmpProxyAction shield_walk[] = {
+        SWMP_PROXY_SHIELD_WALK_FORWARD, SWMP_PROXY_SHIELD_WALK_BACK,
+        SWMP_PROXY_SHIELD_WALK_LEFT, SWMP_PROXY_SHIELD_WALK_RIGHT,
+    };
     if (state != local_motion_state) local_motion_at = 0;
     uint64_t elapsed = now - local_motion_at;
     if (local_motion_at && elapsed < UINT64_C(100000000)) return local_motion_action;
 
     SwmpProxyAction action = state == SWMP_PROXY_CLIMB_MOVE ? SWMP_PROXY_CLIMB_WAIT : state;
     if (state == SWMP_PROXY_SWIM_LOCK_FORWARD) action = SWMP_PROXY_SWIM_WAIT;
+    if (state == SWMP_PROXY_SHIELD_WALK_FORWARD) action = SWMP_PROXY_SHIELD_GUARD;
     if (local_motion_at && elapsed <= UINT64_C(300000000)) {
         float dx = pos[0] - local_motion_pos[0], dz = pos[2] - local_motion_pos[2];
         float seconds = elapsed * 1e-9f;
@@ -405,7 +448,9 @@ static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxy
         } else if (state == SWMP_PROXY_SWIM_MOVE) {
             if (speed < 4.0f) action = swim_motion(speed, motion_turn_rate(seconds));
         } else if (state == SWMP_PROXY_SWIM_LOCK_FORWARD) {
-            if (speed >= 0.1f && speed < 4.0f) action = swim_lock_direction(dx, dz);
+            if (speed >= 0.1f && speed < 4.0f) action = lock_direction(dx, dz, swim_lock);
+        } else if (state == SWMP_PROXY_SHIELD_WALK_FORWARD) {
+            if (speed >= 0.1f && speed < 10.0f) action = lock_direction(dx, dz, shield_walk);
         } else if (speed < 10.0f) {
             // The native Move state blends walking, running and sprinting. Lower exit thresholds avoid flicker.
             if (speed >= (local_motion_action == SWMP_PROXY_DASH ? 5.7f : 6.2f)) action = SWMP_PROXY_DASH;
@@ -483,7 +528,7 @@ static bool sample_gear_pose(uint64_t item, const float pos[3], int16_t facing, 
 }
 
 static SwmpGearSet sample_gear(Cpu *cpu, uint64_t actor, uint64_t heap_size, const float pos[3],
-                               SwmpPlayerSnapshot *sample, uint64_t *bow) {
+                               SwmpPlayerSnapshot *sample, uint64_t *bow, uint64_t *shield, bool *shield_raised) {
     SwmpGearSet gear = {0};
     if (!g_site.player_equipment) return gear;
     // The equipment getter uses the same category ordering as the equipped-item drop path.
@@ -494,15 +539,20 @@ static SwmpGearSet sample_gear(Cpu *cpu, uint64_t actor, uint64_t heap_size, con
         uint64_t item = call(cpu, g_site.player_equipment, actor, categories[slot], 0);
         if (!heap_object(item, heap_size, 0x3c8) || LD8(item + 0x64) != 1 || (LD32(item + 0x78) & 1)) continue;
         uint64_t name = LD64(item + 0x10);
-        for (unsigned id = 1; id < SWMP_GEAR_COUNT; id++) {
-            const SwmpGearAsset *asset = &swmp_gear_assets[id];
-            if (asset->slot != slot || !action_named(name, asset->model)) continue;
-            gear.id[slot] = id;
-            if (sample_gear_pose(item, pos, sample->rotation[1], &sample->gear_pose[slot])) {
-                sample->flags |= swmp_gear_pose_flag(slot);
-                if (slot == SWMP_GEAR_BOW) *bow = item;
-            }
-            break;
+        if (guest_range(name, 48) && memchr((const void *)(uintptr_t)name, 0, 48))
+            gear.id[slot] = swmp_gear_identity(slot, (const char *)(uintptr_t)name);
+        if (!gear.id[slot] && slot != SWMP_GEAR_SHIELD) continue;
+        SwmpGearPose pose;
+        if (!sample_gear_pose(item, pos, sample->rotation[1], &pose)) continue;
+        // Lock-on alone leaves the shield stowed. A raised shield is in front of Link.
+        if (slot == SWMP_GEAR_SHIELD) *shield_raised = pose.offset_mm[2] >= 175;
+        if (!gear.id[slot]) continue;
+        sample->gear_pose[slot] = pose;
+        sample->flags |= swmp_gear_pose_flag(slot);
+        if (slot == SWMP_GEAR_BOW) *bow = item;
+        if (slot == SWMP_GEAR_SHIELD) {
+            const SwmpGearModel *model = fs_multiplayer_gear_model(gear.id[slot]);
+            if (model && model->animated) *shield = item;
         }
     }
     return gear;
@@ -575,32 +625,31 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     if (local_actor != actor || local_area != area) {
         local_yaw = 0;
         local_motion_at = 0;
-        local_shield_at = 0;
-        local_shield_break = false;
         local_jumping = false;
+        local_throw = (ThrowState){0};
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
     }
     for (unsigned i = 0; i < 3; i++) sample.position_mm[i] = (int32_t)lround((double)p[i] * 1000);
     bool has_facing = sample_facing(actor, heap_size, p);
     sample.rotation[1] = local_yaw;
-    uint64_t bow = 0;
-    *gear = sample_gear(cpu, actor, heap_size, p, &sample, &bow);
+    uint64_t bow = 0, shield = 0;
+    bool shield_raised = false;
+    *gear = sample_gear(cpu, actor, heap_size, p, &sample, &bow, &shield, &shield_raised);
     sample_armor(cpu, actor, heap_size, now, gear);
     const SwmpGearPose *weapon_pose = (sample.flags & SWMP_PLAYER_WEAPON_POSE) ?
         &sample.gear_pose[SWMP_GEAR_WEAPON] : NULL;
-    // WaitAttention also covers lock-on. A raised shield is in front of Link in his yaw frame.
-    bool shield_raised = (sample.flags & SWMP_PLAYER_SHIELD_POSE) &&
-        sample.gear_pose[SWMP_GEAR_SHIELD].offset_mm[2] >= 175;
     const SwmpGearPose *bow_pose = (sample.flags & SWMP_PLAYER_BOW_POSE) ? &sample.gear_pose[SWMP_GEAR_BOW] : NULL;
-    sample.action = sample_action(cpu, actor, heap_size, now, *gear, weapon_pose, bow_pose, shield_raised, &sample);
+    sample.action = sample_action(cpu, actor, heap_size, *gear, weapon_pose, bow_pose, shield_raised, &sample);
     // The bow starts drawing and finishes releasing independently of Link's upper-body state.
     if (bow) sample.bow_animation = sample_bow_animation(cpu, bow, heap_size);
+    if (shield) sample.shield_animation = sample_shield_animation(cpu, shield, heap_size);
     if (bow && bow_holds_arrow(sample.action) && !strcmp(g_game_version, "1.9.0"))
         sample.nocked_arrow = sample_arrow(bow, heap_size, p, &sample);
     if (sample.action == SWMP_PROXY_CROUCH_IDLE || sample.action == SWMP_PROXY_CROUCH_MOVE)
         sample.flags |= SWMP_PLAYER_CROUCHING;
-    if (sample.action == SWMP_PROXY_SHIELD_GUARD) sample.flags |= SWMP_PLAYER_GUARDING;
+    if (sample.action == SWMP_PROXY_SHIELD_GUARD || sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD)
+        sample.flags |= SWMP_PLAYER_GUARDING;
     if (sample.action == SWMP_PROXY_GLIDE) {
         sample.flags |= SWMP_PLAYER_GLIDING;
         if (has_facing) sample.rotation[2] = sample_glide_bank(p, now);
@@ -610,11 +659,13 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     else if (sample.action == SWMP_PROXY_STEP || sample.action == SWMP_PROXY_STEP_LAND)
         sample.action = sample_step(p, now, sample.action);
     else if (sample.action == SWMP_PROXY_WALK || sample.action == SWMP_PROXY_CLIMB_MOVE ||
-             (has_facing && (sample.action == SWMP_PROXY_SWIM_MOVE || sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD)))
+             (has_facing && (sample.action == SWMP_PROXY_SWIM_MOVE || sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD ||
+                             sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD)))
         sample.action = sample_motion(p, now, sample.action);
     else {
         local_motion_at = 0;
         if (sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD) sample.action = SWMP_PROXY_SWIM_WAIT;
+        if (sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD) sample.action = SWMP_PROXY_SHIELD_GUARD;
     }
     if (g_site.mp_health_current) {
         uint32_t life = (uint32_t)call(cpu, g_site.mp_health_current, info, 0, 0);
@@ -910,7 +961,12 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
     }
     if (!link->visible || !link->proxy || !id) return;
     const SwmpArmorAsset *armor = skinned ? find_armor(kind - SWMP_FIRST_ARMOR_SLOT, id) : NULL;
-    if (skinned ? !armor : !fs_multiplayer_gear_ready(id)) return;
+    const SwmpGearModel *equipment = kind < SWMP_GEAR_SLOTS ? fs_multiplayer_gear_model(id) : NULL;
+    const SwmpGearAsset *auxiliary = kind >= SWMP_GEAR_SLOTS && !skinned && fs_multiplayer_gear_ready(id) ?
+        &swmp_gear_assets[id] : NULL;
+    const char *actor_name = armor ? armor->actor : equipment ? equipment->actor : auxiliary ? auxiliary->actor : NULL;
+    if (!actor_name) return;
+    if (equipment && !equipment->animated) animation = NULL;
     // A delayed equipment record or a missing native pose should leave the last
     // good relative offset attached to Link while the same item is still equipped.
     if (pose) {
@@ -928,7 +984,6 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
         slot->gear = id;
         slot->dye = dye;
         slot->deadline = now + request_ns;
-        const char *actor_name = armor ? armor->actor : swmp_gear_assets[id].actor;
         if (!request_actor(cpu, addr, context, &link->applied, actor_name, dye))
             retire_gear(cpu, peer, kind, now + retry_ns);
     } else if (slot->retained) {
@@ -950,8 +1005,10 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
                     slot->animation_activation = activation;
                 }
             }
-            if (!slot->visible)
-                LOG("[multiplayer] remote %s ready for peer %u\n", armor ? armor->model : swmp_gear_assets[id].label, peer);
+            if (!slot->visible) {
+                const char *label = armor ? armor->model : equipment ? equipment->name : auxiliary->label;
+                LOG("[multiplayer] remote %s ready for peer %u\n", label, peer);
+            }
             slot->visible = true;
         }
         call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
@@ -975,6 +1032,7 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
         if (matching_revision && (sample->flags & swmp_gear_pose_flag(kind))) {
             pose = &sample->gear_pose[kind];
             if (kind == SWMP_GEAR_BOW) animation = bow_animation_names[sample->bow_animation];
+            if (kind == SWMP_GEAR_SHIELD) animation = shield_animation_names[sample->shield_animation];
         }
         update_visual(cpu, peer, kind, now, context, id, pose, animation, 0);
     }
@@ -1138,9 +1196,8 @@ void rt_mp_presence_tick(Cpu *cpu) {
     bool changed = lobby_generation != roster.lobby_generation;
     if (changed) {
         local_motion_at = 0;
-        local_shield_at = 0;
-        local_shield_break = false;
         local_jumping = false;
+        local_throw = (ThrowState){0};
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
     }
@@ -1149,9 +1206,8 @@ void rt_mp_presence_tick(Cpu *cpu) {
     if (!context) {
         local = (SwmpPlayerSnapshot){0};
         player = 0;
-        local_shield_at = 0;
-        local_shield_break = false;
         local_jumping = false;
+        local_throw = (ThrowState){0};
     }
     bool world_changed = local_context != context || local_actor != player || local_area != local.area_id;
     if (world_changed || changed) applied_clock_at = 0;

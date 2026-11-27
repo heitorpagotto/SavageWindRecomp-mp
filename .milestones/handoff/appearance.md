@@ -25,5 +25,5 @@
   and reapplies coverage from the active pieces when the worn models change. Unequipped,
   pending and unavailable pieces leave their corresponding base meshes visible.
 - The Windows replay verified representative dyes and masking on protocol 7.
-  See the [current handoff](../HANDOFF.md) for the matching launcher and
-  [test evidence](../testing/appearance.md#m25-armor-colors-and-base-skin-clipping) for settings and captures.
+  See the [test evidence](../testing/appearance.md#m25-armor-colors-and-base-skin-clipping)
+  for the matching launcher, settings, and captures.

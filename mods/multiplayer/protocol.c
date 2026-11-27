@@ -141,14 +141,11 @@ const char *swmp_packet_error_string(SwmpPacketError error) {
 bool swmp_gear_set_valid(SwmpGearSet gear) {
     for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
         if (gear.armor_dye[i] > SWMP_ARMOR_DYE_MAX || (!gear.armor[i] && gear.armor_dye[i])) return false;
-    uint8_t weapon = gear.id[SWMP_GEAR_WEAPON];
-    return (weapon == SWMP_GEAR_NONE || weapon == SWMP_GEAR_WOODCUTTERS_AXE ||
-            weapon == SWMP_GEAR_TRAVELERS_SWORD || weapon == SWMP_GEAR_TRAVELERS_SPEAR ||
-            weapon == SWMP_GEAR_TRAVELERS_CLAYMORE) &&
-           (!gear.id[SWMP_GEAR_SHIELD] || gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_WOODEN_SHIELD ||
-            gear.id[SWMP_GEAR_SHIELD] == SWMP_GEAR_SOLDIERS_SHIELD) &&
-           (!gear.id[SWMP_GEAR_BOW] || gear.id[SWMP_GEAR_BOW] == SWMP_GEAR_TRAVELERS_BOW ||
-            gear.id[SWMP_GEAR_BOW] == SWMP_GEAR_SOLDIERS_BOW);
+    SwmpGearFamily weapon = swmp_gear_family(gear.id[SWMP_GEAR_WEAPON]);
+    return (!gear.id[SWMP_GEAR_WEAPON] ||
+            (weapon >= SWMP_GEAR_FAMILY_SWORD && weapon <= SWMP_GEAR_FAMILY_SPEAR)) &&
+           (!gear.id[SWMP_GEAR_SHIELD] || swmp_gear_family(gear.id[SWMP_GEAR_SHIELD]) == SWMP_GEAR_FAMILY_SHIELD) &&
+           (!gear.id[SWMP_GEAR_BOW] || swmp_gear_family(gear.id[SWMP_GEAR_BOW]) == SWMP_GEAR_FAMILY_BOW);
 }
 
 enum {
@@ -160,6 +157,7 @@ enum {
     ANIMATION_PHASE_AT = NOCKED_ARROW_AT + 3,
     ARROW_POSE_AT = NOCKED_ARROW_AT + 4,
     SAMPLED_MS_AT = ARROW_POSE_AT + GEAR_POSE_SIZE,
+    SHIELD_ANIMATION_AT = SAMPLED_MS_AT + 4,
 };
 
 static bool pose_offset_valid(const SwmpGearPose *pose) {
@@ -177,6 +175,8 @@ static bool gear_pose_valid(const SwmpPlayerSnapshot *s) {
     }
     if (s->bow_animation >= SWMP_BOW_ANIM_COUNT ||
         (s->bow_animation && !(s->flags & SWMP_PLAYER_BOW_POSE))) return false;
+    if (s->shield_animation >= SWMP_SHIELD_ANIM_COUNT ||
+        (s->shield_animation && !(s->flags & SWMP_PLAYER_SHIELD_POSE))) return false;
     return s->nocked_arrow == SWMP_ARROW_NONE ||
            (s->nocked_arrow < SWMP_ARROW_COUNT && (s->flags & SWMP_PLAYER_BOW_POSE) &&
             pose_offset_valid(&s->arrow_pose));
@@ -217,6 +217,7 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     out[ANIMATION_PHASE_AT] = s->animation_phase;
     if (s->nocked_arrow) put_gear_pose(out + ARROW_POSE_AT, &s->arrow_pose);
     put32(out + SAMPLED_MS_AT, s->sampled_ms);
+    out[SHIELD_ANIMATION_AT] = s->shield_animation;
     return true;
 }
 
@@ -235,6 +236,7 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .equipment_revision = get32(data + 40),
         .nocked_arrow = data[NOCKED_ARROW_AT],
         .bow_animation = data[BOW_ANIMATION_AT],
+        .shield_animation = data[SHIELD_ANIMATION_AT],
         .animation_activation = data[ANIMATION_ACTIVATION_AT],
         .animation_phase = data[ANIMATION_PHASE_AT],
         .sampled_ms = get32(data + SAMPLED_MS_AT),
@@ -329,7 +331,7 @@ static bool get_text(char *text, size_t limit, const uint8_t *data, size_t size,
     return true;
 }
 
-enum { EQUIPMENT_ARMOR_AT = 5 + SWMP_GEAR_SLOTS,
+enum { EQUIPMENT_ARMOR_AT = 5 + 2 * SWMP_GEAR_SLOTS,
        EQUIPMENT_DYE_AT = EQUIPMENT_ARMOR_AT + 4 * SWMP_ARMOR_SLOTS,
        EQUIPMENT_SIZE = EQUIPMENT_DYE_AT + SWMP_ARMOR_SLOTS };
 
@@ -392,7 +394,8 @@ bool swmp_control_encode(uint8_t *out, size_t capacity, size_t *size, SwmpMessag
             !swmp_gear_set_valid(m->equipment.state.gear) || !m->equipment.state.revision) return false;
         out[0] = m->equipment.peer;
         put32(out + 1, m->equipment.state.revision);
-        memcpy(out + 5, m->equipment.state.gear.id, SWMP_GEAR_SLOTS);
+        for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++)
+            put16(out + 5 + i * 2, m->equipment.state.gear.id[i]);
         for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
             put32(out + EQUIPMENT_ARMOR_AT + i * 4, m->equipment.state.gear.armor[i]);
         memcpy(out + EQUIPMENT_DYE_AT, m->equipment.state.gear.armor_dye, SWMP_ARMOR_SLOTS);
@@ -465,7 +468,8 @@ bool swmp_control_decode(SwmpControl *msg, SwmpMessageType type, const uint8_t *
         if (size != EQUIPMENT_SIZE || data[0] >= SWMP_MAX_PEERS) return false;
         m.equipment.peer = data[0];
         m.equipment.state.revision = get32(data + 1);
-        memcpy(m.equipment.state.gear.id, data + 5, SWMP_GEAR_SLOTS);
+        for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++)
+            m.equipment.state.gear.id[i] = get16(data + 5 + i * 2);
         for (unsigned i = 0; i < SWMP_ARMOR_SLOTS; i++)
             m.equipment.state.gear.armor[i] = get32(data + EQUIPMENT_ARMOR_AT + i * 4);
         memcpy(m.equipment.state.gear.armor_dye, data + EQUIPMENT_DYE_AT, SWMP_ARMOR_SLOTS);

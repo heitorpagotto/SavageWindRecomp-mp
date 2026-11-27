@@ -5,13 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 7u
+#define SWMP_PROTOCOL_VERSION 9u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
-#define SWMP_PLAYER_SNAPSHOT_SIZE 100u
+#define SWMP_PLAYER_SNAPSHOT_SIZE 101u
 #define SWMP_GEAR_OFFSET_LIMIT_MM 3000
 #define SWMP_ENVIRONMENT_SIZE 8u
 #define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
@@ -112,17 +112,25 @@ typedef enum {
 } SwmpGearSlot;
 
 typedef enum {
-    SWMP_GEAR_NONE,
-    SWMP_GEAR_WOODCUTTERS_AXE,
-    SWMP_GEAR_WOODEN_SHIELD,
-    SWMP_GEAR_TRAVELERS_BOW,
-    SWMP_GEAR_TRAVELERS_SWORD,
-    SWMP_GEAR_TRAVELERS_SPEAR,
-    SWMP_GEAR_TRAVELERS_CLAYMORE,
-    SWMP_GEAR_SOLDIERS_SHIELD,
-    SWMP_GEAR_SOLDIERS_BOW,
-    SWMP_GEAR_COUNT
-} SwmpGear;
+    SWMP_GEAR_FAMILY_NONE,
+    SWMP_GEAR_FAMILY_SWORD,
+    SWMP_GEAR_FAMILY_LSWORD,
+    SWMP_GEAR_FAMILY_SPEAR,
+    SWMP_GEAR_FAMILY_SHIELD,
+    SWMP_GEAR_FAMILY_BOW,
+    SWMP_GEAR_FAMILY_COUNT
+} SwmpGearFamily;
+
+enum { SWMP_GEAR_NONE = 0, SWMP_GEAR_VARIANTS = 1000 };
+
+// Match the numeric suffix of a stock Weapon_<family>_NNN actor.
+#define SWMP_GEAR_ID(family, variant) (SWMP_GEAR_FAMILY_##family * SWMP_GEAR_VARIANTS + (variant))
+
+static inline SwmpGearFamily swmp_gear_family(uint16_t id) {
+    unsigned family = id / SWMP_GEAR_VARIANTS;
+    return id % SWMP_GEAR_VARIANTS && family < SWMP_GEAR_FAMILY_COUNT ?
+        (SwmpGearFamily)family : SWMP_GEAR_FAMILY_NONE;
+}
 
 typedef enum {
     SWMP_ARMOR_HEAD,
@@ -134,7 +142,7 @@ typedef enum {
 enum { SWMP_ARMOR_DYE_MAX = 15 };
 
 typedef struct {
-    uint8_t id[SWMP_GEAR_SLOTS];  // SwmpGear identities, resolved against installed resources
+    uint16_t id[SWMP_GEAR_SLOTS];  // family and numeric variant, resolved against installed resources
     uint32_t armor[SWMP_ARMOR_SLOTS];  // installed model identities, zero for the default appearance
     uint8_t armor_dye[SWMP_ARMOR_SLOTS];  // zero selects the native undyed palette
 } SwmpGearSet;
@@ -171,6 +179,17 @@ typedef enum {
     SWMP_BOW_ANIM_COUNT,
 } SwmpBowAnimation;
 
+typedef enum {
+    SWMP_SHIELD_ANIM_NONE,
+    SWMP_SHIELD_ANIM_OFF,
+    SWMP_SHIELD_ANIM_ON,
+    SWMP_SHIELD_ANIM_EQUIP_ON,
+    SWMP_SHIELD_ANIM_EQUIP_OFF,
+    SWMP_SHIELD_ANIM_TRANSFORM,
+    SWMP_SHIELD_ANIM_FOLD,
+    SWMP_SHIELD_ANIM_COUNT,
+} SwmpShieldAnimation;
+
 static inline unsigned swmp_gear_pose_flag(SwmpGearSlot slot) {
     return SWMP_PLAYER_WEAPON_POSE << slot;
 }
@@ -194,6 +213,7 @@ typedef struct {
     SwmpGearPose gear_pose[SWMP_GEAR_SLOTS];
     uint8_t nocked_arrow;  // SwmpArrow, valid with a bow pose
     uint8_t bow_animation; // SwmpBowAnimation, valid with a bow pose
+    uint8_t shield_animation; // SwmpShieldAnimation, valid with a shield pose
     uint8_t animation_activation; // nonzero for a tracked clip instance
     uint8_t animation_phase;      // 1..255 maps to [0, 1], zero if unavailable
     SwmpGearPose arrow_pose;

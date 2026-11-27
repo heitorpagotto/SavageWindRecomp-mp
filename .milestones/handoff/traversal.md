@@ -1,5 +1,16 @@
 # Traversal, dodges, and reactions
 
+## M2.5 wall release
+
+- Earlier wall-climbing traces showed native `WallOff` while the remote Link
+  switched to Idle midair. The action map now plays the installed left-foot
+  release clip before the usual Fall and Land states.
+- The action is appended after the existing action IDs and uses the existing
+  snapshot format. Both peers need the matching source fingerprint.
+- Release uses a representative clip. Foot selection, tired releases, and
+  attachment alignment during the transition remain open.
+  [Windows replay](../testing/traversal.md#m25-wall-release)
+
 ## M2.5 grounded dodges
 
 - The native trace in `build/m25-dodge-sd300nm8/` confirmed Step and StepLand for neutral,

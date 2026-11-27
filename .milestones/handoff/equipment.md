@@ -1,5 +1,35 @@
 # Melee weapons and equipment groundwork
 
+## M2.5 grounded weapon throws
+
+- Sword, large-sword, and spear throws use their native wind-up, held aim,
+  and release clips. Native `WeaponThrowCharge` uses a 36-frame aim track.
+  The sender retains the starting melee family through `WeaponThrow`
+  because the held actor detaches before the release finishes.
+- One-handed and Giant Boomerangs catch in `WeaponThrowCatch` on layer 1,
+  slot 1 over `WaitAttention`. The receiver selects the catch clip by
+  melee family. Normal equipment revisions remove the held model at
+  release and restore it on catch. Revisions and the snapshot format
+  still use protocol 9.
+- This covers Link and the held model during grounded throws. Projectile
+  flight, impacts, and moving or airborne variants remain open.
+  [Test evidence](../testing/equipment.md#m25-grounded-weapon-throws)
+
+## M2.5 installed weapon catalog
+
+- The previous build supported only four melee models, two shields, and two
+  bows. The runtime now builds passive aliases from the installed ActorInfo and
+  actor packs for the five numbered equipment families. It resolves aliases
+  by the native family and variant number on each peer.
+- Protocol 8 sends a 16-bit identity per equipped slot. Existing position
+  snapshots still carry each item's relative transform and equipment revision.
+  Both peers need the matching build.
+- Melee variants reuse their one-handed, two-handed, or spear action map.
+  Each item uses its own model list, and bows keep their native animation
+  sets, including the two bows with custom lists. The three numbered actor
+  records without models have no passive visual.
+  [Verification](../testing/equipment.md#m25-installed-weapon-catalog)
+
 ## M2.5 weapon families
 
 - Resume review confirmed that the previous checkpoint recognizes the Woodcutter's Axe

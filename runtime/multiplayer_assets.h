@@ -22,7 +22,7 @@ typedef struct {
 } SwmpGearAsset;
 
 enum {
-    SWMP_PARAGLIDER_ASSET = SWMP_GEAR_COUNT,
+    SWMP_PARAGLIDER_ASSET = 1,
     SWMP_ARROW_ASSET_BASE = SWMP_PARAGLIDER_ASSET,
     SWMP_VISUAL_ASSET_COUNT = SWMP_ARROW_ASSET_BASE + SWMP_ARROW_COUNT,
     SWMP_PARAGLIDER_SLOT = SWMP_GEAR_SLOTS,
@@ -30,6 +30,19 @@ enum {
     SWMP_FIRST_ARMOR_SLOT,
     SWMP_VISUAL_SLOTS = SWMP_FIRST_ARMOR_SLOT + SWMP_ARMOR_SLOTS,
 };
+
+enum { SWMP_MAX_GEAR_MODELS = 256 };
+
+typedef struct {
+    uint16_t id;
+    char name[24], actor[24], folder[48], model[48];
+    bool ready, animated;
+} SwmpGearModel;
+
+typedef struct {
+    SwmpGearModel models[SWMP_MAX_GEAR_MODELS];
+    unsigned count;
+} SwmpGearCatalog;
 
 enum { SWMP_MAX_ARMOR_MODELS = 160, SWMP_MAX_ARMOR_NAMES = 512 };
 
@@ -148,24 +161,56 @@ typedef enum {
     SWMP_PROXY_TUMBLE_LAND,
     SWMP_PROXY_HARD_LAND,
     SWMP_PROXY_HARD_LAND_RECOVER,
+    SWMP_PROXY_CLIMB_RELEASE,
+    SWMP_PROXY_SHIELD_WALK_FORWARD,
+    SWMP_PROXY_SHIELD_WALK_BACK,
+    SWMP_PROXY_SHIELD_WALK_LEFT,
+    SWMP_PROXY_SHIELD_WALK_RIGHT,
+    SWMP_PROXY_SURF_MOUNT,
+    SWMP_PROXY_SURF_MOUNT_GLIDE,
+    SWMP_PROXY_SURF_RIDE,
+    SWMP_PROXY_SURF_JUMP,
+    SWMP_PROXY_SURF_AIR,
+    SWMP_PROXY_SURF_LAND,
+    SWMP_PROXY_SURF_DISMOUNT,
+    SWMP_PROXY_SURF_STAGGER,
+    SWMP_PROXY_SURF_FAILED,
+    SWMP_PROXY_SHIELD_DRAW,
+    SWMP_PROXY_SWORD_THROW_WINDUP,
+    SWMP_PROXY_LSWORD_THROW_WINDUP,
+    SWMP_PROXY_SPEAR_THROW_WINDUP,
+    SWMP_PROXY_SWORD_THROW_AIM,
+    SWMP_PROXY_LSWORD_THROW_AIM,
+    SWMP_PROXY_SPEAR_THROW_AIM,
+    SWMP_PROXY_SWORD_THROW_RELEASE,
+    SWMP_PROXY_LSWORD_THROW_RELEASE,
+    SWMP_PROXY_SPEAR_THROW_RELEASE,
+    SWMP_PROXY_SWORD_THROW_CATCH,
+    SWMP_PROXY_LSWORD_THROW_CATCH,
     SWMP_PROXY_ACTION_COUNT,
 } SwmpProxyAction;
 
 const char *swmp_proxy_action_name(SwmpProxyAction action);
 SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, SwmpGearSet gear,
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                         bool shield_raised);
+                                         bool shield_raised, float draw_duration);
+SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family, float clip_duration);
 // Build uncompressed RomFS resources from the local game's data. The caller owns the result.
 uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t *out_size);
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size);
 uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
                         const uint8_t *gear, size_t gear_size, size_t *out_size);
+uint16_t swmp_gear_identity(SwmpGearSlot slot, const char *name);
+bool swmp_gear_catalog(const uint8_t *src, size_t size, SwmpGearCatalog *out);
+uint8_t *swmp_gear_model_pack(SwmpGearModel *asset, const uint8_t *src, size_t size,
+                              const uint8_t *gear, size_t gear_size, size_t *out_size);
 bool swmp_armor_catalog(const uint8_t *src, size_t size, SwmpArmorCatalog *out);
 uint32_t swmp_armor_identity(const SwmpArmorCatalog *catalog, SwmpArmorSlot slot, const char *native_name);
 uint8_t *swmp_armor_pack(const SwmpArmorAsset *asset, const uint8_t *src, size_t size,
                          bool in_place, size_t *out_size);
 uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_mask,
-                              const SwmpArmorCatalog *armor, size_t *out_size);
+                              const SwmpGearCatalog *gear, const SwmpArmorCatalog *armor, size_t *out_size);
 bool fs_multiplayer_proxy_ready(void);
 bool fs_multiplayer_gear_ready(unsigned asset);
+const SwmpGearModel *fs_multiplayer_gear_model(uint16_t id);
 const SwmpArmorCatalog *fs_multiplayer_armor_catalog(void);

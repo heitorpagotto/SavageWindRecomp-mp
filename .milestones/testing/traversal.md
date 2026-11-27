@@ -1,5 +1,24 @@
 # Traversal, dodges, and reactions
 
+## M2.5 wall release
+
+- The Windows app linked. The standalone multiplayer core, direct invite,
+  and WebRTC loopback tests passed. A local resource check resolved all 97
+  proxy clip references and confirmed that the wall release takes precedence
+  over a bow aim sample.
+- Two Windows Vulkan games on the Plateau used BOTW 1.9.0, protocol 7, gamelib
+  `baf44255c0bc3428`, and source ID `dd4b88437469808ab8c6368989b86c93e50ef3f2`.
+  Both used copied saves, 960x540 at 50% scale, a 1400 MiB VRAM budget, and
+  Vulkan heap copy off. The host used an RTX 4050 Laptop GPU (610.88) and
+  the client AMD Radeon Graphics (25.10.30.02).
+- The host pressed B while climbing. The receiving controller played
+  ClimbRelease, Fall, Land, and Idle in order on the same proxy at measured
+  30, 60, and 90 FPS. At the 120 FPS cap, the host measured about 100 FPS and
+  the client about 103 FPS. The client capture at 30 FPS shows the wall release pose.
+- Logs and captures are under `build/m25-wall-release-check-pewsa8js/`.
+  The local replay scripts are `build/m25-wall-release-build/build_fixture.py`
+  and `build/m25-wall-release-build/verify_release.py`.
+
 ## M2.5 fall-damage recovery
 
 - The Tah Muhl Shrine probe in `build/m25-hard-landing-an2p_5i_/` moved Link upward
