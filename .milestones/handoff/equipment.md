@@ -1,5 +1,22 @@
 # Melee weapons and equipment groundwork
 
+## M2.5 held materials and item releases
+
+- Sample the five world CarryBox indices in the material manager. Each
+  instance keeps its model and interpolated world transform through
+  carry, placement, and toss. The inventory preview uses its own actors.
+- The remote Link and his armor use native material hold clips and blend
+  them with walk or run playback. The native `GrabPut` state uses
+  a 30-frame track for the far release.
+- Normal inventory discard uses the completed native spawn request.
+  Equipped discard and weapon throws track the released equipment
+  actor. Registered aliases reuse installed model lists with passive
+  actor behavior. Shared item pickup and combat effects remain future work.
+- Protocol 10 carries up to 12 item instances per owner in pose snapshots.
+  The receiver culls items by their own positions and retires them
+  when the owner leaves or either side changes areas.
+  [Test evidence](../testing/equipment.md#m25-held-materials-and-item-releases)
+
 ## M2.5 grounded weapon throws
 
 - Sword, large-sword, and spear throws use their native wind-up, held aim,

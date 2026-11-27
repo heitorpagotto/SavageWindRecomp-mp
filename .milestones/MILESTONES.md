@@ -97,6 +97,8 @@ Acceptance criteria:
 Status **in progress**. The first slice implements host time and weather sync and admission notifications.
 Protocol 8 extends the passive weapon, shield and bow slots to the installed numbered
 equipment catalog. [Equipment checkpoint](handoff/equipment.md#m25-installed-weapon-catalog)
+Protocol 10 adds material carry animations and visual replication for held,
+dropped, and thrown items. [Item checkpoint](handoff/equipment.md#m25-held-materials-and-item-releases)
 New native clips cover
 landing, standing draw, attacks, charge and stow for three melee families,
 grounded throw wind-up, aim and release with one- and two-handed boomerang catches, shield guard blends and reactions,

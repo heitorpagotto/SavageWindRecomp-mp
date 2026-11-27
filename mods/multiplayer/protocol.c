@@ -158,7 +158,13 @@ enum {
     ARROW_POSE_AT = NOCKED_ARROW_AT + 4,
     SAMPLED_MS_AT = ARROW_POSE_AT + GEAR_POSE_SIZE,
     SHIELD_ANIMATION_AT = SAMPLED_MS_AT + 4,
+    HELD_MATERIALS_AT = SHIELD_ANIMATION_AT + 1,
+    ITEM_POSES_AT = HELD_MATERIALS_AT + 1,
+    ITEM_POSE_SIZE = 18,
 };
+
+_Static_assert(ITEM_POSES_AT + ITEM_POSE_SIZE * SWMP_ITEM_SLOTS == SWMP_PLAYER_SNAPSHOT_SIZE,
+               "snapshot size must include all item slots");
 
 static bool pose_offset_valid(const SwmpGearPose *pose) {
     for (unsigned i = 0; i < 3; i++) {
@@ -195,7 +201,7 @@ static void get_gear_pose(SwmpGearPose *pose, const uint8_t *data) {
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *s) {
     if (!out || !s || s->peer_id >= SWMP_MAX_PEERS || (s->flags & ~SWMP_PLAYER_STATE_KNOWN)) return false;
     if (s->animation_phase && !s->animation_activation) return false;
-    if (!gear_pose_valid(s)) return false;
+    if (!gear_pose_valid(s) || s->held_materials > SWMP_HELD_MATERIAL_LIMIT) return false;
     out[0] = s->peer_id;
     out[1] = s->flags;
     put16(out + 2, s->action);
@@ -218,6 +224,19 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     if (s->nocked_arrow) put_gear_pose(out + ARROW_POSE_AT, &s->arrow_pose);
     put32(out + SAMPLED_MS_AT, s->sampled_ms);
     out[SHIELD_ANIMATION_AT] = s->shield_animation;
+    out[HELD_MATERIALS_AT] = s->held_materials;
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        const SwmpItemPose *item = &s->items[i];
+        if (!!item->model != !!item->instance || (item->model && !s->area_id)) return false;
+        if (!item->model) continue;
+        uint8_t *p = out + ITEM_POSES_AT + i * ITEM_POSE_SIZE;
+        put32(p, item->model);
+        put16(p + 4, item->instance);
+        for (unsigned axis = 0; axis < 3; axis++) {
+            put16(p + 6 + 2 * axis, (uint16_t)item->offset_cm[axis]);
+            put16(p + 12 + 2 * axis, (uint16_t)item->rotation[axis]);
+        }
+    }
     return true;
 }
 
@@ -240,6 +259,7 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .animation_activation = data[ANIMATION_ACTIVATION_AT],
         .animation_phase = data[ANIMATION_PHASE_AT],
         .sampled_ms = get32(data + SAMPLED_MS_AT),
+        .held_materials = data[HELD_MATERIALS_AT],
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);
@@ -248,7 +268,19 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         if (decoded.flags & swmp_gear_pose_flag(slot))
             get_gear_pose(&decoded.gear_pose[slot], data + GEAR_POSES_AT + GEAR_POSE_SIZE * slot);
     if (decoded.nocked_arrow) get_gear_pose(&decoded.arrow_pose, data + ARROW_POSE_AT);
-    if (!gear_pose_valid(&decoded)) return false;
+    if (!gear_pose_valid(&decoded) || decoded.held_materials > SWMP_HELD_MATERIAL_LIMIT) return false;
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        SwmpItemPose *item = &decoded.items[i];
+        const uint8_t *p = data + ITEM_POSES_AT + i * ITEM_POSE_SIZE;
+        item->model = get32(p);
+        item->instance = get16(p + 4);
+        if (!!item->model != !!item->instance || (item->model && !decoded.area_id)) return false;
+        if (!item->model) continue;
+        for (unsigned axis = 0; axis < 3; axis++) {
+            item->offset_cm[axis] = (int16_t)get16(p + 6 + 2 * axis);
+            item->rotation[axis] = (int16_t)get16(p + 12 + 2 * axis);
+        }
+    }
     *s = decoded;
     return true;
 }

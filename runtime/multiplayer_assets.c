@@ -9,7 +9,6 @@
 #include <zlib.h>
 
 static const char template_actor[] = "Obj_RockGray_A_M_01";
-static const char model_archive[] = "Obj_RockGray_A";
 static const char link_model[] = "Link";
 
 #define VISUAL(slot, source, model, actor, label, bundle) {slot, model, actor, label, \
@@ -181,7 +180,14 @@ static bool resource_name(const char *name, size_t capacity) {
 }
 
 static int compare_gear_models(const void *a, const void *b) {
-    return (int)((const SwmpGearModel *)a)->id - (int)((const SwmpGearModel *)b)->id;
+    uint32_t x = ((const SwmpGearModel *)a)->id, y = ((const SwmpGearModel *)b)->id;
+    return x < y ? -1 : x > y;
+}
+
+uint32_t swmp_item_identity(const char *name) {
+    if (!resource_name(name, sizeof ((SwmpGearModel *)0)->name)) return 0;
+    uint16_t gear = gear_identity(name);
+    return gear ? gear : crc(name) | UINT32_C(0x80000000);
 }
 
 bool swmp_gear_catalog(const uint8_t *src, size_t size, SwmpGearCatalog *out) {
@@ -198,18 +204,23 @@ bool swmp_gear_catalog(const uint8_t *src, size_t size, SwmpGearCatalog *out) {
     for (unsigned i = 0; i < t.actors.count && out->count < SWMP_MAX_GEAR_MODELS; i++) {
         BymlNode actor = actor_entry(&b, &t, i);
         const char *name = actor_string(&b, &t, actor, "name");
-        uint16_t id = gear_identity(name);
-        if (!id) continue;
         const char *profile = actor_string(&b, &t, actor, "profile");
-        if (!profile || strcmp(profile, gear_families[swmp_gear_family(id)].profile)) continue;
+        if (!profile || !resource_name(name, sizeof out->models[0].name)) continue;
+        uint16_t gear = gear_identity(name);
+        bool prop = !strncmp(name, "Obj_Lift", 8) || !strncmp(name, "Obj_Barrel", 10) ||
+            !strncmp(name, "Obj_Pot", 7);
+        bool bomb = !strncmp(name, "RemoteBomb", 10) && !strcmp(profile, "PlayerItem");
+        bool material = !strcmp(profile, "Item") || !strcmp(profile, "CapturedActor");
+        if (gear ? strcmp(profile, gear_families[swmp_gear_family(gear)].profile) :
+            !material && !prop && !bomb) continue;
         const char *folder = actor_string(&b, &t, actor, "bfres");
         const char *model = actor_string(&b, &t, actor, "mainModel");
         SwmpGearModel *asset = &out->models[out->count];
         // The native model list can describe multiple units without a mainModel entry.
         if (!model) model = folder;
         if (!resource_name(folder, sizeof asset->folder) || !resource_name(model, sizeof asset->model)) continue;
-        *asset = (SwmpGearModel){.id = id};
-        snprintf(asset->actor, sizeof asset->actor, "SwmpGear%04x", (unsigned)id);
+        *asset = (SwmpGearModel){.id = swmp_item_identity(name)};
+        snprintf(asset->actor, sizeof asset->actor, "SwmpGear%04x", (unsigned)asset->id);
         memcpy(asset->name, name, strlen(name) + 1);
         memcpy(asset->folder, folder, strlen(folder) + 1);
         memcpy(asset->model, model, strlen(model) + 1);
@@ -543,18 +554,6 @@ static bool set_dummy_physics(uint8_t *data, size_t size) {
     return true;
 }
 
-static bool replace_model_name(uint8_t *data, size_t size, const char *old) {
-    size_t len = strlen(old) + 1;
-    bool found = false;
-    for (size_t i = 0; i + len <= size; i += 4) {
-        if (memcmp(data + i, old, len)) continue;
-        memset(data + i, 0, len);
-        memcpy(data + i, link_model, sizeof link_model);
-        found = true;
-    }
-    return found;
-}
-
 typedef enum {
     PROXY_GEAR_NONE = SWMP_GEAR_FAMILY_NONE,
     PROXY_GEAR_LSWORD = SWMP_GEAR_FAMILY_LSWORD,
@@ -694,11 +693,32 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_SPEAR_THROW_RELEASE] = ACTION(SpearThrowRelease, "Spear_Throw_Throw", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SWORD_THROW_CATCH] = ACTION(SwordThrowCatch, "Sword_Throw_Catch", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_LSWORD_THROW_CATCH] = ACTION(LargeSwordThrowCatch, "Lsword_Throw_Catch", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HOLD_FEW] = ACTION(HoldFew, "Lift_Lift_Pouch_Few", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HOLD_MANY] = ACTION(HoldMany, "Lift_Lift_Pouch_Many", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_PUT_MATERIALS] = ACTION(PutMaterials, "Lift_Put_Pouch_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_TOSS_MATERIALS] = ACTION(TossMaterials, "Lift_Put_Pouch_Far", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_LIFT_PROP] = ACTION(LiftProp, "Lift_Up_L", "GrabUp", PROXY_GEAR_NONE),
+    [SWMP_PROXY_HOLD_PROP] = ACTION(HoldProp, "Lift_Up_L", "GrabWait", PROXY_GEAR_NONE),
+    [SWMP_PROXY_PUT_PROP] = ACTION(PutProp, "Lift_Put_L", "GrabPut", PROXY_GEAR_NONE),
+    [SWMP_PROXY_THROW_PROP] = ACTION(ThrowProp, "Lift_Throw_L", "GrabThrow", PROXY_GEAR_NONE),
+    [SWMP_PROXY_WALK_HOLD_FEW] = ACTION(WalkHoldFew, "Lift_Lift_Pouch_Few", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_WALK_HOLD_MANY] = ACTION(WalkHoldMany, "Lift_Lift_Pouch_Many", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_RUN_HOLD_FEW] = ACTION(RunHoldFew, "Lift_Lift_Pouch_Few", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_RUN_HOLD_MANY] = ACTION(RunHoldMany, "Lift_Lift_Pouch_Many", NULL, PROXY_GEAR_NONE),
 };
 #undef ACTION
 
 const char *swmp_proxy_action_name(SwmpProxyAction action) {
     return proxy_actions[(unsigned)action < SWMP_PROXY_ACTION_COUNT ? action : SWMP_PROXY_IDLE].state;
+}
+
+SwmpProxyAction swmp_proxy_carry_action(SwmpProxyAction action, unsigned count) {
+    if (!count) return action;
+    bool many = count >= 3;
+    if (action == SWMP_PROXY_WALK) return many ? SWMP_PROXY_WALK_HOLD_MANY : SWMP_PROXY_WALK_HOLD_FEW;
+    if (action == SWMP_PROXY_RUN || action == SWMP_PROXY_DASH)
+        return many ? SWMP_PROXY_RUN_HOLD_MANY : SWMP_PROXY_RUN_HOLD_FEW;
+    return many ? SWMP_PROXY_HOLD_MANY : SWMP_PROXY_HOLD_FEW;
 }
 
 typedef struct {
@@ -856,7 +876,7 @@ static unsigned aamp_string(uint8_t *out, unsigned at, const char *key, unsigned
 
 enum {
     PROXY_ANIM_LIST_SIZE = 124 + SWMP_PROXY_ACTION_COUNT * (24 + 2 * 64),
-    PROXY_ANIM_STATE_SIZE = 120 + 64,
+    PROXY_ANIM_STATE_SIZE = 448,
 };
 
 static size_t proxy_anim_list(uint8_t out[PROXY_ANIM_LIST_SIZE], bool in_place) {
@@ -898,6 +918,51 @@ static size_t proxy_anim_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *c
     write32(out + TYPE, 67);  // skeletal clip
     unsigned end = aamp_string(out, PARAMS + 8, "FileName", STRINGS_AT, clip);
     aamp_header(out, end, 3, 1, 2, 4, end - STRINGS_AT);
+    return end;
+}
+
+static size_t proxy_carry_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *gait, const char *hold) {
+    // Link's native carry blend uses the Lift bone mask over a locomotion clip.
+    enum { ROOT = 52, ELEMENTS = 64, BLEND = 76, GAIT = 88, HOLD = 100, EXTEND = 112,
+           RANGES = 124, MASK = 136, OBJECTS = 148, PARAMS = 204, DATA = 316, STRINGS = 360 };
+    aamp_list(out, ROOT, "param_root", ELEMENTS, 1, 0, 0);
+    aamp_list(out, ELEMENTS, "Elements", BLEND, 3, 0, 0);
+    aamp_list(out, BLEND, "Element0", EXTEND, 1, OBJECTS, 2);
+    aamp_list(out, GAIT, "Element1", 0, 0, OBJECTS + 16, 1);
+    aamp_list(out, HOLD, "Element2", 0, 0, OBJECTS + 24, 1);
+    aamp_list(out, EXTEND, "Extend", RANGES, 2, 0, 0);
+    aamp_list(out, RANGES, "Ranges", 0, 0, OBJECTS + 32, 2);
+    aamp_list(out, MASK, "BlenderBone", 0, 0, OBJECTS + 48, 1);
+    aamp_object(out, OBJECTS, "Parameters", PARAMS, 3);
+    aamp_object(out, OBJECTS + 8, "Children", PARAMS + 24, 2);
+    aamp_object(out, OBJECTS + 16, "Parameters", PARAMS + 40, 2);
+    aamp_object(out, OBJECTS + 24, "Parameters", PARAMS + 56, 2);
+    aamp_object(out, OBJECTS + 32, "Range0", PARAMS + 72, 2);
+    aamp_object(out, OBJECTS + 40, "Range1", PARAMS + 88, 2);
+    aamp_object(out, OBJECTS + 48, "BlenderBone0", PARAMS + 104, 1);
+    aamp_value(out, PARAMS, "TypeIndex", 2, DATA);
+    write32(out + DATA, 5);
+    aamp_value(out, PARAMS + 8, "JudgeOnce", 0, DATA + 4);
+    aamp_value(out, PARAMS + 16, "InputLimit", 1, DATA + 8);
+    write32(out + DATA + 8, UINT32_C(0xbf800000));  // -1.0f
+    aamp_value(out, PARAMS + 24, "Child0", 2, DATA + 12);
+    aamp_value(out, PARAMS + 32, "Child1", 2, DATA + 16);
+    write32(out + DATA + 12, 1);
+    write32(out + DATA + 16, 2);
+    aamp_value(out, PARAMS + 40, "TypeIndex", 2, DATA + 20);
+    aamp_value(out, PARAMS + 56, "TypeIndex", 2, DATA + 24);
+    write32(out + DATA + 20, 67);
+    write32(out + DATA + 24, 67);
+    unsigned end = aamp_string(out, PARAMS + 48, "FileName", STRINGS, gait);
+    end = aamp_string(out, PARAMS + 64, "FileName", end, hold);
+    aamp_value(out, PARAMS + 72, "Start", 1, DATA + 28);
+    aamp_value(out, PARAMS + 80, "End", 1, DATA + 32);
+    aamp_value(out, PARAMS + 88, "Start", 1, DATA + 36);
+    aamp_value(out, PARAMS + 96, "End", 1, DATA + 40);
+    unsigned mask_name = end;
+    end = aamp_string(out, PARAMS + 104, "Value0", end, "Lift");
+    aamp_value(out, PARAMS + 104, "Value0", 7, mask_name);
+    aamp_header(out, end, 8, 7, 14, STRINGS - DATA, end - STRINGS);
     return end;
 }
 
@@ -992,6 +1057,31 @@ invalid:
 static const char stock_link[] = "Actor/ActorLink/Obj_RockGray_A_M_01.bxml";
 static const char stock_model_list[] = "Actor/ModelList/Obj_RockGray_A_M_01.bmodellist";
 
+static uint8_t *proxy_model_list(uint8_t *stock, size_t size, const char *folder, const char *unit,
+                                 const char *palette, size_t *out_size) {
+    if (size < 52 || size > 4096 || (size & 3) || read32(stock + 12) != size || read32(stock + 44)) return NULL;
+    uint8_t *folder_param = aamp_param(stock, size, "Folder", 8);
+    uint8_t *unit_param = aamp_param(stock, size, "UnitName", 8);
+    uint8_t *material = aamp_param(stock, size, "VariationMatAnim", 8);
+    uint8_t *shader = aamp_param(stock, size, "VariationShaderAnim", 8);
+    if (!folder_param || !unit_param || (palette && (!material || !shader))) return NULL;
+    size_t capacity = size + align4(strlen(folder) + 1) + align4(strlen(unit) + 1);
+    if (palette) capacity += 2 * align4(strlen(palette) + 1);
+    uint8_t *model = calloc(1, capacity);
+    if (!model) return NULL;
+    memcpy(model, stock, size);
+    unsigned end = aamp_string(model, (unsigned)(folder_param - stock), "Folder", (unsigned)size, folder);
+    end = aamp_string(model, (unsigned)(unit_param - stock), "UnitName", end, unit);
+    if (palette) {
+        end = aamp_string(model, (unsigned)(material - stock), "VariationMatAnim", end, palette);
+        end = aamp_string(model, (unsigned)(shader - stock), "VariationShaderAnim", end, palette);
+    }
+    write32(model + 12, end);
+    write32(model + 40, read32(stock + 40) + (uint32_t)(end - size));
+    *out_size = end;
+    return model;
+}
+
 static uint8_t *animated_proxy_pack(const char *actor, PackFile link, PackFile model,
                                     bool in_place, size_t *out_size) {
     uint8_t list[PROXY_ANIM_LIST_SIZE] = {0}, clips[SWMP_PROXY_ACTION_COUNT][PROXY_ANIM_STATE_SIZE] = {{0}};
@@ -1000,8 +1090,16 @@ static uint8_t *animated_proxy_pack(const char *actor, PackFile link, PackFile m
     PackFile files[3 + SWMP_PROXY_ACTION_COUNT] = {
         link, model, {path, list, proxy_anim_list(list, in_place)},
     };
-    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++)
-        files[3 + i] = (PackFile){proxy_actions[i].path, clips[i], proxy_anim_state(clips[i], proxy_actions[i].clip)};
+    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
+        const char *gait = NULL;
+        if (i == SWMP_PROXY_WALK_HOLD_FEW || i == SWMP_PROXY_WALK_HOLD_MANY)
+            gait = proxy_actions[SWMP_PROXY_WALK].clip;
+        if (i == SWMP_PROXY_RUN_HOLD_FEW || i == SWMP_PROXY_RUN_HOLD_MANY)
+            gait = proxy_actions[SWMP_PROXY_RUN].clip;
+        size_t bytes = gait ? proxy_carry_state(clips[i], gait, proxy_actions[i].clip) :
+            proxy_anim_state(clips[i], proxy_actions[i].clip);
+        files[3 + i] = (PackFile){proxy_actions[i].path, clips[i], bytes};
+    }
     return pack_files(files, sizeof files / sizeof files[0], out_size);
 }
 
@@ -1013,16 +1111,16 @@ uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t 
     uint32_t data, ls, le, ms, me;
     uint8_t *out = NULL;
     if (sarc_find(raw, n, stock_link, &data, &ls, &le) >= 0 &&
-        sarc_find(raw, n, stock_model_list, &data, &ms, &me) >= 0 &&
-        replace_model_name(raw + data + ms, me - ms, model_archive) &&
-        replace_model_name(raw + data + ms, me - ms, template_actor)) {
-        size_t link_size;
+        sarc_find(raw, n, stock_model_list, &data, &ms, &me) >= 0) {
+        size_t link_size, model_size;
         uint8_t *link = proxy_actor_link(raw + data + ls, le - ls, "ASUser", SWMP_PROXY_ACTOR, &link_size);
-        if (link) {
+        uint8_t *model = proxy_model_list(raw + data + ms, me - ms, link_model, link_model, NULL, &model_size);
+        if (link && model) {
             out = animated_proxy_pack(SWMP_PROXY_ACTOR, (PackFile){proxy_link, link, link_size},
-                (PackFile){stock_model_list, raw + data + ms, me - ms}, in_place, out_size);
-            free(link);
+                (PackFile){stock_model_list, model, model_size}, in_place, out_size);
         }
+        free(model);
+        free(link);
     }
     free(raw);
     return out;
@@ -1048,28 +1146,11 @@ uint8_t *swmp_armor_pack(const SwmpArmorAsset *asset, const uint8_t *src, size_t
     animated = proxy_actor_link(linked, link_size, "ASUser", asset->actor, &animated_size);
     if (!animated) goto done;
 
-    uint8_t *stock = raw + data + ms;
-    size_t stock_size = me - ms;
-    if (stock_size < 52 || stock_size > 4096 || (stock_size & 3) || read32(stock + 12) != stock_size ||
-        read32(stock + 44)) goto done;
-    uint8_t *folder = aamp_param(stock, stock_size, "Folder", 8);
-    uint8_t *unit = aamp_param(stock, stock_size, "UnitName", 8);
-    uint8_t *material = aamp_param(stock, stock_size, "VariationMatAnim", 8);
-    uint8_t *shader = aamp_param(stock, stock_size, "VariationShaderAnim", 8);
-    if (!folder || !unit || !material || !shader) goto done;
     // These variation names reserve the native material tracks alongside the skeletal AS.
     const char *palette = armor_palette[asset->slot];
-    size_t model_size = stock_size + align4(strlen(asset->folder) + 1) + align4(strlen(asset->model) + 1) +
-        2 * align4(strlen(palette) + 1);
-    model = calloc(1, model_size);
+    size_t model_size;
+    model = proxy_model_list(raw + data + ms, me - ms, asset->folder, asset->model, palette, &model_size);
     if (!model) goto done;
-    memcpy(model, stock, stock_size);
-    unsigned end = aamp_string(model, (unsigned)(folder - stock), "Folder", (unsigned)stock_size, asset->folder);
-    end = aamp_string(model, (unsigned)(unit - stock), "UnitName", end, asset->model);
-    end = aamp_string(model, (unsigned)(material - stock), "VariationMatAnim", end, palette);
-    aamp_string(model, (unsigned)(shader - stock), "VariationShaderAnim", end, palette);
-    write32(model + 12, (uint32_t)model_size);
-    write32(model + 40, read32(stock + 40) + (uint32_t)(model_size - stock_size));
 
     char link_path[80], model_path[80];
     snprintf(link_path, sizeof link_path, "Actor/ActorLink/%s.bxml", asset->actor);
@@ -1191,7 +1272,8 @@ uint8_t *swmp_gear_model_pack(SwmpGearModel *asset, const uint8_t *src, size_t s
                               const uint8_t *gear, size_t gear_size, size_t *out_size) {
     char actor_link[80];
     snprintf(actor_link, sizeof actor_link, "Actor/ActorLink/%s.bxml", asset->actor);
-    SwmpGearAsset visual = {.slot = gear_families[swmp_gear_family(asset->id)].slot,
+    SwmpGearFamily family = asset->id <= UINT16_MAX ? swmp_gear_family((uint16_t)asset->id) : SWMP_GEAR_FAMILY_NONE;
+    SwmpGearAsset visual = {.slot = gear_families[family].slot,
                             .actor = asset->actor, .actor_link = actor_link};
     return gear_pack(&visual, asset->name, src, size, gear, gear_size, out_size, &asset->animated);
 }

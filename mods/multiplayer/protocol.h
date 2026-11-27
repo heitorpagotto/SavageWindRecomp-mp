@@ -5,14 +5,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 9u
+#define SWMP_PROTOCOL_VERSION 10u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
-#define SWMP_PLAYER_SNAPSHOT_SIZE 101u
+#define SWMP_ITEM_SLOTS 12u
+#define SWMP_PLAYER_SNAPSHOT_SIZE (102u + 18u * SWMP_ITEM_SLOTS)
 #define SWMP_GEAR_OFFSET_LIMIT_MM 3000
+#define SWMP_HELD_MATERIAL_LIMIT 5u
 #define SWMP_ENVIRONMENT_SIZE 8u
 #define SWMP_DAY_MILLI 360000u  // TimeMgr uses 360 units per day.
 #define SWMP_WEATHER_TYPES 9u
@@ -157,6 +159,13 @@ typedef struct {
     int16_t rotation[3];  // relative pitch, yaw, roll as signed turn fractions
 } SwmpGearPose;
 
+typedef struct {
+    uint32_t model;
+    uint16_t instance;    // changes when the owner reuses this slot
+    int16_t offset_cm[3]; // world axes, relative to snapshot position
+    int16_t rotation[3];  // world pitch, yaw, roll as signed turn fractions
+} SwmpItemPose;
+
 typedef enum {
     SWMP_ARROW_NONE,
     SWMP_ARROW_NORMAL,
@@ -218,6 +227,8 @@ typedef struct {
     uint8_t animation_phase;      // 1..255 maps to [0, 1], zero if unavailable
     SwmpGearPose arrow_pose;
     uint32_t sampled_ms;          // low 32 bits of the owning game's monotonic sample time
+    uint8_t held_materials;       // drives Link's upper-body carry pose over locomotion
+    SwmpItemPose items[SWMP_ITEM_SLOTS];
 } SwmpPlayerSnapshot;
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);

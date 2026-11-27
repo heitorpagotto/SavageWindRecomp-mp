@@ -64,6 +64,10 @@ int main(void) {
                   SWMP_PROXY_IDLE);
     expect_action(swmp_proxy_throw_action("WeaponThrow", SWMP_GEAR_FAMILY_NONE, 28),
                   SWMP_PROXY_IDLE);
+    expect_action(swmp_proxy_carry_action(SWMP_PROXY_IDLE, 2), SWMP_PROXY_HOLD_FEW);
+    expect_action(swmp_proxy_carry_action(SWMP_PROXY_WALK, 5), SWMP_PROXY_WALK_HOLD_MANY);
+    expect_action(swmp_proxy_carry_action(SWMP_PROXY_RUN, 2), SWMP_PROXY_RUN_HOLD_FEW);
+    expect_action(swmp_proxy_carry_action(SWMP_PROXY_PUT_MATERIALS, 0), SWMP_PROXY_PUT_MATERIALS);
     if (!failures) puts("multiplayer animation selector: ok");
     return failures != 0;
 }

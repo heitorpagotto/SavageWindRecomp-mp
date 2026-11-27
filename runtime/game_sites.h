@@ -86,6 +86,8 @@
     X(mp_armor_material_frame) \
     X(mp_health_current) \
     X(mp_weather_current) \
+    X(mp_material_manager) \
+    X(mp_item_drop_ready) \
     X(horse_cam_lr)           /* CameraHorse's return address after calling the camera stick input */
 
 typedef struct {

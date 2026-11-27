@@ -10,7 +10,7 @@ or test evidence.
 | --- | --- | --- |
 | Armor, dyes, and body visibility | [Appearance](handoff/appearance.md) | [Appearance tests](testing/appearance.md) |
 | Movement, jitter, and clip phase | [Playback](handoff/playback.md) | [Playback tests](testing/playback.md) |
-| Melee weapons and passive gear | [Equipment](handoff/equipment.md) | [Equipment tests](testing/equipment.md) |
+| Melee weapons, held materials, and item releases | [Equipment](handoff/equipment.md) | [Equipment tests](testing/equipment.md) |
 | Shields, bows, and arrows | [Shield and bow](handoff/shield-bow.md) | [Shield and bow tests](testing/shield-bow.md) |
 | Swimming, climbing, gliding, dodges, and hits | [Traversal and reactions](handoff/traversal.md) | [Traversal tests](testing/traversal.md) |
 | Host clock, weather, and join/leave notices | [Environment](handoff/environment.md) | [Environment tests](testing/environment.md) |

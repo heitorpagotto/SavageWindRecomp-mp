@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "checkpoint_date": "2026-11-26",
+  "checkpoint_date": "2026-11-27",
   "repository": {
     "branch": "multiplayer/windows-test",
     "base_commit": "1a334d2",
@@ -8,7 +8,7 @@
   },
   "project": {
     "name": "Savage Wind Multiplayer",
-    "protocol_version": 9,
+    "protocol_version": 10,
     "target_game_version": "1.9.0",
     "max_players": 8,
     "maintained_platforms": [

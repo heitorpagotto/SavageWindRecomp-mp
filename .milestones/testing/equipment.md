@@ -1,5 +1,30 @@
 # Melee weapons and equipment groundwork
 
+## M2.5 held materials and item releases
+
+- Windows UCRT64 rebuilt the app and regenerated and linked the BOTW
+  1.9.0 x86-64-v3 gamelib `e5c3dd1133f2953b`. The multiplayer core,
+  animation selector, direct invite, and WebRTC loopback tests passed.
+  The site and layout suites passed 52 and 59 checks respectively.
+  The three changed runtime sources cross-compiled for Linux x86-64.
+- Two Windows Vulkan games near Oman Au Shrine ran at a 30 FPS cap with
+  copied saves, 960×540 output, 50% render scale, 1400 MiB VRAM budget,
+  and Vulkan heap copy and GPU overlap off. The host used an RTX 4050
+  Laptop GPU (610.88) and the client used AMD Radeon Graphics (25.10.30.02).
+- The 30 FPS run in `build/m25-items-live-r_pso4w6/` verified two and five
+  held materials, with apples and Stamella Shrooms retaining separate
+  identities while walking and after near and far releases. It also
+  verified an inventory Woodcutter's Axe drop, spear flight and landing,
+  one-handed Boomerang flight, put-away, and item teardown on peer leave.
+  The receiver screenshots `five-front.png`, `five-walk.png`, and
+  `five-far-drop.png` show the five-item sequence.
+- The matching build in `build/m25-items-60-rxkx7p_3/` verified an
+  equipped Boomerang drop from the client. The host replaced the held
+  gear model with a world item that fell and rolled down the slope.
+  `build/m25-items-fps60-lyzvhaoq/` repeated the five-item carry, walk,
+  far release, Woodcutter's Axe drop, and spear flight at a 60 FPS cap.
+  Both games reached approximately 60 FPS after shader warm-up.
+
 ## M2.5 grounded weapon throws
 
 - The Windows UCRT64 app linked. The multiplayer core, animation selector,

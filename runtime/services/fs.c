@@ -103,7 +103,7 @@ bool fs_multiplayer_proxy_ready(void) { return atomic_load(&multiplayer_proxy_re
 bool fs_multiplayer_gear_ready(unsigned asset) {
     return asset < SWMP_VISUAL_ASSET_COUNT && (atomic_load(&multiplayer_gear_ready) & (1u << asset));
 }
-const SwmpGearModel *fs_multiplayer_gear_model(uint16_t id) {
+const SwmpGearModel *fs_multiplayer_gear_model(uint32_t id) {
     if (!atomic_load(&multiplayer_proxy_ready)) return NULL;
     const SwmpGearCatalog *catalog = &images[0].equipment;
     unsigned lo = 0, hi = catalog->count;
@@ -695,7 +695,7 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
         free(gear);
     }
     uint8_t *stock_info = pack ? fs_game_file(SWMP_ACTOR_INFO, &stock_info_size) : NULL;
-    unsigned equipment_ready = 0;
+    unsigned equipment_ready = 0, items_ready = 0;
     if (stock_info && g_site.player_equipment && swmp_gear_catalog(stock_info, stock_info_size, &R->equipment)) {
         for (unsigned i = 0; i < R->equipment.count; i++) {
             SwmpGearModel *asset = &R->equipment.models[i];
@@ -705,11 +705,16 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
             if (!multiplayer_gear_available(source, alias)) continue;
             size_t size = 0;
             uint8_t *gear = fs_game_file(source, &size);
+            if (!gear && asset->id > UINT16_MAX) {
+                SwmpGearAsset bundled = {.template_pack = source, .bundle = "Pack/TitleBG.pack"};
+                gear = read_proxy_bundle(&bundled, &size);
+            }
             raw = swmp_gear_model_pack(asset, stock, template_size, gear, size, &raw_size);
             R->equipment_packs[i].pack = pack_proxy_resource(raw, raw_size, &R->equipment_packs[i].size);
             free(gear);
             asset->ready = R->equipment_packs[i].pack != NULL;
-            equipment_ready += asset->ready;
+            if (asset->ready && asset->id <= UINT16_MAX) equipment_ready++;
+            if (asset->ready && asset->id > UINT16_MAX) items_ready++;
         }
     }
     if (stock_info && g_site.mp_anim_play && swmp_armor_catalog(stock_info, stock_info_size, &R->armor)) {
@@ -725,7 +730,7 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, &R->equipment, &R->armor, &raw_size);
     if (!raw && R->equipment.count) {
         discard_multiplayer_equipment();
-        equipment_ready = 0;
+        equipment_ready = items_ready = 0;
         raw = swmp_proxy_actor_info(stock_info, stock_info_size, gear_mask, NULL, &R->armor, &raw_size);
     }
     if (!raw && R->armor.model_count) {
@@ -756,6 +761,7 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     R->proxy_animation = animation;
     R->proxy_animation_size = animation_size;
     LOG("[multiplayer] prepared %u equipment aliases\n", equipment_ready);
+    LOG("[multiplayer] prepared %u item aliases\n", items_ready);
     uint8_t *meta = meta_copy(fmeta, foff, fsz);
     uint64_t relative = R->ov_end - R->rom_data_off, size = info_size;
     memcpy(meta + info->meta + 8, &relative, 8);

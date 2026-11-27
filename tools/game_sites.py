@@ -68,7 +68,9 @@ MP_ARMOR_SITES = ('mp_armor_visibility', 'mp_armor_dye', 'mp_armor_dye_key',
                   'mp_armor_load', 'mp_armor_texture_frame', 'mp_armor_material_frame')
 MP_HEALTH_SITES = ('mp_health_current',)
 MP_WEATHER_SITES = ('mp_weather_current',)
-STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_ARMOR_SITES + MP_HEALTH_SITES + MP_WEATHER_SITES)
+MP_ITEM_SITES = ('mp_material_manager', 'mp_item_drop_ready')
+STRICT_SITES = set(OPT_TWO_SITES + MP_PRESENCE_SITES + MP_ANIMATION_SITES + MP_ARMOR_SITES +
+                   MP_HEALTH_SITES + MP_WEATHER_SITES + MP_ITEM_SITES)
 MP_ANIMATION_PLAY = ('90000008/9f00001f 1e3e1001 1e204100 f9400108/ffc003ff 910003e1 aa1503e0 '
                      '2a1403e2 2a1303e3 52800024 91004108 a9005be8 94000000/fc000000')
 
@@ -423,6 +425,13 @@ SITES = [
     # World Manager's effective weather for its current climate, including the forecast when no override is set.
     Site('mp_weather_current', 'code', '3943e100 d65f03c0 b9478001 14000000/fc000000 a9be7bfd '
          'f9000bf3 910003fd aa0003f3 94000000/fc000000 2a0003e1', 2),
+    # The inventory previews materials separately from the world CarryBox.
+    Site('mp_material_manager', 'ref', '90000008/9f00001f 91000108/ffc003ff f9400113 b4000013/ff00001f aa0003f4 '
+         '910c0260 94000000/fc000000 36000000/fff8001f f9418a68 eb14011f 54000001/ff00001f aa1303e0 '
+         'a9414ff4 a8c27bfd 14000000/fc000000 a9414ff4 2a1f03e0 a8c27bfd d65f03c0 d10203ff fd0013ea', 1),
+    # The native unequipped discard job has taken and initialized the world actor.
+    Site('mp_item_drop_ready', 'code', '910e62c1 910003e0 52800602 94000000/fc000000 910003e0 aa1603e1 '
+         '94000000/fc000000 910003e1 aa1603e0 aa1f03e2', 0),
     # Add items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # Adding items (tools/patches.py _item_tick; runtime/items.c): the entry of Link's damage handling (every frame in
     # play: the game thread's place for the item get), the pause menu data's item get, and where the pause menu data's
@@ -450,6 +459,7 @@ OPTIONAL_GROUPS = [
     MP_ARMOR_SITES,
     MP_HEALTH_SITES,
     MP_WEATHER_SITES,
+    MP_ITEM_SITES,
     ('ui_layout_draw', 'ui_layout_native', 'ui_layout_pane'),
     ('quick_drop_tick', 'quick_drop_actor_call', 'player_drop_forbidden', 'actor_info_lookup',
      'actor_info_has_tag', 'pouch_discard', 'player_equipment', 'pouch_default_name',
@@ -542,6 +552,8 @@ KNOWN = {
         'mp_armor_material_frame': 0x7001529d64,
         'mp_health_current': 0x7000cc7184,
         'mp_weather_current': 0x7001431c3c,
+        'mp_material_manager': 0x7001e0c828,
+        'mp_item_drop_ready': 0x7000b25b94,
         'quick_sort_enter': 0x7000e283fc,
         'quick_sort_menu': 0x7000e28744,
         'pouch_page_count': 0x7000d970a8,

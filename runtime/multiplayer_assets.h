@@ -31,11 +31,11 @@ enum {
     SWMP_VISUAL_SLOTS = SWMP_FIRST_ARMOR_SLOT + SWMP_ARMOR_SLOTS,
 };
 
-enum { SWMP_MAX_GEAR_MODELS = 256 };
+enum { SWMP_MAX_GEAR_MODELS = 640 };
 
 typedef struct {
-    uint16_t id;
-    char name[24], actor[24], folder[48], model[48];
+    uint32_t id;
+    char name[48], actor[24], folder[48], model[48];
     bool ready, animated;
 } SwmpGearModel;
 
@@ -187,6 +187,18 @@ typedef enum {
     SWMP_PROXY_SPEAR_THROW_RELEASE,
     SWMP_PROXY_SWORD_THROW_CATCH,
     SWMP_PROXY_LSWORD_THROW_CATCH,
+    SWMP_PROXY_HOLD_FEW,
+    SWMP_PROXY_HOLD_MANY,
+    SWMP_PROXY_PUT_MATERIALS,
+    SWMP_PROXY_TOSS_MATERIALS,
+    SWMP_PROXY_LIFT_PROP,
+    SWMP_PROXY_HOLD_PROP,
+    SWMP_PROXY_PUT_PROP,
+    SWMP_PROXY_THROW_PROP,
+    SWMP_PROXY_WALK_HOLD_FEW,
+    SWMP_PROXY_WALK_HOLD_MANY,
+    SWMP_PROXY_RUN_HOLD_FEW,
+    SWMP_PROXY_RUN_HOLD_MANY,
     SWMP_PROXY_ACTION_COUNT,
 } SwmpProxyAction;
 
@@ -195,12 +207,14 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
                                          const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
                                          bool shield_raised, float draw_duration);
 SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family, float clip_duration);
+SwmpProxyAction swmp_proxy_carry_action(SwmpProxyAction action, unsigned count);
 // Build uncompressed RomFS resources from the local game's data. The caller owns the result.
 uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t *out_size);
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size);
 uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
                         const uint8_t *gear, size_t gear_size, size_t *out_size);
 uint16_t swmp_gear_identity(SwmpGearSlot slot, const char *name);
+uint32_t swmp_item_identity(const char *name);
 bool swmp_gear_catalog(const uint8_t *src, size_t size, SwmpGearCatalog *out);
 uint8_t *swmp_gear_model_pack(SwmpGearModel *asset, const uint8_t *src, size_t size,
                               const uint8_t *gear, size_t gear_size, size_t *out_size);
@@ -212,5 +226,5 @@ uint8_t *swmp_proxy_actor_info(const uint8_t *src, size_t size, unsigned gear_ma
                               const SwmpGearCatalog *gear, const SwmpArmorCatalog *armor, size_t *out_size);
 bool fs_multiplayer_proxy_ready(void);
 bool fs_multiplayer_gear_ready(unsigned asset);
-const SwmpGearModel *fs_multiplayer_gear_model(uint16_t id);
+const SwmpGearModel *fs_multiplayer_gear_model(uint32_t id);
 const SwmpArmorCatalog *fs_multiplayer_armor_catalog(void);

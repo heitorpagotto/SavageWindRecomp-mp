@@ -34,9 +34,13 @@ typedef struct {
 } PlaybackSample;
 
 typedef struct {
+    uint64_t generation;
+    PlaybackSample samples[PLAYBACK_SAMPLES];
+    unsigned count;
+} RemotePlayback;
+
+typedef struct {
     uint64_t generation, deadline;
-    PlaybackSample playback[PLAYBACK_SAMPLES];
-    unsigned playback_count;
     Pose applied;
     float model_lift;
     SwmpProxyAction animation;
@@ -56,10 +60,40 @@ typedef struct {
     bool retained, visible, has_pose;
 } GearActor;
 
+typedef struct {
+    uint64_t unit;
+    uint32_t id;
+} ItemRef;
+
+typedef struct {
+    ItemRef ref;
+    uint64_t observed_at;
+    uint16_t instance;
+    bool held;
+} LocalItem;
+
+typedef struct {
+    uint64_t deadline;
+    uint32_t model;
+    uint16_t instance;
+    bool retained, visible;
+} RemoteItem;
+
 // Owned by the guest menu update thread. The request address must stay fixed while the game owns it.
 static Placeholder slots[SWMP_MAX_PEERS];
+static RemotePlayback playback[SWMP_MAX_PEERS];
 static GearActor gear_slots[SWMP_VISUAL_SLOTS][SWMP_MAX_PEERS];
 static uint64_t storage, gear_storage[SWMP_VISUAL_SLOTS], lobby_generation;
+static uint64_t item_storage[SWMP_ITEM_SLOTS];
+static RemoteItem remote_items[SWMP_MAX_PEERS][SWMP_ITEM_SLOTS];
+static LocalItem local_items[SWMP_ITEM_SLOTS];
+static uint16_t next_item_instance;
+static uint64_t local_pouch_at;
+// The discard job can complete on a different guest thread.
+static pthread_mutex_t item_lock = PTHREAD_MUTEX_INITIALIZER;
+static ItemRef pending_items[SWMP_ITEM_SLOTS], equipped_items[SWMP_GEAR_SLOTS];
+static unsigned pending_count;
+static bool observe_drops;
 static uint64_t local_context, local_actor;
 static uint32_t local_area;
 static uint64_t applied_clock_at;
@@ -95,8 +129,17 @@ RT_ON_RESET(multiplayer_presence_reset) {
     local_armor_at = 0;
     memset(&local_armor, 0, sizeof local_armor);
     memset(slots, 0, sizeof slots);
+    memset(playback, 0, sizeof playback);
     memset(gear_slots, 0, sizeof gear_slots);
     memset(gear_storage, 0, sizeof gear_storage);
+    memset(item_storage, 0, sizeof item_storage);
+    memset(remote_items, 0, sizeof remote_items);
+    memset(local_items, 0, sizeof local_items);
+    memset(pending_items, 0, sizeof pending_items);
+    memset(equipped_items, 0, sizeof equipped_items);
+    pending_count = next_item_instance = 0;
+    local_pouch_at = 0;
+    observe_drops = false;
 }
 
 static bool guest_range(uint64_t addr, size_t size) {
@@ -189,6 +232,29 @@ static bool heap_object(uint64_t addr, uint64_t heap_size, size_t size) {
     return !(addr & 7) && addr >= HEAP_BASE && heap_size >= size && addr - HEAP_BASE <= heap_size - size;
 }
 
+static bool same_item(ItemRef a, ItemRef b) { return a.unit == b.unit && a.id == b.id; }
+
+static ItemRef item_ref(uint64_t actor, uint64_t heap_size) {
+    if (!heap_object(actor, heap_size, 0x7c) || LD8(actor + 0x64) == 3 || (LD32(actor + 0x78) & 1))
+        return (ItemRef){0};
+    // The native actor index identifies the process unit and its allocation ID.
+    return (ItemRef){LD64(actor + 0x68), LD32(actor + 0x60)};
+}
+
+enum { POUCH_FIRST_INDEX = 0xa0, POUCH_SLOT_SIZE = 0x128 };
+
+static uint64_t pouch_container(uint64_t actor, uint64_t heap_size) {
+    if (!g_site.mp_material_manager || !heap_object(actor, heap_size, 0x90)) return 0;
+    uint64_t manager = LD64(g_site.mp_material_manager);
+    if (!heap_object(manager, heap_size, 0x318)) return 0;
+    uint64_t attached = LD64(actor + 0x88);
+    uint64_t unit = LD64(manager + 0x300);
+    if (!heap_object(unit, heap_size, 0x50) || LD64(unit + 0x48) != attached ||
+        LD32(unit + 0x40) != LD32(manager + 0x308)) return 0;
+    uint64_t container = LD64(manager + 0x310);
+    return heap_object(container, heap_size, POUCH_FIRST_INDEX + SWMP_HELD_MATERIAL_LIMIT * POUCH_SLOT_SIZE) ? container : 0;
+}
+
 static uint64_t animation_controller(uint64_t actor, uint64_t heap_size) {
     // The generic actor owns its AS controller. It becomes available after the model is loaded.
     if (!heap_object(actor, heap_size, 0x568)) return 0;
@@ -272,7 +338,8 @@ static void sample_jump_phase(uint64_t controller, uint64_t heap_size, SwmpPlaye
 
 static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, SwmpGearSet gear,
                                      const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                     bool shield_raised, SwmpPlayerSnapshot *sample) {
+                                     bool shield_raised, unsigned pouch_count, uint64_t now,
+                                     SwmpPlayerSnapshot *sample) {
     uint64_t controller = g_site.mp_anim_current ? animation_controller(actor, heap_size) : 0;
     if (!controller) {
         local_jumping = false;
@@ -292,7 +359,8 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     if (!releasing || (!local_throw.releasing && family)) local_throw.family = family;
     local_throw.releasing = releasing;
     float clip_duration = 0;
-    if ((releasing || charging || !strcmp(state, "WeaponEquipOn")) && !strcmp(g_game_version, "1.9.0")) {
+    bool putting = !strcmp(state, "GrabPut");
+    if ((releasing || charging || putting || !strcmp(state, "WeaponEquipOn")) && !strcmp(g_game_version, "1.9.0")) {
         float frame, duration;
         if (animation_frame(controller, heap_size, &frame, &duration)) clip_duration = duration;
     }
@@ -303,7 +371,17 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     // Bow actions and boomerang catches can play over the native WaitAttention state.
     bool can_catch = (family == SWMP_GEAR_FAMILY_SWORD || family == SWMP_GEAR_FAMILY_LSWORD) &&
         !strcmp(state, "WaitAttention");
-    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch ? animation_state(cpu, controller, 1, 1) : "";
+    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch || pouch_count ?
+        animation_state(cpu, controller, 1, 1) : "";
+    if (pouch_count && !strcmp(upper, "GrabPouchUpper")) {
+        local_pouch_at = now;
+        sample->held_materials = pouch_count;
+        return swmp_proxy_sample_action(state, "", (SwmpGearSet){0}, NULL, NULL, false, 0);
+    }
+    if (putting && (pouch_count || (local_pouch_at && now - local_pouch_at < retry_ns))) {
+        local_pouch_at = now;
+        return clip_duration == 30.0f ? SWMP_PROXY_TOSS_MATERIALS : SWMP_PROXY_PUT_MATERIALS;
+    }
     if (can_catch && !strcmp(upper, "WeaponThrowCatch")) {
         return swmp_proxy_throw_action(upper, family, 0);
     }
@@ -483,6 +561,14 @@ static int16_t quantize_turn(float angle) {
     return (int16_t)(turn == 32768 ? -32768 : turn);
 }
 
+static void matrix_turns(const float a[12], float yaw, int16_t rotation[3]) {
+    // The receiver reconstructs the matrix in Y-X-Z order.
+    float horizontal = hypotf(a[2], a[10]);
+    rotation[0] = quantize_turn(atan2f(-a[6], horizontal));
+    rotation[1] = quantize_turn((horizontal > 1e-4f ? atan2f(a[2], a[10]) : atan2f(-a[8], a[0])) - yaw);
+    rotation[2] = horizontal > 1e-4f ? quantize_turn(atan2f(a[4], a[5])) : 0;
+}
+
 static float clamp_glide_bank(float roll) {
     return fminf(glide_bank_limit, fmaxf(-glide_bank_limit, roll));
 }
@@ -519,16 +605,13 @@ static bool sample_gear_pose(uint64_t item, const float pos[3], int16_t facing, 
     for (unsigned i = 0; i < 3; i++)
         if (fabsf(offset[i]) > SWMP_GEAR_OFFSET_LIMIT_MM / 1000.0f) return false;
     for (unsigned i = 0; i < 3; i++) pose->offset_mm[i] = (int16_t)lroundf(1000 * offset[i]);
-    // The same Y-X-Z convention is used to reconstruct the native matrix on the receiver.
-    float horizontal = hypotf(a[2], a[10]);
-    pose->rotation[0] = quantize_turn(atan2f(-a[6], horizontal));
-    pose->rotation[1] = quantize_turn((horizontal > 1e-4f ? atan2f(a[2], a[10]) : atan2f(-a[8], a[0])) - yaw);
-    pose->rotation[2] = horizontal > 1e-4f ? quantize_turn(atan2f(a[4], a[5])) : 0;
+    matrix_turns(a, yaw, pose->rotation);
     return true;
 }
 
 static SwmpGearSet sample_gear(Cpu *cpu, uint64_t actor, uint64_t heap_size, const float pos[3],
-                               SwmpPlayerSnapshot *sample, uint64_t *bow, uint64_t *shield, bool *shield_raised) {
+                               SwmpPlayerSnapshot *sample, uint64_t *bow, uint64_t *shield, bool *shield_raised,
+                               ItemRef equipped[SWMP_GEAR_SLOTS]) {
     SwmpGearSet gear = {0};
     if (!g_site.player_equipment) return gear;
     // The equipment getter uses the same category ordering as the equipped-item drop path.
@@ -538,6 +621,7 @@ static SwmpGearSet sample_gear(Cpu *cpu, uint64_t actor, uint64_t heap_size, con
     for (unsigned slot = 0; slot < SWMP_GEAR_SLOTS; slot++) {
         uint64_t item = call(cpu, g_site.player_equipment, actor, categories[slot], 0);
         if (!heap_object(item, heap_size, 0x3c8) || LD8(item + 0x64) != 1 || (LD32(item + 0x78) & 1)) continue;
+        equipped[slot] = item_ref(item, heap_size);
         uint64_t name = LD64(item + 0x10);
         if (guest_range(name, 48) && memchr((const void *)(uintptr_t)name, 0, 48))
             gear.id[slot] = swmp_gear_identity(slot, (const char *)(uintptr_t)name);
@@ -608,7 +692,8 @@ static SwmpArrow sample_arrow(uint64_t bow, uint64_t heap_size, const float pos[
     return SWMP_ARROW_NONE;
 }
 
-static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player, SwmpGearSet *gear) {
+static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player, SwmpGearSet *gear,
+                                        ItemRef equipped[SWMP_GEAR_SLOTS]) {
     SwmpPlayerSnapshot sample = {0};
     if (!g_site.player_info || framepace_title_ui() || framepace_loading_ui()) return sample;
     uint32_t area = game_place_area_id();
@@ -627,6 +712,7 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         local_motion_at = 0;
         local_jumping = false;
         local_throw = (ThrowState){0};
+        local_pouch_at = 0;
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
     }
@@ -635,12 +721,15 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     sample.rotation[1] = local_yaw;
     uint64_t bow = 0, shield = 0;
     bool shield_raised = false;
-    *gear = sample_gear(cpu, actor, heap_size, p, &sample, &bow, &shield, &shield_raised);
+    *gear = sample_gear(cpu, actor, heap_size, p, &sample, &bow, &shield, &shield_raised, equipped);
     sample_armor(cpu, actor, heap_size, now, gear);
     const SwmpGearPose *weapon_pose = (sample.flags & SWMP_PLAYER_WEAPON_POSE) ?
         &sample.gear_pose[SWMP_GEAR_WEAPON] : NULL;
     const SwmpGearPose *bow_pose = (sample.flags & SWMP_PLAYER_BOW_POSE) ? &sample.gear_pose[SWMP_GEAR_BOW] : NULL;
-    sample.action = sample_action(cpu, actor, heap_size, *gear, weapon_pose, bow_pose, shield_raised, &sample);
+    uint64_t container = pouch_container(actor, heap_size);
+    unsigned count = container ? LD32(container + 0x6c) : 0;
+    sample.action = sample_action(cpu, actor, heap_size, *gear, weapon_pose, bow_pose, shield_raised,
+                                  count <= SWMP_HELD_MATERIAL_LIMIT ? count : 0, now, &sample);
     // The bow starts drawing and finishes releasing independently of Link's upper-body state.
     if (bow) sample.bow_animation = sample_bow_animation(cpu, bow, heap_size);
     if (shield) sample.shield_animation = sample_shield_animation(cpu, shield, heap_size);
@@ -692,9 +781,108 @@ static Pose snapshot_pose(const SwmpPlayerSnapshot *sample) {
     return pose;
 }
 
-static void queue_playback(Placeholder *slot, const SwmpPosition *position, uint64_t now_ms) {
-    unsigned count = slot->playback_count;
-    PlaybackSample *samples = slot->playback;
+static bool equipment_contains(const ItemRef equipped[SWMP_GEAR_SLOTS], ItemRef ref) {
+    if (!ref.unit) return false;
+    for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++)
+        if (same_item(equipped[i], ref)) return true;
+    return false;
+}
+
+static void observe_item(ItemRef ref, uint64_t now, bool held) {
+    if (!ref.unit || ref.id == UINT32_MAX) return;
+    LocalItem *available = NULL, *oldest = NULL;
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        LocalItem *item = &local_items[i];
+        if (same_item(ref, item->ref)) {
+            item->held |= held;
+            return;
+        }
+        if (!item->ref.unit && !available) available = item;
+        if (!item->held && (!oldest || item->observed_at < oldest->observed_at)) oldest = item;
+    }
+    LocalItem *item = available ? available : oldest;
+    if (!item) return;
+    if (!++next_item_instance) ++next_item_instance;
+    *item = (LocalItem){.ref = ref, .observed_at = now, .instance = next_item_instance, .held = held};
+}
+
+static void sample_items(Cpu *cpu, uint64_t player, const ItemRef equipped[SWMP_GEAR_SLOTS],
+                         bool changed, uint64_t now, SwmpPlayerSnapshot *sample) {
+    ItemRef observed[SWMP_ITEM_SLOTS];
+    pthread_mutex_lock(&item_lock);
+    unsigned count = changed ? 0 : pending_count;
+    memcpy(observed, pending_items, count * sizeof *observed);
+    ItemRef weapon = equipped_items[SWMP_GEAR_WEAPON];
+    memcpy(equipped_items, equipped, sizeof equipped_items);
+    pending_count = 0;
+    observe_drops = player != 0;
+    pthread_mutex_unlock(&item_lock);
+
+    if (changed) memset(local_items, 0, sizeof local_items);
+    if (!player) return;
+    uint64_t heap_size = kernel_heap_size();
+    uint64_t container = pouch_container(player, heap_size);
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) local_items[i].held = false;
+    if (container) {
+        // These are the world items in Link's CarryBox. The pause menu's
+        // duplicate actors live in the manager and use menu-space transforms.
+        for (unsigned i = 0; i < SWMP_HELD_MATERIAL_LIMIT; i++) {
+            uint64_t index = container + POUCH_FIRST_INDEX + i * POUCH_SLOT_SIZE;
+            observe_item((ItemRef){LD64(index), LD32(index + 8)}, now, true);
+        }
+    } else if (sample->action >= SWMP_PROXY_LIFT_PROP && sample->action <= SWMP_PROXY_THROW_PROP) {
+        observe_item(item_ref(LD64(player + 0x88), heap_size), now, true);
+    }
+    if (!changed && local_throw.releasing && !equipment_contains(equipped, weapon))
+        observe_item(weapon, now, false);
+    for (unsigned i = 0; i < count; i++) observe_item(observed[i], now, false);
+
+    Cpu scratch = *cpu;
+    scratch.sp -= SLOT_SIZE;
+    uint64_t addr = scratch.sp;
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        LocalItem *item = &local_items[i];
+        if (!item->ref.unit || equipment_contains(equipped, item->ref)) continue;
+        if (!heap_object(item->ref.unit, heap_size, 0x50)) {
+            *item = (LocalItem){0};
+            continue;
+        }
+        memset((void *)(uintptr_t)addr, 0, SLOT_SIZE);
+        ST64(addr + INDEX_OFFSET, item->ref.unit);
+        ST32(addr + INDEX_OFFSET + 8, item->ref.id);
+        uint64_t actor = resolve(&scratch, addr);
+        if (!actor || LD32(actor + 0x78) & 1) {
+            *item = (LocalItem){0};
+        } else if (heap_object(actor, heap_size, 0x3c8) && LD8(actor + 0x64) == 1) {
+            uint64_t name = LD64(actor + 0x10);
+            uint32_t id = guest_range(name, 48) && memchr((const void *)(uintptr_t)name, 0, 48) ?
+                swmp_item_identity((const char *)(uintptr_t)name) : 0;
+            const SwmpGearModel *model = fs_multiplayer_gear_model(id);
+            float matrix[12];
+            memcpy(matrix, (const void *)(uintptr_t)(actor + 0x398), sizeof matrix);
+            float pos[] = {matrix[3], matrix[7], matrix[11]};
+            float offset[3];
+            bool valid = model && action_named(name, model->name) && valid_position(pos);
+            for (unsigned axis = 0; axis < 3; axis++) {
+                offset[axis] = pos[axis] * 100 - sample->position_mm[axis] / 10.0f;
+                valid &= fabsf(offset[axis]) <= INT16_MAX;
+            }
+            for (unsigned n = 0; n < 12; n++) valid &= isfinite(matrix[n]);
+            if (valid) {
+                SwmpItemPose *pose = &sample->items[i];
+                pose->model = id;
+                pose->instance = item->instance;
+                for (unsigned axis = 0; axis < 3; axis++) pose->offset_cm[axis] = (int16_t)lroundf(offset[axis]);
+                matrix_turns(matrix, 0, pose->rotation);
+            }
+        }
+        call(&scratch, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
+    }
+}
+
+static void queue_playback(RemotePlayback *slot, const SwmpPosition *position, uint64_t now_ms) {
+    unsigned count = slot->count;
+    PlaybackSample *samples = slot->samples;
     uint64_t play_at = position->received_at + playback_delay_ms;
     if (count) {
         PlaybackSample *last = &samples[count - 1];
@@ -722,7 +910,7 @@ static void queue_playback(Placeholder *slot, const SwmpPosition *position, uint
         memmove(samples, samples + 1, count * sizeof *samples);
     }
     samples[count] = (PlaybackSample){.snapshot = position->snapshot, .play_at = play_at};
-    slot->playback_count = count + 1;
+    slot->count = count + 1;
 }
 
 static SwmpGearPose interpolate_gear(const SwmpGearPose *a, const SwmpGearPose *b, float t) {
@@ -735,18 +923,18 @@ static SwmpGearPose interpolate_gear(const SwmpGearPose *a, const SwmpGearPose *
     return pose;
 }
 
-static SwmpPlayerSnapshot sample_playback(Placeholder *slot, uint64_t now_ms, Pose *pose) {
-    PlaybackSample *samples = slot->playback;
+static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms, Pose *pose) {
+    PlaybackSample *samples = slot->samples;
     unsigned first = 0;
-    while (first + 1 < slot->playback_count && samples[first + 1].play_at <= now_ms) first++;
+    while (first + 1 < slot->count && samples[first + 1].play_at <= now_ms) first++;
     if (first) {
-        slot->playback_count -= first;
-        memmove(samples, samples + first, slot->playback_count * sizeof *samples);
+        slot->count -= first;
+        memmove(samples, samples + first, slot->count * sizeof *samples);
     }
     const SwmpPlayerSnapshot *a = &samples[0].snapshot, *b = &samples[1].snapshot;
     SwmpPlayerSnapshot result = *a;
     *pose = snapshot_pose(a);
-    if (slot->playback_count == 1 || now_ms <= samples[0].play_at) return result;
+    if (slot->count == 1 || now_ms <= samples[0].play_at) return result;
 
     Pose target = snapshot_pose(b);
     float distance_sq = 0;
@@ -771,6 +959,17 @@ static SwmpPlayerSnapshot sample_playback(Placeholder *slot, uint64_t now_ms, Po
     if (a->action == b->action && a->animation_activation == b->animation_activation &&
         a->animation_phase && b->animation_phase)
         result.animation_phase = (uint8_t)lroundf(a->animation_phase + t * (b->animation_phase - a->animation_phase));
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        SwmpItemPose *item = &result.items[i];
+        const SwmpItemPose *next = &b->items[i];
+        if (!item->model || item->model != next->model || item->instance != next->instance) continue;
+        for (unsigned axis = 0; axis < 3; axis++) {
+            item->offset_cm[axis] = (int16_t)lroundf(item->offset_cm[axis] +
+                t * (next->offset_cm[axis] - item->offset_cm[axis]));
+            float turn = remainderf(next->rotation[axis] - item->rotation[axis], 65536.0f);
+            item->rotation[axis] = (int16_t)lroundf(item->rotation[axis] + t * turn);
+        }
+    }
     return result;
 }
 
@@ -901,8 +1100,60 @@ static bool retain_actor(Cpu *cpu, uint64_t addr) {
     return false;
 }
 
-static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames, float phase);
+static void update_items(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context, const SwmpPlayerSnapshot *local,
+                         const SwmpPlayerSnapshot *sample, const Pose *owner) {
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        RemoteItem *slot = &remote_items[peer][i];
+        const SwmpItemPose *pose = sample ? &sample->items[i] : NULL;
+        const SwmpGearModel *model = pose && pose->model ? fs_multiplayer_gear_model(pose->model) : NULL;
+        Pose target = {0};
+        if (model) {
+            for (unsigned axis = 0; axis < 3; axis++)
+                target.position[axis] = owner->position[axis] + pose->offset_cm[axis] / 100.0f;
+            float radius = slot->model ? retain_radius : spawn_radius;
+            if (!valid_position(target.position) || distance_squared(local, &target) > radius * radius) model = NULL;
+        }
+        uint64_t addr = item_storage[i] + peer * SLOT_SIZE;
+        if (slot->model && (!model || slot->model != pose->model || slot->instance != pose->instance)) {
+            release_actor(cpu, addr, slot->retained);
+            *slot = (RemoteItem){.deadline = now + snapshot_ns};
+        }
+        if (!model || !context) continue;
+        if (!slot->model) {
+            if (now < slot->deadline) continue;
+            if (!item_storage[i]) {
+                item_storage[i] = actor_slots_alloc();
+                if (!item_storage[i]) continue;
+                addr = item_storage[i] + peer * SLOT_SIZE;
+            }
+            if (request_actor(cpu, addr, context, &target, model->actor, 0)) {
+                *slot = (RemoteItem){.model = pose->model, .instance = pose->instance, .deadline = now + request_ns};
+                continue;
+            }
+        } else if (slot->retained) {
+            uint64_t actor = resolve(cpu, addr);
+            bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
+            if (active) {
+                SwmpGearPose orientation = {0};
+                memcpy(orientation.rotation, pose->rotation, sizeof orientation.rotation);
+                move_gear(cpu, actor, &target, &orientation);
+                if (!slot->visible) LOG("[multiplayer] remote item %s ready for peer %u\n", model->name, peer);
+                slot->visible = true;
+            }
+            call(cpu, g_site.actor_link_release, addr + LINK_OFFSET, 0, 0);
+            if (active || (!slot->visible && now < slot->deadline)) continue;
+        } else if (call(cpu, g_site.mp_presence_ready, addr, 0, 0) & 1) {
+            slot->retained = retain_actor(cpu, addr);
+            if (slot->retained) continue;
+        } else if (now < slot->deadline && !(call(cpu, g_site.mp_presence_failed, addr, 0, 0) & 1)) {
+            continue;
+        }
+        release_actor(cpu, addr, slot->retained);
+        *slot = (RemoteItem){.deadline = now + retry_ns};
+    }
+}
 
+static bool play_animation(Cpu *source, uint64_t actor, const char *state, float blend_frames, float phase);
 static uint64_t appearance_model(uint64_t actor, uint64_t heap_size) {
     if (!heap_object(actor, heap_size, 0x4e8)) return 0;
     uint64_t model = LD64(actor + 0x4e0);
@@ -1120,15 +1371,17 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
         bool active = actor && LD8(actor + 0x64) == 1 && !(LD32(actor + 0x78) & 1);
         if (active && slot->proxy) {
             update_proxy(cpu, actor, slot, pose);
+            SwmpProxyAction action = swmp_proxy_carry_action(pose->action, sample->held_materials);
             uint8_t activation = pose->action == SWMP_PROXY_JUMP ? sample->animation_activation : 0;
             slot->animation_phase = -1.0f;
-            if (slot->animation != pose->action || slot->animation_activation != activation) {
-                SwmpProxyAction from = slot->animation, to = pose->action;
+            if (slot->animation != action || slot->animation_activation != activation) {
+                SwmpProxyAction from = slot->animation, to = action;
                 // Standing Link's shield keeps moving for several updates around the guard state edge.
                 bool raise = to == SWMP_PROXY_SHIELD_GUARD && (from == SWMP_PROXY_IDLE || from == SWMP_PROXY_SWORD_READY);
                 bool lower = from == SWMP_PROXY_SHIELD_GUARD && (to == SWMP_PROXY_IDLE || to == SWMP_PROXY_SWORD_READY);
                 float blend_frames = raise || lower ? 4.0f : -1.0f;
-                float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f : -1.0f;
+                float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f :
+                    to == SWMP_PROXY_HOLD_PROP ? 1.0f : -1.0f;
                 if (play_animation(cpu, actor, swmp_proxy_action_name(to), blend_frames, phase)) {
                     slot->animation = to;
                     slot->animation_activation = activation;
@@ -1160,6 +1413,22 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
 }
 
 #endif
+
+// Native inventory discard and equipped-item release paths.
+void rt_mp_item_drop_ready(uint64_t actor, int equipped_only) {
+#ifdef SW_MULTIPLAYER
+    pthread_mutex_lock(&item_lock);
+    if (observe_drops && pending_count < SWMP_ITEM_SLOTS) {
+        ItemRef ref = item_ref(actor, kernel_heap_size());
+        if (ref.unit && (!equipped_only || equipment_contains(equipped_items, ref)))
+            pending_items[pending_count++] = ref;
+    }
+    pthread_mutex_unlock(&item_lock);
+#else
+    (void)actor;
+    (void)equipped_only;
+#endif
+}
 
 // Called by the native variation loader while the placement parameters are still live.
 uint32_t rt_mp_armor_spawn_dye(uint64_t actor, uint64_t args) {
@@ -1193,24 +1462,31 @@ void rt_mp_presence_tick(Cpu *cpu) {
     uint64_t now = plat_now_ns(), now_ms = now / UINT64_C(1000000);
     uint64_t player = 0;
     SwmpGearSet gear = {0};
+    ItemRef equipped[SWMP_GEAR_SLOTS] = {0};
     bool changed = lobby_generation != roster.lobby_generation;
     if (changed) {
         local_motion_at = 0;
         local_jumping = false;
         local_throw = (ThrowState){0};
+        local_pouch_at = 0;
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
     }
-    SwmpPlayerSnapshot local = roster.lobby_generation ? sample_player(cpu, now, &player, &gear) : (SwmpPlayerSnapshot){0};
+    SwmpPlayerSnapshot local = roster.lobby_generation ?
+        sample_player(cpu, now, &player, &gear, equipped) : (SwmpPlayerSnapshot){0};
     uint64_t context = local.area_id ? spawn_context() : 0;
     if (!context) {
         local = (SwmpPlayerSnapshot){0};
         player = 0;
         local_jumping = false;
         local_throw = (ThrowState){0};
+        local_pouch_at = 0;
+        memset(equipped, 0, sizeof equipped);
     }
     bool world_changed = local_context != context || local_actor != player || local_area != local.area_id;
     if (world_changed || changed) applied_clock_at = 0;
+    if (g_site.mp_material_manager)
+        sample_items(cpu, player, equipped, world_changed || changed, now, &local);
     SwmpEnvironment environment;
     bool sampled_environment = update_environment(cpu, &roster, local.area_id, now_ms, &environment);
     swmp_m1_publish_state(roster.lobby_generation, &local, gear, sampled_environment ? &environment : NULL, now_ms);
@@ -1234,19 +1510,30 @@ void rt_mp_presence_tick(Cpu *cpu) {
         const SwmpPosition *position = &roster.positions[peer];
         Pose pose = snapshot_pose(&position->snapshot);
         uint64_t generation = roster.remotes.generation[peer];
-        bool has_pose = generation && position->snapshot.area_id == local.area_id &&
+        bool has_pose = context && generation && position->snapshot.area_id == local.area_id &&
             swmp_position_fresh(position, now_ms) && valid_position(pose.position);
+        RemotePlayback *track = &playback[peer];
+        bool reset_playback = changed || world_changed || track->generation != generation || !has_pose;
+        if (reset_playback) {
+            track->generation = generation;
+            track->count = 0;
+            update_items(cpu, peer, now, 0, &local, NULL, NULL);
+        }
         float distance_sq = has_pose ? distance_squared(&local, &pose) : INFINITY;
         float radius = slot->generation == generation ? retain_radius : spawn_radius;
         bool desired = context && distance_sq <= radius * radius;
+        SwmpPlayerSnapshot sample = {0};
+        if (has_pose) {
+            queue_playback(track, position, now_ms);
+            sample = sample_playback(track, now_ms, &pose);
+            update_items(cpu, peer, now, context, &local, &sample, &pose);
+        }
         if (slot->generation && (changed || world_changed || slot->generation != generation || !desired)) {
             const char *reason = changed || slot->generation != generation ? "roster changed" :
                 !context ? "local world unavailable" : world_changed ? "local world changed" :
                 !has_pose ? "remote position unavailable" : "out of range";
             retire(cpu, peer, now, reason);
         } else if (slot->generation) {
-            queue_playback(slot, position, now_ms);
-            SwmpPlayerSnapshot sample = sample_playback(slot, now_ms, &pose);
             poll_actor(cpu, peer, now, &pose, &sample);
             update_gear(cpu, peer, now, context, &sample, &roster.equipment[peer], pose.action);
         } else if (desired && now >= slot->deadline) {
@@ -1257,7 +1544,6 @@ void rt_mp_presence_tick(Cpu *cpu) {
             if (request_actor(cpu, addr, context, &pose, proxy ? SWMP_PROXY_ACTOR : placeholder_name, 0)) {
                 *slot = (Placeholder){.generation = generation, .deadline = now + request_ns, .proxy = proxy,
                     .applied = pose, .animation = SWMP_PROXY_ACTION_COUNT};
-                queue_playback(slot, position, now_ms);
             } else {
                 retire(cpu, peer, now, "creation rejected");
             }

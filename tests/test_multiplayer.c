@@ -29,7 +29,7 @@ static void packet_test(void) {
     };
     CHECK(swmp_packet_encode(packet, sizeof packet, &in) == SWMP_PACKET_OK);
     const uint8_t expected[] = {
-        0x53, 0x57, 0x4d, 0x50, 0, 9, 16, 4, 0, 0, 0, 3,
+        0x53, 0x57, 0x4d, 0x50, 0, 10, 16, 4, 0, 0, 0, 3,
         0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 3, 1, 0, 0,
         0x10, 0x20, 0x30, 0x40, 0xa0, 0xb0, 0xc0, 0xd0,
     };
@@ -45,7 +45,7 @@ static void packet_test(void) {
     packet[0] = 0;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_MAGIC);
     packet[0] = 0x53;
-    packet[5] = 8;
+    packet[5] = 9;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_VERSION);
     packet[5] = SWMP_PROTOCOL_VERSION;
     packet[21] = SWMP_CHANNEL_COUNT;
@@ -93,7 +93,14 @@ static void snapshot_test(void) {
         .animation_activation = 37,
         .animation_phase = 128,
         .sampled_ms = UINT32_C(0x12345678),
+        .held_materials = 5,
         .arrow_pose = {.offset_mm = {-280, 1280, 450}, .rotation = {-649, -3610, 16003}},
+        .items = {
+            [0] = {.model = UINT32_C(0xa1b2c3d4), .instance = 0x12fe,
+                   .offset_cm = {-97, 131, 20}, .rotation = {INT16_MIN, -80, INT16_MAX}},
+            [SWMP_ITEM_SLOTS - 1] = {.model = SWMP_GEAR_ID(SPEAR, 2), .instance = 0x2201,
+                                     .offset_cm = {4050, -600, 2900}, .rotation = {45, 7000, -1}},
+        },
     };
     uint8_t data[SWMP_PLAYER_SNAPSHOT_SIZE];
     CHECK(swmp_player_snapshot_encode(data, &in));
@@ -112,6 +119,20 @@ static void snapshot_test(void) {
     CHECK(out.nocked_arrow == in.nocked_arrow);
     CHECK(data[81] == SWMP_BOW_ANIM_DRAW && out.bow_animation == in.bow_animation);
     CHECK(data[100] == SWMP_SHIELD_ANIM_EQUIP_ON && out.shield_animation == in.shield_animation);
+    const uint8_t first_item[] = {0xa1, 0xb2, 0xc3, 0xd4, 0x12, 0xfe, 0xff, 0x9f, 0, 131, 0, 20,
+                                  0x80, 0, 0xff, 0xb0, 0x7f, 0xff};
+    CHECK(data[101] == 5 && out.held_materials == 5);
+    CHECK(!memcmp(data + 102, first_item, sizeof first_item));
+    for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
+        CHECK(out.items[i].model == in.items[i].model && out.items[i].instance == in.items[i].instance);
+        CHECK(!memcmp(out.items[i].offset_cm, in.items[i].offset_cm, sizeof in.items[i].offset_cm));
+        CHECK(!memcmp(out.items[i].rotation, in.items[i].rotation, sizeof in.items[i].rotation));
+    }
+    data[106] = data[107] = 0;
+    CHECK(!swmp_player_snapshot_decode(&out, data));
+    in.items[0].instance = 0;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.items[0].instance = 0x12fe;
     CHECK(!memcmp(out.arrow_pose.offset_mm, in.arrow_pose.offset_mm, sizeof in.arrow_pose.offset_mm));
     CHECK(!memcmp(out.arrow_pose.rotation, in.arrow_pose.rotation, sizeof in.arrow_pose.rotation));
     for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++) {
