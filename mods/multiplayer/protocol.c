@@ -162,9 +162,12 @@ enum {
     ITEM_POSES_AT = HELD_MATERIALS_AT + 1,
     ITEM_POSE_SIZE = 18,
     WARP_AMOUNT_AT = ITEM_POSES_AT + ITEM_POSE_SIZE * SWMP_ITEM_SLOTS,
+    HORSE_GAIT_AT = WARP_AMOUNT_AT + 1,
+    HORSE_PHASE_AT = HORSE_GAIT_AT + 1,
+    HORSE_POSE_AT = HORSE_PHASE_AT + 1,
 };
 
-_Static_assert(WARP_AMOUNT_AT + 1 == SWMP_PLAYER_SNAPSHOT_SIZE, "snapshot size must include the warp amount");
+_Static_assert(HORSE_POSE_AT + GEAR_POSE_SIZE == SWMP_PLAYER_SNAPSHOT_SIZE, "snapshot size must include the horse pose");
 
 static bool pose_offset_valid(const SwmpGearPose *pose) {
     for (unsigned i = 0; i < 3; i++) {
@@ -183,6 +186,8 @@ static bool gear_pose_valid(const SwmpPlayerSnapshot *s) {
         (s->bow_animation && !(s->flags & SWMP_PLAYER_BOW_POSE))) return false;
     if (s->shield_animation >= SWMP_SHIELD_ANIM_COUNT ||
         (s->shield_animation && !(s->flags & SWMP_PLAYER_SHIELD_POSE))) return false;
+    if (s->horse_gait >= SWMP_HORSE_GAIT_COUNT ||
+        (s->horse_gait ? !s->area_id || !pose_offset_valid(&s->horse_pose) : s->horse_phase != 0)) return false;
     return s->nocked_arrow == SWMP_ARROW_NONE ||
            (s->nocked_arrow < SWMP_ARROW_COUNT && (s->flags & SWMP_PLAYER_BOW_POSE) &&
             pose_offset_valid(&s->arrow_pose));
@@ -226,6 +231,9 @@ bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const S
     out[SHIELD_ANIMATION_AT] = s->shield_animation;
     out[HELD_MATERIALS_AT] = s->held_materials;
     out[WARP_AMOUNT_AT] = s->warp_amount;
+    out[HORSE_GAIT_AT] = s->horse_gait;
+    out[HORSE_PHASE_AT] = s->horse_phase;
+    if (s->horse_gait) put_gear_pose(out + HORSE_POSE_AT, &s->horse_pose);
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
         const SwmpItemPose *item = &s->items[i];
         if (!!item->model != !!item->instance || (item->model && !s->area_id)) return false;
@@ -262,6 +270,8 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         .sampled_ms = get32(data + SAMPLED_MS_AT),
         .held_materials = data[HELD_MATERIALS_AT],
         .warp_amount = data[WARP_AMOUNT_AT],
+        .horse_gait = data[HORSE_GAIT_AT],
+        .horse_phase = data[HORSE_PHASE_AT],
     };
     for (int i = 0; i < 3; i++) decoded.position_mm[i] = (int32_t)get32(data + 12 + i * 4);
     for (int i = 0; i < 3; i++) decoded.rotation[i] = (int16_t)get16(data + 24 + i * 2);
@@ -270,6 +280,7 @@ bool swmp_player_snapshot_decode(SwmpPlayerSnapshot *s,
         if (decoded.flags & swmp_gear_pose_flag(slot))
             get_gear_pose(&decoded.gear_pose[slot], data + GEAR_POSES_AT + GEAR_POSE_SIZE * slot);
     if (decoded.nocked_arrow) get_gear_pose(&decoded.arrow_pose, data + ARROW_POSE_AT);
+    if (decoded.horse_gait) get_gear_pose(&decoded.horse_pose, data + HORSE_POSE_AT);
     if (!gear_pose_valid(&decoded) || decoded.held_materials > SWMP_HELD_MATERIAL_LIMIT) return false;
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
         SwmpItemPose *item = &decoded.items[i];

@@ -67,6 +67,7 @@ else
     make -j"$JOBS" B="$build_dir" GEN="$build_dir/generated" \
         "$build_dir/savagewind.exe" "$build_dir/savagewind-config.exe"
 fi
+make B="$build_dir" stage-ui-fonts
 
 # Inspect the new executable away from previously staged DLLs so a rebuild picks up toolchain updates.
 probe_dir=$(mktemp -d "$build_dir/.dll-probe.XXXXXX")
@@ -95,4 +96,4 @@ cp runtime/cpu.h runtime/simd.h runtime/simd_fp.h runtime/simd_softfma.h runtime
     tools/gamelib_entry.c runtime/hle/hle_symbols.txt "$build_dir/gamelib-src/"
 
 printf 'Windows executable: %s/savagewind.exe\n' "$build_dir"
-printf 'Local runtime DLLs and game setup tools staged next to savagewind.exe.\n'
+printf 'Runtime DLLs, UI fonts and game setup tools staged next to savagewind.exe.\n'

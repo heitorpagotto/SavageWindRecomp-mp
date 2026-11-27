@@ -24,7 +24,8 @@ void menu_apply_window_requests(void *sdl_window);
 void menu_render(id<MTLDevice> dev, id<MTLCommandBuffer> cb, id<MTLTexture> target);
 #elif !defined(__APPLE__)
 // Render thread, inside the window image's rendering (Vulkan command buffer cmd).
-void menu_render(void *cmd, uint32_t target_w, uint32_t target_h);
+struct SwmpIndicatorOverlay;
+void menu_render(void *cmd, uint32_t target_w, uint32_t target_h, const struct SwmpIndicatorOverlay *indicators);
 bool menu_render_needed(void);  // menu_render would draw something (it records into cmd itself: the recorder drains first)
 #endif
 

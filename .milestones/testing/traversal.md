@@ -1,5 +1,30 @@
 # Traversal, dodges, and reactions
 
+## M2.5 riding and mounted combat
+
+- The Windows UCRT64 app linked. Multiplayer core, animation selector,
+  direct invite, and WebRTC loopback tests passed. A local resource check
+  resolved the horse and rider clips, verified planar root edits on seven
+  horse clips, and rejected a truncated archive. The gamelib ID matched
+  `be47daf941612328`.
+- Two Windows Vulkan peers used BOTW 1.9.0, copied saves, direct WebRTC,
+  960x540 at 50% render scale, a 1400 MiB VRAM budget, and heap copy off.
+  The host used an RTX 4050 Laptop GPU (610.88) and the client used AMD
+  Radeon Graphics (25.10.30.02). The 30 FPS development replay in
+  `build/m25-horse-wild-verified-moj90yqb/` mounted and soothed a wild
+  horse. The receiver played RideCanter, RideSwordRight, RideBowLoad,
+  RideBowAim, RideBowShoot, and RideBowEnd, and retired the nocked arrow
+  on release. The observer captures are `near-mounted.png` and
+  `near-bow.png` in `client/build/`.
+- The matching protocol 12 build replayed the mounted fight at 30 FPS
+  in `build/m25-mounted-combat-8huyqodw/`. The receiver played the
+  charge and right-side cut for all three weapon families, then played
+  the forward bow reload, aim, and shot. It showed the Normal Arrow
+  during draw and retired it on release. Pressing X made native Link
+  jump off the mount and retired the remote horse. Receiver captures
+  are `rider.png` and `rider-bow.png` in `client/build/`. Left-side
+  cuts and backward bow aim have selector and resource coverage.
+
 ## M2.5 fast travel and narrow climbs
 
 - The Windows app and matching game library built, and the multiplayer

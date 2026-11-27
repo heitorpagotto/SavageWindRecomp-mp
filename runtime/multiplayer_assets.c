@@ -26,6 +26,7 @@ const SwmpGearAsset swmp_gear_assets[SWMP_VISUAL_ASSET_COUNT] = {
     ARROW(SHOCK, "ElectricArrow", "Weapon_Arrow_004", "SwmpRemoteShockArrow", "nocked shock arrow"),
     ARROW(BOMB, "BombArrow_A", "Weapon_Arrow_002", "SwmpRemoteBombArrow", "nocked bomb arrow"),
     ARROW(ANCIENT, "AncientArrow", "Weapon_Arrow_007", "SwmpRemoteAncientArrow", "nocked ancient arrow"),
+    [SWMP_HORSE_ASSET] = VISUAL(SWMP_HORSE_SLOT, "GameRomHorse", "Horse_Link", "SwmpRemoteHorse", "horse", NULL),
 };
 #undef ARROW
 #undef VISUAL
@@ -738,7 +739,86 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_POLE_HOLD] = ACTION(PoleHold, "Climb_Tree_Top_Sharp_FootL", "ClimbTreeTopSharp", PROXY_GEAR_NONE),
     [SWMP_PROXY_WARP_DEPART] = ACTION(WarpDepart, "Demo_Warp_Nml", "Warp", PROXY_GEAR_NONE),
     [SWMP_PROXY_WARP_ARRIVE] = ACTION(WarpArrive, "Nml_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_WAIT] = ACTION(RideWait, "Horse_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_WALK] = ACTION(RideWalk, "Horse_Move_Gear_1", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_TROT] = ACTION(RideTrot, "Horse_Move_Gear_2", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_CANTER] = ACTION(RideCanter, "Horse_Move_Gear_3", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_GALLOP] = ACTION(RideGallop, "Horse_Move_Gear_Top", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BACK] = ACTION(RideBack, "Horse_Move_Back", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_JUMP] = ACTION(RideJump, "Horse_Jump_Gear_3", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_REAR] = ACTION(RideRear, "Horse_Courbette_Gear_3", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_RODEO] = ACTION(RideRodeo, "Horse_Rodeo", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SWORD_RIGHT] = ACTION(RideSwordRight, "Sword_Attack_Horse_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SWORD_LEFT] = ACTION(RideSwordLeft, "Sword_Attack_Horse_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_LSWORD_RIGHT] = ACTION(RideLargeSwordRight, "Lsword_Attack_Horse_R", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_LSWORD_LEFT] = ACTION(RideLargeSwordLeft, "Lsword_Attack_Horse_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SPEAR_RIGHT] = ACTION(RideSpearRight, "Spear_Attack_Horse_R30", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SPEAR_LEFT] = ACTION(RideSpearLeft, "Spear_Attack_Horse_L30_D40", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SWORD_CHARGE] = ACTION(RideSwordCharge, "Sword_Charge_Horse", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_LSWORD_CHARGE] = ACTION(RideLargeSwordCharge, "Lsword_Charge_Horse", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_SPEAR_CHARGE] = ACTION(RideSpearCharge, "Spear_Charge_Horse", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_LOAD] = ACTION(RideBowLoad, "Bow_Attack_Load", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_AIM] = ACTION(RideBowAim, "Bow_Attack_Charge", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_SHOOT] = ACTION(RideBowShoot, "Bow_Attack_Shoot", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_BACK_LOAD] = ACTION(RideBowBackLoad, "Bow_Attack_Load", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_BACK_AIM] = ACTION(RideBowBackAim, "Bow_Attack_Charge", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_BACK_SHOOT] = ACTION(RideBowBackShoot, "Bow_Attack_Shoot", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_HORSE_BOW_END] = ACTION(RideBowEnd, "Bow_Attack_Horse_End", NULL, PROXY_GEAR_NONE),
 };
+
+static const ProxyAction horse_actions[] = {
+    ACTION(HorseWait, "Wait", "Wait", PROXY_GEAR_NONE),
+    ACTION(HorseWalk, "Move_Gear_1", "Move_Gear1", PROXY_GEAR_NONE),
+    ACTION(HorseTrot, "Move_Gear_2", "Move_Gear2", PROXY_GEAR_NONE),
+    ACTION(HorseCanter, "Move_Gear_3", "Move_Gear3", PROXY_GEAR_NONE),
+    ACTION(HorseGallop, "Move_Gear_Top", "Move_Gear4", PROXY_GEAR_NONE),
+    ACTION(HorseBack, "Move_Back", "Move_Back", PROXY_GEAR_NONE),
+    ACTION(HorseJump, "Jump_Gear_3", "Jump_Gear3", PROXY_GEAR_NONE),
+    ACTION(HorseRear, "Courbette_Gear_3", "Courbette", PROXY_GEAR_NONE),
+    ACTION(HorseRodeo, "Rodeo", "Rodeo", PROXY_GEAR_NONE),
+};
+
+_Static_assert(sizeof horse_actions / sizeof *horse_actions == SWMP_HORSE_GAIT_COUNT - 1,
+               "every horse gait needs a proxy clip");
+
+const char *swmp_horse_gait_name(SwmpHorseGait gait) {
+    return gait > SWMP_HORSE_NONE && gait < SWMP_HORSE_GAIT_COUNT ? horse_actions[gait - 1].state : NULL;
+}
+
+SwmpHorseGait swmp_horse_gait(const char *state) {
+    for (unsigned i = 0; i < sizeof horse_actions / sizeof *horse_actions; i++)
+        if (!strcmp(state, horse_actions[i].native)) return SWMP_HORSE_WAIT + i;
+    if (!strncmp(state, "Jump", 4)) return SWMP_HORSE_JUMP;
+    return SWMP_HORSE_NONE;
+}
+
+SwmpProxyAction swmp_horse_rider_action(SwmpHorseGait gait, const char *base, const char *lower, const char *upper,
+                                       SwmpGearFamily family, bool left) {
+    if (gait <= SWMP_HORSE_NONE || gait >= SWMP_HORSE_GAIT_COUNT) return SWMP_PROXY_IDLE;
+    if (!strcmp(base, "CutHorseRide") || !strcmp(base, "CutChargeHorseRide") ||
+        !strcmp(lower, "CutHorseRide") || !strcmp(lower, "CutChargeHorseRide") ||
+        !strcmp(upper, "CutHorseRide") || !strcmp(upper, "CutChargeHorseRide")) {
+        if (family == SWMP_GEAR_FAMILY_SWORD)
+            return left ? SWMP_PROXY_HORSE_SWORD_LEFT : SWMP_PROXY_HORSE_SWORD_RIGHT;
+        if (family == SWMP_GEAR_FAMILY_LSWORD)
+            return left ? SWMP_PROXY_HORSE_LSWORD_LEFT : SWMP_PROXY_HORSE_LSWORD_RIGHT;
+        if (family == SWMP_GEAR_FAMILY_SPEAR)
+            return left ? SWMP_PROXY_HORSE_SPEAR_LEFT : SWMP_PROXY_HORSE_SPEAR_RIGHT;
+    }
+    if (!strcmp(base, "CutChargeWaitHorseRide") || !strcmp(lower, "CutChargeWaitHorseRide") ||
+        !strcmp(upper, "CutChargeWaitHorseRide")) {
+        if (family == SWMP_GEAR_FAMILY_SWORD) return SWMP_PROXY_HORSE_SWORD_CHARGE;
+        if (family == SWMP_GEAR_FAMILY_LSWORD) return SWMP_PROXY_HORSE_LSWORD_CHARGE;
+        if (family == SWMP_GEAR_FAMILY_SPEAR) return SWMP_PROXY_HORSE_SPEAR_CHARGE;
+    }
+    bool back = !strcmp(lower, "AimHorseLowerB") || !strcmp(lower, "AimHorseLowerWaitB") ||
+        !strcmp(lower, "AimHorseLowerTurnB") || !strcmp(base, "AimHorseLowerB");
+    if (!strcmp(upper, "BowReload")) return back ? SWMP_PROXY_HORSE_BOW_BACK_LOAD : SWMP_PROXY_HORSE_BOW_LOAD;
+    if (!strcmp(upper, "BowCharge")) return back ? SWMP_PROXY_HORSE_BOW_BACK_AIM : SWMP_PROXY_HORSE_BOW_AIM;
+    if (!strcmp(upper, "BowShoot")) return back ? SWMP_PROXY_HORSE_BOW_BACK_SHOOT : SWMP_PROXY_HORSE_BOW_SHOOT;
+    if (!strcmp(upper, "HorseBowEndUpper")) return SWMP_PROXY_HORSE_BOW_END;
+    return SWMP_PROXY_HORSE_WAIT + gait - SWMP_HORSE_WAIT;
+}
 #undef ACTION
 
 const char *swmp_proxy_action_name(SwmpProxyAction action) {
@@ -912,30 +992,28 @@ enum {
     PROXY_ANIM_STATE_SIZE = 448,
 };
 
-static size_t proxy_anim_list(uint8_t out[PROXY_ANIM_LIST_SIZE], bool in_place) {
+static size_t proxy_anim_list(uint8_t *out, const ProxyAction *actions, unsigned count, const char *archive) {
     enum { ROOT = 52, ADD_RES = ROOT + 12, DEFINES = ADD_RES + 12,
-           RES_OBJECT = DEFINES + 12, FIRST_STATE = RES_OBJECT + 8,
-           PARAMS = FIRST_STATE + 8 * SWMP_PROXY_ACTION_COUNT,
-           STRINGS_AT = PARAMS + 8 * (1 + 2 * SWMP_PROXY_ACTION_COUNT) };
+           RES_OBJECT = DEFINES + 12, FIRST_STATE = RES_OBJECT + 8 };
+    unsigned params = FIRST_STATE + 8 * count;
+    unsigned strings = params + 8 * (1 + 2 * count);
     aamp_list(out, ROOT, "param_root", ADD_RES, 2, 0, 0);
     aamp_list(out, ADD_RES, "AddReses", 0, 0, RES_OBJECT, 1);
-    aamp_list(out, DEFINES, "ASDefines", 0, 0, FIRST_STATE, SWMP_PROXY_ACTION_COUNT);
-    aamp_object(out, RES_OBJECT, "AddRes_0", PARAMS, 1);
-    unsigned end = aamp_string(out, PARAMS, "Anim", STRINGS_AT,
-                               in_place ? SWMP_PROXY_ANIMATION : SWMP_PLAYER_ANIMATION);
+    aamp_list(out, DEFINES, "ASDefines", 0, 0, FIRST_STATE, count);
+    aamp_object(out, RES_OBJECT, "AddRes_0", params, 1);
+    unsigned end = aamp_string(out, params, "Anim", strings, archive);
     const ProxyAction *order[SWMP_PROXY_ACTION_COUNT];
-    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) order[i] = &proxy_actions[i];
-    qsort(order, SWMP_PROXY_ACTION_COUNT, sizeof *order, compare_actions);
-    for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
+    for (unsigned i = 0; i < count; i++) order[i] = &actions[i];
+    qsort(order, count, sizeof *order, compare_actions);
+    for (unsigned i = 0; i < count; i++) {
         char entry[24];
         snprintf(entry, sizeof entry, "ASDefine_%u", i);
-        unsigned param = PARAMS + 8 + 16 * i;
+        unsigned param = params + 8 + 16 * i;
         aamp_object(out, FIRST_STATE + 8 * i, entry, param, 2);
         end = aamp_string(out, param, "Name", end, order[i]->state);
         end = aamp_string(out, param + 8, "Filename", end, order[i]->file);
     }
-    aamp_header(out, end, 3, 1 + SWMP_PROXY_ACTION_COUNT, 1 + 2 * SWMP_PROXY_ACTION_COUNT,
-                0, end - STRINGS_AT);
+    aamp_header(out, end, 3, 1 + count, 1 + 2 * count, 0, end - strings);
     return end;
 }
 
@@ -954,8 +1032,8 @@ static size_t proxy_anim_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *c
     return end;
 }
 
-static size_t proxy_carry_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *gait, const char *hold) {
-    // Link's native carry blend uses the Lift bone mask over a locomotion clip.
+static size_t proxy_masked_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *gait,
+                                 const char *upper, const char *mask) {
     enum { ROOT = 52, ELEMENTS = 64, BLEND = 76, GAIT = 88, HOLD = 100, EXTEND = 112,
            RANGES = 124, MASK = 136, OBJECTS = 148, PARAMS = 204, DATA = 316, STRINGS = 360 };
     aamp_list(out, ROOT, "param_root", ELEMENTS, 1, 0, 0);
@@ -987,13 +1065,13 @@ static size_t proxy_carry_state(uint8_t out[PROXY_ANIM_STATE_SIZE], const char *
     write32(out + DATA + 20, 67);
     write32(out + DATA + 24, 67);
     unsigned end = aamp_string(out, PARAMS + 48, "FileName", STRINGS, gait);
-    end = aamp_string(out, PARAMS + 64, "FileName", end, hold);
+    end = aamp_string(out, PARAMS + 64, "FileName", end, upper);
     aamp_value(out, PARAMS + 72, "Start", 1, DATA + 28);
     aamp_value(out, PARAMS + 80, "End", 1, DATA + 32);
     aamp_value(out, PARAMS + 88, "Start", 1, DATA + 36);
     aamp_value(out, PARAMS + 96, "End", 1, DATA + 40);
     unsigned mask_name = end;
-    end = aamp_string(out, PARAMS + 104, "Value0", end, "Lift");
+    end = aamp_string(out, PARAMS + 104, "Value0", end, mask);
     aamp_value(out, PARAMS + 104, "Value0", 7, mask_name);
     aamp_header(out, end, 8, 7, 14, STRINGS - DATA, end - STRINGS);
     return end;
@@ -1063,11 +1141,42 @@ static bool remove_root_motion(uint8_t *raw, size_t size, const uint8_t *clip, u
     return changed;
 }
 
+typedef struct {
+    unsigned action, motion;
+} RootMotion;
+
+static uint8_t *in_place_animation(const uint8_t *src, size_t size, size_t *out_size,
+                                   const ProxyAction *actions, const RootMotion *motion, unsigned motion_count) {
+    if (!src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
+    size_t n;
+    uint8_t *raw = yaz0_unpack(src, size, &n);
+    if (!raw) return NULL;
+    if (n < 0xc0 || memcmp(raw, "FRES    \x03\0\x05\0\xff\xfe", 14) || read32(raw + 0x1c) != n)
+        goto invalid;
+    // Switch BFRES 5.0.3 stores contiguous skeletal-clip headers with file-relative offsets.
+    unsigned count = raw[0xbe] | raw[0xbf] << 8;
+    uint8_t *clips = animation_offset(raw, n, raw + 0x38, count * 0x60u);
+    if (!clips) goto invalid;
+    unsigned found = 0;
+    for (unsigned i = 0; i < count; i++) {
+        const uint8_t *clip = clips + i * 0x60;
+        if (memcmp(clip, "FSKA", 4)) goto invalid;
+        for (unsigned j = 0; j < motion_count; j++) {
+            if (!animation_name(raw, n, clip + 0x10, actions[motion[j].action].clip)) continue;
+            if ((found & (1u << j)) || !remove_root_motion(raw, n, clip, motion[j].motion)) goto invalid;
+            found |= 1u << j;
+        }
+    }
+    if (found != (1u << motion_count) - 1) goto invalid;
+    *out_size = n;
+    return raw;
+invalid:
+    free(raw);
+    return NULL;
+}
+
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size) {
-    static const struct {
-        SwmpProxyAction action;
-        unsigned motion;
-    } root_motion[] = {
+    static const RootMotion root_motion[] = {
         {SWMP_PROXY_WALK, ROOT_PLANAR},
         {SWMP_PROXY_RUN, ROOT_PLANAR},
         {SWMP_PROXY_DASH, ROOT_PLANAR},
@@ -1095,32 +1204,20 @@ uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size)
         {SWMP_PROXY_CLIMB_JUMP_UP_LEFT, ROOT_TRANSLATION},
         {SWMP_PROXY_CLIMB_JUMP_LEFT, ROOT_TRANSLATION},
     };
-    if (!src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
-    size_t n;
-    uint8_t *raw = yaz0_unpack(src, size, &n);
-    if (!raw) return NULL;
-    if (n < 0xc0 || memcmp(raw, "FRES    \x03\0\x05\0\xff\xfe", 14) || read32(raw + 0x1c) != n)
-        goto invalid;
-    // Switch BFRES 5.0.3 stores contiguous skeletal-clip headers with file-relative offsets.
-    unsigned count = raw[0xbe] | raw[0xbf] << 8;
-    uint8_t *clips = animation_offset(raw, n, raw + 0x38, count * 0x60u);
-    if (!clips) goto invalid;
-    unsigned found = 0;
-    for (unsigned i = 0; i < count; i++) {
-        const uint8_t *clip = clips + i * 0x60;
-        if (memcmp(clip, "FSKA", 4)) goto invalid;
-        for (unsigned j = 0; j < sizeof root_motion / sizeof *root_motion; j++) {
-            if (!animation_name(raw, n, clip + 0x10, proxy_actions[root_motion[j].action].clip)) continue;
-            if ((found & (1u << j)) || !remove_root_motion(raw, n, clip, root_motion[j].motion)) goto invalid;
-            found |= 1u << j;
-        }
-    }
-    if (found != (1u << (sizeof root_motion / sizeof *root_motion)) - 1) goto invalid;
-    *out_size = n;
-    return raw;
-invalid:
-    free(raw);
-    return NULL;
+    return in_place_animation(src, size, out_size, proxy_actions, root_motion, sizeof root_motion / sizeof *root_motion);
+}
+
+uint8_t *swmp_horse_animation(const uint8_t *src, size_t size, size_t *out_size) {
+    static const RootMotion root_motion[] = {
+        {SWMP_HORSE_WALK - 1, ROOT_PLANAR},
+        {SWMP_HORSE_TROT - 1, ROOT_PLANAR},
+        {SWMP_HORSE_CANTER - 1, ROOT_PLANAR},
+        {SWMP_HORSE_GALLOP - 1, ROOT_PLANAR},
+        {SWMP_HORSE_BACK - 1, ROOT_PLANAR},
+        {SWMP_HORSE_JUMP - 1, ROOT_PLANAR},
+        {SWMP_HORSE_REAR - 1, ROOT_PLANAR},
+    };
+    return in_place_animation(src, size, out_size, horse_actions, root_motion, sizeof root_motion / sizeof *root_motion);
 }
 
 static const char stock_link[] = "Actor/ActorLink/Obj_RockGray_A_M_01.bxml";
@@ -1157,7 +1254,8 @@ static uint8_t *animated_proxy_pack(const char *actor, PackFile link, PackFile m
     char path[80];
     snprintf(path, sizeof path, "Actor/ASList/%s.baslist", actor);
     PackFile files[3 + SWMP_PROXY_ACTION_COUNT] = {
-        link, model, {path, list, proxy_anim_list(list, in_place)},
+        link, model, {path, list, proxy_anim_list(list, proxy_actions, SWMP_PROXY_ACTION_COUNT,
+                                                in_place ? SWMP_PROXY_ANIMATION : SWMP_PLAYER_ANIMATION)},
     };
     for (unsigned i = 0; i < SWMP_PROXY_ACTION_COUNT; i++) {
         const char *gait = NULL;
@@ -1165,7 +1263,13 @@ static uint8_t *animated_proxy_pack(const char *actor, PackFile link, PackFile m
             gait = proxy_actions[SWMP_PROXY_WALK].clip;
         if (i == SWMP_PROXY_RUN_HOLD_FEW || i == SWMP_PROXY_RUN_HOLD_MANY)
             gait = proxy_actions[SWMP_PROXY_RUN].clip;
-        size_t bytes = gait ? proxy_carry_state(clips[i], gait, proxy_actions[i].clip) :
+        const char *mask = "Lift";
+        if (i >= SWMP_PROXY_HORSE_BOW_LOAD && i <= SWMP_PROXY_HORSE_BOW_BACK_SHOOT) {
+            gait = i >= SWMP_PROXY_HORSE_BOW_BACK_LOAD ?
+                "Bow_Attack_Horse_Draw_Lower_B" : "Bow_Attack_Horse_Draw_Lower_F";
+            mask = "ArmLR";
+        }
+        size_t bytes = gait ? proxy_masked_state(clips[i], gait, proxy_actions[i].clip, mask) :
             proxy_anim_state(clips[i], proxy_actions[i].clip);
         files[3 + i] = (PackFile){proxy_actions[i].path, clips[i], bytes};
     }
@@ -1278,6 +1382,25 @@ static unsigned gear_animations(PackFile *files, unsigned capacity, const char *
     return count > 1 ? count : 0;
 }
 
+static uint8_t *horse_pack(const SwmpGearAsset *asset, uint8_t *link, size_t link_size, PackFile model,
+                           size_t *out_size) {
+    enum { COUNT = SWMP_HORSE_GAIT_COUNT - 1 };
+    uint8_t *animated = proxy_actor_link(link, link_size, "ASUser", asset->actor, &link_size);
+    if (!animated) return NULL;
+    char path[80];
+    snprintf(path, sizeof path, "Actor/ASList/%s.baslist", asset->actor);
+    uint8_t list[124 + COUNT * (24 + 2 * 64)] = {0}, clips[COUNT][PROXY_ANIM_STATE_SIZE] = {{0}};
+    PackFile files[3 + COUNT] = {
+        {asset->actor_link, animated, link_size}, model,
+        {path, list, proxy_anim_list(list, horse_actions, COUNT, SWMP_PROXY_HORSE_ANIMATION)},
+    };
+    for (unsigned i = 0; i < COUNT; i++)
+        files[3 + i] = (PackFile){horse_actions[i].path, clips[i], proxy_anim_state(clips[i], horse_actions[i].clip)};
+    uint8_t *out = pack_files(files, sizeof files / sizeof files[0], out_size);
+    free(animated);
+    return out;
+}
+
 static uint8_t *gear_pack(const SwmpGearAsset *asset, const char *native,
                           const uint8_t *src, size_t size, const uint8_t *gear, size_t gear_size,
                           size_t *out_size, bool *animated) {
@@ -1314,6 +1437,11 @@ static uint8_t *gear_pack(const SwmpGearAsset *asset, const char *native,
                 {asset->actor_link, link, link_size},
                 {model_list, model + model_data + ms, me - ms},
             };
+            if (asset->slot == SWMP_HORSE_SLOT) {
+                out = horse_pack(asset, link, link_size, files[1], out_size);
+                free(link);
+                goto done;
+            }
             unsigned count = BASE_FILES;
             char alias_list[80];
             if (anim_user) {

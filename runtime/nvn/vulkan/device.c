@@ -3079,6 +3079,13 @@ static void present_locked(NvnTexture *t) {
     }
     // Frame generation: the frame between the last one and this (exec.c vk_fg_generate), presented first. Its copies
     // are 8-bit and would clip the HDR picture, so it stays off while the game's float picture is presented.
+    const struct SwmpIndicatorOverlay *indicators = NULL;
+#ifdef SW_MULTIPLAYER
+    // Frame generation consumes the camera candidates at present.
+    float camera[16];
+    bool have_camera = vk_world_view_projection(camera);
+    SwmpIndicatorOverlay overlay;
+#endif
     TexBackend *gen;
     { SW_ZONE("present/frame_gen"); gen = (held || hdr_src) ? NULL : vk_fg_generate(t, b); }
     {   // (measuring) SAVAGEWIND_FG_TEST=1: the frame made, not presented
@@ -3114,6 +3121,12 @@ static void present_locked(NvnTexture *t) {
         } else {
             output_scale(dw, dh, g_settings.wide_view, &os);
         }
+#ifdef SW_MULTIPLAYER
+        if (!held) {
+            overlay = swmp_m1_indicator_overlay(&os, have_camera ? camera : NULL);
+            if (overlay.visible) indicators = &overlay;
+        }
+#endif
         double sx = os.sx, sy = os.sy, vx = os.vx, vy = os.vy, vw = os.vw, vh = os.vh;
         float crop[4] = {(float)os.crop[0], (float)os.crop[1], (float)os.crop[2], (float)os.crop[3]};  // (uv origin, size)
         renderer_set_scale((float)sx, (float)sy);
@@ -3130,8 +3143,8 @@ static void present_locked(NvnTexture *t) {
         uint64_t td = SDL_GetTicksNS();
         if (gen) {  // the generated frame, as the game's are (crop, anti-aliasing, menu), then this one half a frame later
             vk_present_draw(cb, gen, (float)vx, (float)vy, (float)vw, (float)vh, pv);
-            if (menu_render_needed()) rec_drain();  // (ImGui records into cb itself, and may upload its fonts on the queue)
-            menu_render((void *)cb, g_vk.sc_extent.width, g_vk.sc_extent.height);
+            if (indicators || menu_render_needed()) rec_drain();
+            menu_render((void *)cb, g_vk.sc_extent.width, g_vk.sc_extent.height, indicators);
             // SAVAGEWIND_FG_SHOT_AT=<frame>,... (counted as SAVAGEWIND_SHOT_AT): the window at two presents in a row
             // from there, each generated frame and the game's after it -> build/frames/window_N_<0|1>_<gen|real>.png
             // (real 0, gen 1, real 1: a generated frame between the two it was made from)
@@ -3168,11 +3181,11 @@ static void present_locked(NvnTexture *t) {
         static long menu_at = -1;
         if (menu_at < 0) menu_at = getenv("SAVAGEWIND_MENU_AT") ? atol(getenv("SAVAGEWIND_MENU_AT")) : 0;
         if (menu_at && (long)total_frames + 1 == menu_at) { extern void menu_test_open(void); menu_test_open(); }
-        bool menu = menu_render_needed();
+        bool menu = indicators || menu_render_needed();
         if (menu) {
             rec_drain();  // (ImGui records into cb itself, and may upload its fonts on the queue)
             if (hdr_src) frame_menu_begin(cb);  // (the float picture is not the menu's target)
-            { SW_ZONE("present/menu"); menu_render((void *)cb, g_vk.sc_extent.width, g_vk.sc_extent.height); }
+            { SW_ZONE("present/menu"); menu_render((void *)cb, g_vk.sc_extent.width, g_vk.sc_extent.height, indicators); }
         }
         g_present_split[2] += SDL_GetTicksNS() - td;
         static long win_shot = -1;

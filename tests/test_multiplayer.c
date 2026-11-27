@@ -29,7 +29,7 @@ static void packet_test(void) {
     };
     CHECK(swmp_packet_encode(packet, sizeof packet, &in) == SWMP_PACKET_OK);
     const uint8_t expected[] = {
-        0x53, 0x57, 0x4d, 0x50, 0, 11, 16, 4, 0, 0, 0, 3,
+        0x53, 0x57, 0x4d, 0x50, 0, 12, 16, 4, 0, 0, 0, 3,
         0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 3, 1, 0, 0,
         0x10, 0x20, 0x30, 0x40, 0xa0, 0xb0, 0xc0, 0xd0,
     };
@@ -45,7 +45,7 @@ static void packet_test(void) {
     packet[0] = 0;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_MAGIC);
     packet[0] = 0x53;
-    packet[5] = 10;
+    packet[5] = 11;
     CHECK(swmp_packet_decode(&out, packet, sizeof packet) == SWMP_PACKET_BAD_VERSION);
     packet[5] = SWMP_PROTOCOL_VERSION;
     packet[21] = SWMP_CHANNEL_COUNT;
@@ -95,6 +95,9 @@ static void snapshot_test(void) {
         .sampled_ms = UINT32_C(0x12345678),
         .held_materials = 5,
         .warp_amount = 163,
+        .horse_gait = SWMP_HORSE_CANTER,
+        .horse_phase = 165,
+        .horse_pose = {.offset_mm = {100, -1975, -40}, .rotation = {450, -720, 3}},
         .arrow_pose = {.offset_mm = {-280, 1280, 450}, .rotation = {-649, -3610, 16003}},
         .items = {
             [0] = {.model = UINT32_C(0xa1b2c3d4), .instance = 0x12fe,
@@ -123,7 +126,19 @@ static void snapshot_test(void) {
     const uint8_t first_item[] = {0xa1, 0xb2, 0xc3, 0xd4, 0x12, 0xfe, 0xff, 0x9f, 0, 131, 0, 20,
                                   0x80, 0, 0xff, 0xb0, 0x7f, 0xff};
     CHECK(data[101] == 5 && out.held_materials == 5);
-    CHECK(data[SWMP_PLAYER_SNAPSHOT_SIZE - 1] == 163 && out.warp_amount == 163);
+    CHECK(data[102 + SWMP_ITEM_SLOTS * 18] == 163 && out.warp_amount == 163);
+    CHECK(out.horse_gait == in.horse_gait && out.horse_phase == in.horse_phase);
+    CHECK(!memcmp(out.horse_pose.offset_mm, in.horse_pose.offset_mm, sizeof in.horse_pose.offset_mm));
+    CHECK(!memcmp(out.horse_pose.rotation, in.horse_pose.rotation, sizeof in.horse_pose.rotation));
+    data[SWMP_PLAYER_SNAPSHOT_SIZE - 14] = SWMP_HORSE_NONE;
+    CHECK(!swmp_player_snapshot_decode(&out, data));
+    in.horse_gait = SWMP_HORSE_GAIT_COUNT;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.horse_gait = SWMP_HORSE_CANTER;
+    in.horse_pose.offset_mm[1] = INT16_MIN;
+    CHECK(!swmp_player_snapshot_encode(data, &in));
+    in.horse_pose.offset_mm[1] = -1975;
+    CHECK(swmp_player_snapshot_encode(data, &in));
     CHECK(!memcmp(data + 102, first_item, sizeof first_item));
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
         CHECK(out.items[i].model == in.items[i].model && out.items[i].instance == in.items[i].instance);

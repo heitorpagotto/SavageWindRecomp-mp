@@ -115,12 +115,12 @@ Link during turns. Grounded locomotion and equipment share buffered playback, an
 start at the sampled animation phase. Default hair and equipped armor use skinned models that follow
 the remote proxy. Protocol 7 adds native dye indices and body masking. Representative
 dye and masking cases passed in two Windows games at 30 FPS. [Appearance evidence](testing/appearance.md#m25-armor-colors-and-base-skin-clipping)
-The rest of the equipment and animation catalog and overhead names are open. See the
+The rest of the equipment and animation catalog is open. See the
 [playback handoff](handoff/playback.md#m25-remote-movement-and-standing-jump-playback) and
 [animation backlog](NEXT.md#remaining-animation-work).
 
 Goal: clients share the host's time of day and weather, and every player sees the other Links' equipped
-gear and animations.
+gear, animations, and locations on the in-game map.
 
 Planned deliverables:
 
@@ -128,8 +128,9 @@ Planned deliverables:
   one multiplayer setting to enable or disable both, enabled by default.
 - Show `[UserName] connected to the game` to the host and existing peers when the host admits a player.
 - Show a named disconnect notice to other players and a local notice when the player's own session ends.
-- If feasible, display player names above their remote Links. Add a multiplayer setting to hide the names,
+- Display player names above their remote Links. Add a multiplayer setting to hide the names,
   with name display enabled by default.
+- Show remote players' reported locations as markers on the in-game map screen.
 - Reliable appearance and equipment updates keyed by `equipment_revision`, covering every armor slot,
   weapons, shields, and bows, including equip, unequip, drawn, and stowed states.
 - Full remote animation playback, covering traversal, locomotion, equipment use, and combat animations.
@@ -141,7 +142,9 @@ Acceptance criteria:
   consistent weather transitions when sharing an area, including after joining late, reconnecting, or
   traveling. Disabling the setting leaves time and weather under local game control.
 - The join notification uses the admitted player's in-game name and appears once per successful admission.
-- If overhead names ship, verify that they follow their remote Links and can be hidden with the setting.
+- Verify that overhead names follow remote Links and can be hidden with the setting.
+- Map markers follow remote players on the displayed map. Verify that markers appear after joining,
+  update after travel, and disappear when a player leaves or moves outside the displayed map.
 - Each peer sees other Links' armor, weapons, shields, and bows update as players change equipment. Their
   remote animations match the actions they perform, including combat animations.
 - Changes in a peer's gear or animation leave the receiving player's inventory and controls independent.
@@ -150,25 +153,32 @@ Acceptance criteria:
 
 Status: **not started**.
 
-Goal: peers cooperate against enemies and damage one another without duplicate authoritative damage.
+Goal: peers fight the same enemies with synchronized movement, health, and behavior. Enemies can respond
+to any player in the encounter, and peers can damage one another without duplicate authoritative damage.
 
 Planned deliverables:
 
 - Stable actor identity mapping for networked enemies.
+- Host-authoritative enemy spawn, despawn, position, facing, and movement for peers in the same area and phase.
+- Synchronize enemy awareness, target selection and switching, attacks, and reactions to each player's actions,
+  including hit reactions, stagger, knockback, and status effects.
 - Client damage requests with host validation and idempotent authoritative results.
-- Shared enemy health/death and appropriate status/knockback replication.
+- Shared enemy health and death, with authoritative state resync after late join, reconnect, or area re-entry.
 - PvP rules that preserve the base combat feel and avoid feedback loops.
 - Ownership/rate/range checks and reconciliation after prediction disagreement.
-- Show remote players' locations as markers on the in-game map screen.
 
 Acceptance criteria:
 
-- Multiple peers damaging one enemy observe one convergent health/death outcome.
+- Players in the same encounter see the enemy at a convergent position and facing throughout movement and combat.
+- In a shared encounter, have different players draw aggro, cause hit reactions, and become the target of attacks.
+  Verify that each peer sees the same target changes, attacks, and reactions, and that enemy attacks resolve
+  against the intended players.
+- Multiple peers damaging one enemy observe one convergent health and death outcome.
+- After late join, reconnect, or area re-entry, players see the current enemy state without duplicate actors
+  or defeated enemies reappearing due to resync.
 - Replayed, duplicated, forged, stale, and out-of-range requests are rejected.
 - PvP works in both directions with consistent health and death state.
 - High latency, packet loss, and simultaneous-hit cases are reproducible in tests.
-- Map markers follow each player's reported location while it belongs to the displayed map and disappear
-  when that player leaves the session.
 
 ## M4 — Shared world, story, and chests
 

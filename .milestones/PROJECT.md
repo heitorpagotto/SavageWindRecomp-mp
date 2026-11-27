@@ -12,8 +12,10 @@ Required final behavior
 - A host and joining player exchange an invite and reply to connect directly over the internet.
 - Up to eight players can share a session.
 - Remote Links show position, movement and actions, armour, weapons, shield, and bow.
+- The in-game map shows markers for remote players whose locations belong to the displayed map.
 - Players can damage each other. Whether PvP is always on or a session option remains undecided.
-- Enemy health and death are shared for cooperative combat.
+- Players in the same encounter share enemy positions, movement, health, and death. They see the same
+  enemy targeting, attacks, and reactions to each player's actions.
 - Main-story progression and story quests are shared.
 - Chests grant loot to every eligible player.
 - The fork builds and runs on every supported Savage Wind platform. The maintained targets are Windows and

@@ -44,6 +44,10 @@ notice when their own session ends. **Sync host time and weather** is on by defa
 Clients follow the host's clock and effective weather while in the same supported area. Turn it off to use
 local time and weather.
 
+Nearby remote Links display their lobby names overhead by default. Turn off **Show overhead player names**
+in either Multiplayer settings screen to hide them. On the overworld map, colored markers with lobby names
+show where other players are, including players beyond the range where their Link models appear.
+
 Players can connect across different networks when ICE finds a direct route. The app uses the public STUN
 endpoint from the WebRTC documentation to discover addresses. Game traffic flows between peers. Restrictive
 routers or firewalls can prevent a direct connection. For development, `SAVAGEWIND_MP_STUN` overrides the

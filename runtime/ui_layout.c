@@ -28,6 +28,25 @@ int ui_layout_map_mode(uint64_t screen) {
     return frame == 0 ? 1 : frame == end ? 0 : -1;
 }
 
+bool ui_layout_world_map_view(float view[3]) {
+    if (strcmp(g_game_version, "1.9.0") || !g_site.screen_mgr) return false;
+    uint64_t manager = LD64(g_site.screen_mgr);
+    if (!ui_range(manager, 0x38)) return false;
+    uint32_t count = LD32(manager + 0x28);
+    uint64_t screens = LD64(manager + 0x30);
+    if (count <= 0x2f || count > 256 || !ui_range(screens, 8 * count) || LD64(screens + 8 * 0x2f)) return false;
+    uint64_t screen = LD64(screens + 8 * 0x2a);
+    if (!ui_range(screen, 0x3648) || LD8(screen + 0xfe) != 2 || ui_layout_map_mode(screen) != 1) return false;
+
+    // The native map transform, also used for cursor navigation in pc_cursor.c.
+    uint64_t map = LD64(screen + 0x3628);
+    uint64_t data = ui_range(map, 0x8e0) ? LD64(map + 0x8d8) : 0;
+    if (!ui_range(data, 0x87c)) return false;
+    memcpy(view, (const void *)(uintptr_t)(data + 0x870), 3 * sizeof *view);
+    view[2] *= 2.0f;  // AppMap uses two map units per world metre.
+    return isfinite(view[0]) && isfinite(view[1]) && isfinite(view[2]) && view[2] > 0;
+}
+
 static _Thread_local unsigned pane_draw_depth, layout_kind;  // (the scope of the layout being drawn, and its screen:)
 static _Thread_local uint64_t layout_screen;
 RT_ON_RESET(ui_layout_reset) { pane_draw_depth = 0; layout_kind = UI_LAYOUT_NONE; layout_screen = 0; }

@@ -10517,6 +10517,7 @@ static struct {
     bool copy_pending, hudless_ok;
     struct { NvnTexture *depth; uint64_t cb; int draws; float m[FG_CAMERA_FLOATS], link[3]; bool has_link; } cand[4];
     int ncand;
+    uint64_t camera_frame;
     double prev_vp[16];
     float prev_pos[3], prev_fwd[3], prev_link[3];
     bool have_prev_link;
@@ -10581,7 +10582,9 @@ static void fg_before_draw(void) {
 }
 
 static void fg_draw(Prog *pr, CmdRec *r) {
-    if (!g_fg_want && !dlss_wanted()) return;  // (DLSS's motion vectors are made from the same camera: dlss_scene)
+    if (!g_fg_want && !dlss_wanted() && !(settings_multiplayer_enabled() && settings_multiplayer_show_names())) return;
+    uint64_t frame = renderer_present_count();
+    if (fg.camera_frame != frame) fg.camera_frame = frame, fg.ncand = 0;
     if (st.rt.depth && vk_texture_scale_group(st.rt.depth) == RS_SCENE) {
         Range u = st.ubuf[0][0];
         const float *f = (const float *)(uintptr_t)u.addr;
@@ -10657,6 +10660,15 @@ static int cam_best(uint32_t w, uint32_t h) {
             best = i;
     }
     return best;
+}
+
+bool vk_world_view_projection(float matrix[16]) {
+    if (fg.camera_frame != renderer_present_count() || !fg.ncand) return false;
+    int best = 0;
+    for (int i = 1; i < fg.ncand; i++)
+        if (fg.cand[i].draws > fg.cand[best].draws) best = i;
+    memcpy(matrix, fg.cand[best].m + 12, 16 * sizeof *matrix);
+    return true;
 }
 
 // The camera's motion vectors (fg_mv.frag) into mv (RG16F at db's size), for frame generation and DLSS (dlss_scene):

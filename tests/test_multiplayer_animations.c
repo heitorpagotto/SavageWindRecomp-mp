@@ -78,6 +78,22 @@ int main(void) {
     expect_action(swmp_proxy_carry_action(SWMP_PROXY_WALK, 5), SWMP_PROXY_WALK_HOLD_MANY);
     expect_action(swmp_proxy_carry_action(SWMP_PROXY_RUN, 2), SWMP_PROXY_RUN_HOLD_FEW);
     expect_action(swmp_proxy_carry_action(SWMP_PROXY_PUT_MATERIALS, 0), SWMP_PROXY_PUT_MATERIALS);
+    expect_action(swmp_horse_rider_action(swmp_horse_gait("Move_Gear3"), "HorseRun", "", "", SWMP_GEAR_FAMILY_NONE, false),
+                  SWMP_PROXY_HORSE_CANTER);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_WALK, "HorseRun", "CutHorseRide", "", SWMP_GEAR_FAMILY_SWORD, false),
+                  SWMP_PROXY_HORSE_SWORD_RIGHT);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_WAIT, "CutHorseRide", "", "", SWMP_GEAR_FAMILY_LSWORD, true),
+                  SWMP_PROXY_HORSE_LSWORD_LEFT);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_TROT, "HorseRun", "", "CutChargeHorseRide", SWMP_GEAR_FAMILY_SPEAR, false),
+                  SWMP_PROXY_HORSE_SPEAR_RIGHT);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_WALK, "HorseRun", "AimHorseLowerF", "BowReload", SWMP_GEAR_FAMILY_NONE, false),
+                  SWMP_PROXY_HORSE_BOW_LOAD);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_WALK, "HorseRun", "AimHorseLowerB", "BowCharge", SWMP_GEAR_FAMILY_NONE, false),
+                  SWMP_PROXY_HORSE_BOW_BACK_AIM);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_TROT, "HorseRun", "AimHorseLowerF", "BowShoot", SWMP_GEAR_FAMILY_NONE, false),
+                  SWMP_PROXY_HORSE_BOW_SHOOT);
+    expect_action(swmp_horse_rider_action(SWMP_HORSE_TROT, "HorseRun", "", "HorseBowEndUpper", SWMP_GEAR_FAMILY_NONE, false),
+                  SWMP_PROXY_HORSE_BOW_END);
     if (!failures) puts("multiplayer animation selector: ok");
     return failures != 0;
 }

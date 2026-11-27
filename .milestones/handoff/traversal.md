@@ -1,5 +1,26 @@
 # Traversal, dodges, and reactions
 
+## M2.5 riding and mounted combat
+
+- On 1.9.0 the sender reads the native horse attachment during mounted
+  states and samples the horse's transform relative to Link. Protocol 12
+  carries that transform, gait, and phase on the same delayed timeline
+  as Link and his equipment. The receiver uses a passive stock horse
+  model with a default coat. Its animation archive removes authored
+  planar root travel from the clips driven by snapshots.
+- The riding states cover idle, four forward gaits, backing, jumping,
+  rearing, and rodeo. Mounted melee uses the native cut and charge
+  states for one-handed swords, two-handed weapons, and spears. The
+  sender selects a lateral cut from the camera angle at the start of
+  the swing.
+- Mounted bow playback reads the native lower and upper animation slots.
+  The proxy blends the forward or backward riding pose with reload,
+  draw, and release, and uses the mounted bow end clip. The existing
+  bowstring and held-arrow visuals carry the native bow and nock poses
+  through release.
+- See the [test record](../testing/traversal.md#m25-riding-and-mounted-combat)
+  for gameplay coverage.
+
 ## M2.5 wall release
 
 - Earlier wall-climbing traces showed native `WallOff` while the remote Link

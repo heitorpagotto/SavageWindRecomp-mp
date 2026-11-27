@@ -19,11 +19,14 @@ bool fsr3_upscaler_enabled(void);  // (nvn/output_scale.c: SAVAGEWIND_FSR3=0 hid
 // Read by the window, guest and render threads.
 static atomic_bool multiplayer_enabled;
 static atomic_bool multiplayer_sync_environment = true;
+static atomic_bool multiplayer_show_names = true;
 
 bool settings_multiplayer_enabled(void) { return atomic_load(&multiplayer_enabled); }
 void settings_multiplayer_set(bool enabled) { atomic_store(&multiplayer_enabled, enabled); }
 bool settings_multiplayer_sync_environment(void) { return atomic_load(&multiplayer_sync_environment); }
 void settings_multiplayer_set_sync_environment(bool enabled) { atomic_store(&multiplayer_sync_environment, enabled); }
+bool settings_multiplayer_show_names(void) { return atomic_load(&multiplayer_show_names); }
+void settings_multiplayer_set_show_names(bool enabled) { atomic_store(&multiplayer_show_names, enabled); }
 
 // SAVAGEWIND_SETTINGS=<path>: another settings file (test runs never touch the player's savagewind.ini)
 const char *settings_file(void) {
@@ -381,6 +384,7 @@ void settings_load(void) {
         else if (!strcmp(key, "gpu")) g_settings.gpu = gpu_index_parse(val);
         else if (!strcmp(key, "multiplayer")) settings_multiplayer_set(atoi(val) != 0);
         else if (!strcmp(key, "multiplayer_sync_environment")) settings_multiplayer_set_sync_environment(atoi(val) != 0);
+        else if (!strcmp(key, "multiplayer_show_names")) settings_multiplayer_set_show_names(atoi(val) != 0);
         else if (!strcmp(key, "volume")) g_settings.volume = (float)atof(val);
         else if (!strcmp(key, "audio_output")) {
             for (int i = 0; i < AUDIO_OUT_COUNT; i++)
@@ -750,6 +754,7 @@ void settings_save(void) {
     fprintf(f, "settings_version = %d\n", SETTINGS_VERSION);
     fprintf(f, "multiplayer = %d\n", settings_multiplayer_enabled());
     fprintf(f, "multiplayer_sync_environment = %d\n", settings_multiplayer_sync_environment());
+    fprintf(f, "multiplayer_show_names = %d\n", settings_multiplayer_show_names());
     fprintf(f, "fullscreen = %d\n", g_settings.fullscreen);
     int fm = g_settings.fullscreen_mode;
     fprintf(f, "fullscreen_mode = %s\n", k_fsmode[fm >= 0 && fm < FSMODE_COUNT ? fm : FSMODE_AUTO]);

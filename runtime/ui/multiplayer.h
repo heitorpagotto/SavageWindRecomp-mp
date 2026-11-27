@@ -5,5 +5,6 @@
 #ifdef SW_MULTIPLAYER
 void multiplayer_tab_draw();
 void multiplayer_notices_draw(float scale);
+void multiplayer_indicators_draw(const SwmpIndicatorOverlay &overlay, float scale);
 const char *multiplayer_status(const SwmpM1View &view);
 #endif

@@ -14,6 +14,9 @@
 #define SWMP_PROXY_ANIMATION "SwmpLinkAnimation"
 #define SWMP_PLAYER_ANIMATION_FILE "Model/" SWMP_PLAYER_ANIMATION ".sbfres"
 #define SWMP_PROXY_ANIMATION_FILE "Model/" SWMP_PROXY_ANIMATION ".sbfres"
+#define SWMP_STOCK_HORSE_ANIMATION "Model/Horse_Link_Animation.sbfres"
+#define SWMP_PROXY_HORSE_ANIMATION "SwmpHorseAnimation"
+#define SWMP_PROXY_HORSE_ANIMATION_FILE "Model/" SWMP_PROXY_HORSE_ANIMATION ".sbfres"
 
 typedef struct {
     SwmpGearSlot slot;
@@ -24,9 +27,11 @@ typedef struct {
 enum {
     SWMP_PARAGLIDER_ASSET = 1,
     SWMP_ARROW_ASSET_BASE = SWMP_PARAGLIDER_ASSET,
-    SWMP_VISUAL_ASSET_COUNT = SWMP_ARROW_ASSET_BASE + SWMP_ARROW_COUNT,
+    SWMP_HORSE_ASSET = SWMP_ARROW_ASSET_BASE + SWMP_ARROW_COUNT,
+    SWMP_VISUAL_ASSET_COUNT,
     SWMP_PARAGLIDER_SLOT = SWMP_GEAR_SLOTS,
     SWMP_NOCKED_ARROW_SLOT,
+    SWMP_HORSE_SLOT,
     SWMP_FIRST_ARMOR_SLOT,
     SWMP_VISUAL_SLOTS = SWMP_FIRST_ARMOR_SLOT + SWMP_ARMOR_SLOTS,
 };
@@ -213,6 +218,31 @@ typedef enum {
     SWMP_PROXY_POLE_HOLD,
     SWMP_PROXY_WARP_DEPART,
     SWMP_PROXY_WARP_ARRIVE,
+    SWMP_PROXY_HORSE_WAIT,
+    SWMP_PROXY_HORSE_WALK,
+    SWMP_PROXY_HORSE_TROT,
+    SWMP_PROXY_HORSE_CANTER,
+    SWMP_PROXY_HORSE_GALLOP,
+    SWMP_PROXY_HORSE_BACK,
+    SWMP_PROXY_HORSE_JUMP,
+    SWMP_PROXY_HORSE_REAR,
+    SWMP_PROXY_HORSE_RODEO,
+    SWMP_PROXY_HORSE_SWORD_RIGHT,
+    SWMP_PROXY_HORSE_SWORD_LEFT,
+    SWMP_PROXY_HORSE_LSWORD_RIGHT,
+    SWMP_PROXY_HORSE_LSWORD_LEFT,
+    SWMP_PROXY_HORSE_SPEAR_RIGHT,
+    SWMP_PROXY_HORSE_SPEAR_LEFT,
+    SWMP_PROXY_HORSE_SWORD_CHARGE,
+    SWMP_PROXY_HORSE_LSWORD_CHARGE,
+    SWMP_PROXY_HORSE_SPEAR_CHARGE,
+    SWMP_PROXY_HORSE_BOW_LOAD,
+    SWMP_PROXY_HORSE_BOW_AIM,
+    SWMP_PROXY_HORSE_BOW_SHOOT,
+    SWMP_PROXY_HORSE_BOW_BACK_LOAD,
+    SWMP_PROXY_HORSE_BOW_BACK_AIM,
+    SWMP_PROXY_HORSE_BOW_BACK_SHOOT,
+    SWMP_PROXY_HORSE_BOW_END,
     SWMP_PROXY_ACTION_COUNT,
 } SwmpProxyAction;
 
@@ -222,9 +252,14 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
                                          bool shield_raised, float draw_duration);
 SwmpProxyAction swmp_proxy_throw_action(const char *state, SwmpGearFamily family, float clip_duration);
 SwmpProxyAction swmp_proxy_carry_action(SwmpProxyAction action, unsigned count);
+const char *swmp_horse_gait_name(SwmpHorseGait gait);
+SwmpHorseGait swmp_horse_gait(const char *state);
+SwmpProxyAction swmp_horse_rider_action(SwmpHorseGait gait, const char *base, const char *lower, const char *upper,
+                                       SwmpGearFamily family, bool left);
 // Build uncompressed RomFS resources from the local game's data. The caller owns the result.
 uint8_t *swmp_proxy_pack(const uint8_t *src, size_t size, bool in_place, size_t *out_size);
 uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size);
+uint8_t *swmp_horse_animation(const uint8_t *src, size_t size, size_t *out_size);
 uint8_t *swmp_gear_pack(const SwmpGearAsset *asset, const uint8_t *src, size_t size,
                         const uint8_t *gear, size_t gear_size, size_t *out_size);
 uint16_t swmp_gear_identity(SwmpGearSlot slot, const char *name);

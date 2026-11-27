@@ -1156,3 +1156,4 @@ T("Multiplayer status", "สถานะโหมดผู้เล่นหล�
 T("Multiplayer is unavailable for this game build.", "โหมดผู้เล่นหลายคนไม่พร้อมใช้งานในเกมรุ่นนี้")
 T("Offline", "ออฟไลน์")
 T("Connected", "เชื่อมต่อแล้ว")
+T("Show overhead player names", "แสดงชื่อเหนือศีรษะผู้เล่น")

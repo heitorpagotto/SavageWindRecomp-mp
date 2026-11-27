@@ -7,6 +7,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "nvn/output_scale.h"
 #include "lobby.h"
 #include "direct.h"
 
@@ -50,6 +51,18 @@ typedef struct {
     char name[SWMP_PLAYER_NAME_SIZE];
 } SwmpNotice;
 
+typedef struct {
+    uint64_t generation;
+    float above_head[3];
+} SwmpNameAnchor;
+
+typedef struct SwmpIndicatorOverlay {
+    char names[SWMP_MAX_PEERS][SWMP_PLAYER_NAME_SIZE];
+    float points[SWMP_MAX_PEERS][2], clip[4];
+    uint8_t visible;
+    bool map;
+} SwmpIndicatorOverlay;
+
 void swmp_m1_boot(const GameLibTables *game);
 void swmp_m1_update(void);
 void swmp_m1_shutdown(void);
@@ -59,6 +72,8 @@ SwmpM1View swmp_m1_view(void);
 SwmpM1Roster swmp_m1_roster(void);
 void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *position,
                            SwmpGearSet gear, const SwmpEnvironment *environment, uint64_t now_ms);
+void swmp_m1_publish_name_anchors(uint64_t generation, const SwmpNameAnchor anchors[SWMP_MAX_PEERS]);
+SwmpIndicatorOverlay swmp_m1_indicator_overlay(const OutScale *output, const float world_to_clip[16]);
 bool swmp_m1_weather_active(void);
 // A null output checks whether the overlay needs to render.
 size_t swmp_m1_notices(SwmpNotice notices[SWMP_MAX_PEERS]);

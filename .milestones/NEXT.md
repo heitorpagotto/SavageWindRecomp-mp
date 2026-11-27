@@ -20,11 +20,14 @@ Appearance. The owner will validate Linux manually and report issues.
 ## Other open work
 
 - For environment sync, verify mixed game progression and native Linux and mixed-platform
-  behavior. Evaluate overhead names separately.
+  behavior.
   [Environment notes](handoff/environment.md), [environment tests](testing/environment.md)
+- Verify player indicators on Linux and across native Slate travel.
+  [M2.5 acceptance criteria](MILESTONES.md#m25--time-weather-and-full-link-synchronization)
 - M7 tracks the deferred M2 manual tests.
   [Acceptance criteria](MILESTONES.md#m7--deferred-manual-validation), [M2 evidence](testing/m2.md#m2-acceptance-follow-up)
-- Networked damage and enemy ownership are M3 work. [M3 acceptance criteria](MILESTONES.md#m3--combat-enemies-and-pvp)
+- M3 covers authoritative enemy positions, health, targeting, attacks, and reactions to every player,
+  plus networked damage and PvP. [M3 acceptance criteria](MILESTONES.md#m3--combat-enemies-and-pvp)
 - For distribution and the unresolved host direction, see the
   [dependency findings](DIRECT_MULTIPLAYER_HANDOFF.md#security-findings) and
   [build compatibility notes](handoff/builds.md).

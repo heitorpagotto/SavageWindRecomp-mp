@@ -5,14 +5,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SWMP_PROTOCOL_VERSION 11u
+#define SWMP_PROTOCOL_VERSION 12u
 #define SWMP_MAX_PEERS 8u
 #define SWMP_PLAYER_NAME_SIZE 32u
 #define SWMP_HOST_PEER 0u
 #define SWMP_UNASSIGNED_PEER 0xffu
 #define SWMP_PACKET_HEADER_SIZE 32u
 #define SWMP_ITEM_SLOTS 12u
-#define SWMP_PLAYER_SNAPSHOT_SIZE (103u + 18u * SWMP_ITEM_SLOTS)
+#define SWMP_PLAYER_SNAPSHOT_SIZE (117u + 18u * SWMP_ITEM_SLOTS)
 #define SWMP_GEAR_OFFSET_LIMIT_MM 3000
 #define SWMP_HELD_MATERIAL_LIMIT 5u
 #define SWMP_ENVIRONMENT_SIZE 8u
@@ -199,6 +199,20 @@ typedef enum {
     SWMP_SHIELD_ANIM_COUNT,
 } SwmpShieldAnimation;
 
+typedef enum {
+    SWMP_HORSE_NONE,
+    SWMP_HORSE_WAIT,
+    SWMP_HORSE_WALK,
+    SWMP_HORSE_TROT,
+    SWMP_HORSE_CANTER,
+    SWMP_HORSE_GALLOP,
+    SWMP_HORSE_BACK,
+    SWMP_HORSE_JUMP,
+    SWMP_HORSE_REAR,
+    SWMP_HORSE_RODEO,
+    SWMP_HORSE_GAIT_COUNT,
+} SwmpHorseGait;
+
 static inline unsigned swmp_gear_pose_flag(SwmpGearSlot slot) {
     return SWMP_PLAYER_WEAPON_POSE << slot;
 }
@@ -230,6 +244,9 @@ typedef struct {
     uint8_t held_materials;       // drives Link's upper-body carry pose over locomotion
     uint8_t warp_amount;          // native model dissolve, from fully visible (0) to hidden (255)
     SwmpItemPose items[SWMP_ITEM_SLOTS];
+    uint8_t horse_gait;           // SwmpHorseGait, zero outside a horse ride
+    uint8_t horse_phase;          // 1..255 maps to [0, 1], zero if unavailable
+    SwmpGearPose horse_pose;      // horse actor relative to the same Link snapshot as equipment
 } SwmpPlayerSnapshot;
 
 bool swmp_player_snapshot_encode(uint8_t out[SWMP_PLAYER_SNAPSHOT_SIZE], const SwmpPlayerSnapshot *snapshot);

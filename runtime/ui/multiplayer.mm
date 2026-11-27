@@ -4,6 +4,8 @@
 #include "i18n.h"
 #include "imgui.h"
 #include "osk.h"
+#include <algorithm>
+#include <cfloat>
 extern "C" {
 #include "../settings.h"
 }
@@ -45,6 +47,11 @@ void multiplayer_tab_draw() {
         settings_multiplayer_set_sync_environment(sync_environment);
         settings_save();
     }
+    bool show_names = settings_multiplayer_show_names();
+    if (ImGui::Checkbox(tr("Show overhead player names"), &show_names)) {
+        settings_multiplayer_set_show_names(show_names);
+        settings_save();
+    }
     if (!view.pending && !view.joining && view.session.state == SWMP_SESSION_OFFLINE) {
         static char name[SWMP_PLAYER_NAME_SIZE] = "Link";  // i18n-skip (default player name)
         ui_input_text(tr("Player name"), name, sizeof name);
@@ -78,6 +85,36 @@ void multiplayer_tab_draw() {
     }
     const char *leave = view.joining || view.session.state == SWMP_SESSION_OFFLINE ? tr("Cancel") : tr("Leave lobby");
     if (ImGui::Button(leave)) swmp_m1_submit(SWMP_M1_LEAVE, nullptr);
+}
+
+void multiplayer_indicators_draw(const SwmpIndicatorOverlay &overlay, float scale) {
+    static const ImU32 colors[SWMP_MAX_PEERS] = {
+        IM_COL32(84, 226, 242, 255), IM_COL32(255, 198, 81, 255), IM_COL32(170, 223, 106, 255),
+        IM_COL32(255, 145, 165, 255), IM_COL32(173, 166, 255, 255), IM_COL32(113, 187, 255, 255),
+        IM_COL32(255, 159, 105, 255), IM_COL32(100, 230, 177, 255),
+    };
+    ImDrawList *draw = ImGui::GetBackgroundDrawList();
+    draw->PushClipRect(ImVec2(overlay.clip[0], overlay.clip[1]), ImVec2(overlay.clip[2], overlay.clip[3]), true);
+    ImFont *font = ImGui::GetFont();
+    const float size = std::max(13.0f, 21 * scale);
+    for (unsigned i = 0; i < SWMP_MAX_PEERS; i++) {
+        if (!(overlay.visible & (1u << i))) continue;
+        const ImVec2 point(overlay.points[i][0], overlay.points[i][1]);
+        const char *name = overlay.names[i];
+        const ImVec2 text = font->CalcTextSizeA(size, FLT_MAX, 0, name);
+        const float radius = std::max(4.0f, 7 * scale), pad = 4 * scale;
+        if (overlay.map) {
+            draw->AddCircleFilled(point, radius + 1.5f, IM_COL32(15, 22, 28, 255));
+            draw->AddCircleFilled(point, radius, colors[i]);
+        }
+        const ImVec2 label(overlay.map ? point.x + radius + 2 * pad : point.x - text.x * 0.5f,
+                           overlay.map ? point.y - text.y * 0.5f : point.y - text.y);
+        draw->AddRectFilled(ImVec2(label.x - pad, label.y - pad * 0.5f),
+                            ImVec2(label.x + text.x + pad, label.y + text.y + pad * 0.5f),
+                            IM_COL32(15, 22, 28, 220), pad);
+        draw->AddText(font, size, label, IM_COL32_WHITE, name);
+    }
+    draw->PopClipRect();
 }
 
 void multiplayer_notices_draw(float scale) {

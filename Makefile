@@ -444,6 +444,17 @@ WIN_B    := build/win-release
 # than the one that wrote the profile.
 DIST_PGO ?= use
 DIST_LTO ?= thin
+UI_FONT_DIR ?= $(B)
+.PHONY: stage-ui-fonts
+stage-ui-fonts:
+	mkdir -p "$(UI_FONT_DIR)"
+	cp third_party/fonts/FiraSans/FiraSans-SemiBold.ttf third_party/fonts/FiraSans/FiraSans-Medium.ttf "$(UI_FONT_DIR)/"
+	cp third_party/fonts/FiraSans/OFL.txt "$(UI_FONT_DIR)/FiraSans-OFL.txt"
+	cp third_party/fonts/NotoSansThai/NotoSansThai-Medium.ttf "$(UI_FONT_DIR)/"
+	cp third_party/fonts/NotoSansThai/OFL.txt "$(UI_FONT_DIR)/NotoSansThai-OFL.txt"
+	cp third_party/fonts/NotoSansHebrew/NotoSansHebrew-Medium.ttf "$(UI_FONT_DIR)/"
+	cp third_party/fonts/NotoSansHebrew/OFL.txt "$(UI_FONT_DIR)/NotoSansHebrew-OFL.txt"
+
 deps-windows:
 	tools/build_deps_windows.sh
 dist:
@@ -467,12 +478,7 @@ dist:
 	    runtime/hle/hle_symbols.txt "$(DIST)/gamelib-src/"
 	cp docs/icon/icon_1024.png "$(DIST)/icon.png"
 	cp runtime/nvn/vulkan/vk_pipelines.seed "$(DIST)/"  # (the pipeline seed the precompilation reads: hashes and render state, nothing of the game)
-	cp third_party/fonts/FiraSans/FiraSans-SemiBold.ttf third_party/fonts/FiraSans/FiraSans-Medium.ttf "$(DIST)/"  # (menus, OFL)
-	cp third_party/fonts/FiraSans/OFL.txt "$(DIST)/FiraSans-OFL.txt"
-	cp third_party/fonts/NotoSansThai/NotoSansThai-Medium.ttf "$(DIST)/"  # (Thai menus, OFL)
-	cp third_party/fonts/NotoSansThai/OFL.txt "$(DIST)/NotoSansThai-OFL.txt"
-	cp third_party/fonts/NotoSansHebrew/NotoSansHebrew-Medium.ttf "$(DIST)/"  # (Hebrew menus, OFL)
-	cp third_party/fonts/NotoSansHebrew/OFL.txt "$(DIST)/NotoSansHebrew-OFL.txt"
+	$(MAKE) stage-ui-fonts UI_FONT_DIR="$(DIST)"
 	cp third_party/FidelityFX/LICENSE.txt "$(DIST)/FidelityFX-LICENSE.txt"  # (AMD FidelityFX SDK, MIT: README "License")
 	if [ -f build/fsr-dlls/amd_fidelityfx_loader_vk.dll ]; then cp build/fsr-dlls/amd_fidelityfx_*_vk.dll \
 	    build/fsr-dlls/AMD-FidelityFX-DLL-LICENSE.txt "$(DIST)/"; fi  # (AMD FSR 4: tools/fetch_fsr_dlls.py; AMD's licence allows binary redistribution with this notice)

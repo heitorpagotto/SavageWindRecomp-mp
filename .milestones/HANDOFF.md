@@ -1,5 +1,29 @@
 # Current multiplayer handoff
 
+## M2.5 player names and map markers
+
+- **Implemented** Remote Links display their lobby names above their heads. Both Multiplayer settings screens
+  expose **Show overhead player names**, enabled by default. The overworld map shows a colored marker and
+  name for each peer with a fresh position in the displayed area and phase, including peers beyond proxy range.
+  The labels use the applied Link playback pose and the rendered world camera. Map markers use the native
+  AppMap pan and zoom and the newest replicated positions.
+- **Tested** Two Windows peers displayed each other's names at 30 and 60 FPS caps. A peer's map marker followed a
+  position change beyond proxy range, moved with native zoom and pan, and disappeared on disconnect.
+  [Settings and evidence](testing/m2.md#m25-player-names-and-map-markers)
+
+## M2.5 riding and mounted combat
+
+- **Implemented** Remote Link and his horse share one playback timeline.
+  Mounted melee has clips for one-handed swords, two-handed weapons, and
+  spears. Mounted bow playback includes reload, aim, release, and the
+  nocked arrow.
+  [Implementation notes](handoff/traversal.md#m25-riding-and-mounted-combat)
+- **Tested** Two Windows peers at 30 FPS verified canter, charge and cut
+  for all three melee families, forward bow draw and release, and
+  cleanup when Link jumped off the horse. The app and multiplayer tests
+  passed.
+  [Settings and evidence](testing/traversal.md#m25-riding-and-mounted-combat)
+
 ## M2.5 running and traversal playback
 
 - **Implemented** Remote run and sprint use the sender's gait phase to keep
@@ -44,10 +68,10 @@ Checkpoint `e45852a` on `multiplayer/windows-test`, 2026-11-27. M2.5 is in progr
 
 ## Matching Windows build
 
-Both peers need matching protocol 11 builds. The local launcher is
-`build/m25-playback-fix/Play-M25-Playback.cmd` for BOTW 1.9.0. It uses gamelib
+Both peers need matching protocol 12 builds. The local launcher is
+`build/m25-indicators/Play-M25-Indicators.cmd` for BOTW 1.9.0. It uses gamelib
 `be47daf941612328` from `build/m25-warp-sync` and reports source ID
-`e9d4f4d26a0d1aec984cc63a36b3e8bdd083f2c0`.
+`e23d9da2d9f577a29d59a045c5dd57b4a2fd61d4`.
 [Build compatibility](../docs/build-windows-and-appimage.md#multiplayer-build-compatibility)
 
 Linux gameplay and mixed-platform validation are tracked in [M7](MILESTONES.md#m7--deferred-manual-validation).

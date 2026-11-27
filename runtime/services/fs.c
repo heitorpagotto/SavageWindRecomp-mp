@@ -73,8 +73,8 @@ typedef struct {
     size_t hud_pack_size;
     uint8_t *voice_banks;    // the text language's voice banks with the chosen voices' lengths (bars_hybrid)
 #ifdef SW_MULTIPLAYER
-    uint8_t *proxy_pack, *proxy_actor_info, *proxy_animation;
-    size_t proxy_pack_size, proxy_animation_size;
+    uint8_t *proxy_pack, *proxy_actor_info, *proxy_animation, *horse_animation;
+    size_t proxy_pack_size, proxy_animation_size, horse_animation_size;
     struct {
         uint8_t *pack;
         size_t size;
@@ -136,6 +136,7 @@ RT_ON_RESET(fs_reset) {
 #ifdef SW_MULTIPLAYER
         free(m->proxy_pack);
         free(m->proxy_animation);
+        free(m->horse_animation);
         for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) free(m->gear[i].pack);
         for (unsigned i = 0; i < m->equipment.count; i++) free(m->equipment_packs[i].pack);
         for (unsigned i = 0; i < m->armor.model_count; i++) free(m->armor_packs[i].pack);
@@ -268,12 +269,15 @@ static void add_new_files(const uint64_t *h, const uint8_t *dmeta, uint64_t dsz,
     }
 #ifdef SW_MULTIPLAYER
     if (R->proxy_pack) {
-        int capacity = n + SWMP_VISUAL_ASSET_COUNT + 1 + R->equipment.count + R->armor.model_count;
+        int capacity = n + SWMP_VISUAL_ASSET_COUNT + 2 + R->equipment.count + R->armor.model_count;
         if (cap < capacity) nf = realloc(nf, sizeof *nf * capacity);
         nf[n++] = (NewFile){.rel = SWMP_PROXY_PACK, .size = R->proxy_pack_size, .mem = R->proxy_pack};
         if (R->proxy_animation)
             nf[n++] = (NewFile){.rel = SWMP_PROXY_ANIMATION_FILE, .size = R->proxy_animation_size,
                                 .mem = R->proxy_animation};
+        if (R->horse_animation)
+            nf[n++] = (NewFile){.rel = SWMP_PROXY_HORSE_ANIMATION_FILE, .size = R->horse_animation_size,
+                                .mem = R->horse_animation};
         for (unsigned i = 1; i < SWMP_VISUAL_ASSET_COUNT; i++) {
             if (!R->gear[i].pack) continue;
             nf[n] = (NewFile){.size = R->gear[i].size, .mem = R->gear[i].pack};
@@ -660,9 +664,11 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     }
     const RomFile *info = NULL;
     bool alias_exists = overlay_file(SWMP_PROXY_ANIMATION_FILE, host, sizeof host);
+    bool horse_alias_exists = overlay_file(SWMP_PROXY_HORSE_ANIMATION_FILE, host, sizeof host);
     for (int i = 0; i < R->rom_nfiles; i++) {
         if (!strcmp(R->rom_files[i].path, SWMP_PROXY_PACK)) return;
         if (!strcmp(R->rom_files[i].path, SWMP_PROXY_ANIMATION_FILE)) alias_exists = true;
+        if (!strcmp(R->rom_files[i].path, SWMP_PROXY_HORSE_ANIMATION_FILE)) horse_alias_exists = true;
         for (unsigned j = 1; j < SWMP_VISUAL_ASSET_COUNT; j++)
             if (!strcmp(R->rom_files[i].path, swmp_gear_assets[j].pack)) gear_mask &= ~(1u << j);
         if (!strcmp(R->rom_files[i].path, SWMP_ACTOR_INFO)) info = &R->rom_files[i];
@@ -684,6 +690,17 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     uint8_t *stock = fs_game_file(SWMP_PROXY_TEMPLATE, &template_size);
     uint8_t *raw = swmp_proxy_pack(stock, template_size, animation != NULL, &raw_size);
     uint8_t *pack = pack_proxy_resource(raw, raw_size, &pack_size);
+    size_t horse_size = 0;
+    uint8_t *horse_animation = NULL;
+    if (pack && g_site.mp_anim_play && !horse_alias_exists && (gear_mask & (1u << SWMP_HORSE_ASSET))) {
+        size_t stock_size = 0;
+        uint8_t *stock_animation = fs_game_file(SWMP_STOCK_HORSE_ANIMATION, &stock_size);
+        raw = swmp_horse_animation(stock_animation, stock_size, &raw_size);
+        if (raw) horse_animation = yaz0_pack(raw, raw_size, stock_animation, &horse_size);
+        free(raw);
+        free(stock_animation);
+    }
+    if (!horse_animation) gear_mask &= ~(1u << SWMP_HORSE_ASSET);
     for (unsigned i = 1; pack && i < SWMP_VISUAL_ASSET_COUNT; i++) {
         if (!(gear_mask & (1u << i))) continue;
         const SwmpGearAsset *asset = &swmp_gear_assets[i];
@@ -749,6 +766,7 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     if (!actor_info) {
         free(pack);
         free(animation);
+        free(horse_animation);
         discard_multiplayer_equipment();
         discard_multiplayer_armor();
         LOG("[multiplayer] remote Link resources unavailable, using NPC placeholders\n");
@@ -760,6 +778,8 @@ static void add_multiplayer_proxy(const uint8_t *fmeta, uint64_t foff, uint64_t 
     R->proxy_actor_info = actor_info;
     R->proxy_animation = animation;
     R->proxy_animation_size = animation_size;
+    R->horse_animation = horse_animation;
+    R->horse_animation_size = horse_size;
     LOG("[multiplayer] prepared %u equipment aliases\n", equipment_ready);
     LOG("[multiplayer] prepared %u item aliases\n", items_ready);
     uint8_t *meta = meta_copy(fmeta, foff, fsz);

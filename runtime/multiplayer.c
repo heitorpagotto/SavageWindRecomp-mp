@@ -1,14 +1,18 @@
 #ifdef SW_MULTIPLAYER
 #include "multiplayer.h"
 
+#include "framepace.h"
+#include "game_place.h"
 #include "game_sites.h"
 #include "hle.h"
 #include "random.h"
 #include "settings.h"
+#include "ui_layout.h"
 
 #include <SDL3/SDL_clipboard.h>
 #include <SDL3/SDL_stdinc.h>
 #include <rtc/rtc.h>
+#include <math.h>
 #include <string.h>
 
 typedef struct {
@@ -21,6 +25,7 @@ static pthread_mutex_t view_lock = PTHREAD_MUTEX_INITIALIZER;
 static SwmpM1View view;
 static SwmpM1Roster roster;
 static SwmpPosition local_position;
+static SwmpNameAnchor name_anchors[SWMP_MAX_PEERS];
 static SwmpGearSet local_gear;
 static SwmpEnvironment local_environment;
 static bool environment_valid;
@@ -147,6 +152,7 @@ void swmp_m1_shutdown(void) {
     view = (SwmpM1View){0};
     roster = (SwmpM1Roster){0};
     local_position = (SwmpPosition){0};
+    memset(name_anchors, 0, sizeof name_anchors);
     local_gear = (SwmpGearSet){0};
     environment_valid = false;
     memset(notices, 0, sizeof notices);
@@ -170,6 +176,7 @@ void swmp_m1_set_enabled(bool enabled) {
         view = (SwmpM1View){.supported = view.supported};
         roster = (SwmpM1Roster){0};
         local_position = (SwmpPosition){0};
+        memset(name_anchors, 0, sizeof name_anchors);
         local_gear = (SwmpGearSet){0};
         environment_valid = false;
         command = (Command){0};
@@ -202,6 +209,75 @@ void swmp_m1_publish_state(uint64_t generation, const SwmpPlayerSnapshot *positi
         if (environment) local_environment = *environment;
     }
     pthread_mutex_unlock(&view_lock);
+}
+
+void swmp_m1_publish_name_anchors(uint64_t generation, const SwmpNameAnchor anchors[SWMP_MAX_PEERS]) {
+    pthread_mutex_lock(&view_lock);
+    if (generation && generation == roster.lobby_generation)
+        memcpy(name_anchors, anchors, sizeof name_anchors);
+    pthread_mutex_unlock(&view_lock);
+}
+
+static void indicator_screen_point(const OutScale *output, float x, float y, float point[2]) {
+    point[0] = output->vx + output->vw * ((0.5 + 0.5 * x) - output->crop[0]) / output->crop[2];
+    point[1] = output->vy + output->vh * ((0.5 - 0.5 * y) - output->crop[1]) / output->crop[3];
+}
+
+SwmpIndicatorOverlay swmp_m1_indicator_overlay(const OutScale *output, const float world_to_clip[16]) {
+    SwmpIndicatorOverlay overlay = {0};
+    if (!settings_multiplayer_enabled()) return overlay;
+    uint32_t area = game_place_area_id();
+    if (!area || framepace_loading_ui() || framepace_title_ui()) return overlay;
+
+    float map_view[3];
+    overlay.map = framepace_menu_ui() && ui_layout_world_map_view(map_view);
+    if (!overlay.map && (!world_to_clip || !settings_multiplayer_show_names() || framepace_map_ui() ||
+                         framepace_menu_ui() || framepace_dialogue_ui() || framepace_in_event())) return overlay;
+    uint32_t displayed_area = overlay.map ? GAME_PLACE_MAIN_FIELD_AREA : area;
+
+    float clip_x = 1.0f, clip_y = 1.0f;
+    float layout_x = 640 * fmax(1, output->shape), layout_y = 360 / fmin(1, output->shape);
+    if (overlay.map) {
+        clip_x = 632 / layout_x;
+        clip_y = (280 + output_map_extra_y()) / layout_y;
+    }
+    indicator_screen_point(output, -clip_x, clip_y, overlay.clip);
+    indicator_screen_point(output, clip_x, -clip_y, overlay.clip + 2);
+
+    uint64_t now = plat_now_ns() / UINT64_C(1000000);
+    pthread_mutex_lock(&view_lock);
+    if (!roster.lobby_generation || local_position.snapshot.area_id != area || !swmp_position_fresh(&local_position, now)) {
+        pthread_mutex_unlock(&view_lock);
+        return overlay;
+    }
+    for (unsigned peer = 0; peer < SWMP_MAX_PEERS; peer++) {
+        uint64_t generation = roster.remotes.generation[peer];
+        const SwmpPosition *position = &roster.positions[peer];
+        const SwmpPlayerSnapshot *sample = &position->snapshot;
+        if (!generation || sample->area_id != displayed_area || sample->phase_id != local_position.snapshot.phase_id ||
+            !swmp_position_fresh(position, now)) continue;
+
+        float x, y;
+        if (overlay.map) {
+            // Positive world Z is south, opposite to the native layout's up axis.
+            x = (map_view[0] + map_view[2] * (sample->position_mm[0] * 0.001f)) / layout_x;
+            y = (map_view[1] - map_view[2] * (sample->position_mm[2] * 0.001f)) / layout_y;
+        } else {
+            const SwmpNameAnchor *anchor = &name_anchors[peer];
+            if (anchor->generation != generation) continue;
+            const float *p = anchor->above_head, *m = world_to_clip;
+            float w = m[12] * p[0] + m[13] * p[1] + m[14] * p[2] + m[15];
+            if (!(w > 0.01f)) continue;
+            x = (m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + m[3]) / w;
+            y = (m[4] * p[0] + m[5] * p[1] + m[6] * p[2] + m[7]) / w;
+        }
+        if (!(fabsf(x) < clip_x && fabsf(y) < clip_y)) continue;
+        indicator_screen_point(output, x, y, overlay.points[peer]);
+        memcpy(overlay.names[peer], view.session.peers[peer].name, SWMP_PLAYER_NAME_SIZE);
+        overlay.visible |= 1u << peer;
+    }
+    pthread_mutex_unlock(&view_lock);
+    return overlay;
 }
 
 bool swmp_m1_weather_active(void) {
@@ -369,6 +445,7 @@ void swmp_m1_update(void) {
     if (roster.lobby_generation != admitted.lobby_generation) {
         if (!admitted.lobby_generation) add_notice(SWMP_NOTICE_LOCAL_LEFT, NULL, now);
         local_position = (SwmpPosition){0};
+        memset(name_anchors, 0, sizeof name_anchors);
         local_gear = (SwmpGearSet){0};
         environment_valid = false;
     }

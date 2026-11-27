@@ -1,6 +1,7 @@
 #include "cpu.h"
 
 #ifdef SW_MULTIPLAYER
+#include "control_cells.h"
 #include "framepace.h"
 #include "game_place.h"
 #include "game_sites.h"
@@ -122,6 +123,7 @@ typedef struct {
     bool releasing;
 } ThrowState;
 static ThrowState local_throw;
+static SwmpProxyAction local_horse_attack;
 static uint64_t local_armor_at;
 static struct {
     uint32_t model[SWMP_ARMOR_SLOTS];
@@ -139,6 +141,7 @@ RT_ON_RESET(multiplayer_presence_reset) {
     local_jumping = false;
     memset(&local_traversal, 0, sizeof local_traversal);
     local_throw = (ThrowState){0};
+    local_horse_attack = SWMP_PROXY_IDLE;
     local_armor_at = 0;
     memset(&local_armor, 0, sizeof local_armor);
     memset(slots, 0, sizeof slots);
@@ -341,6 +344,29 @@ static bool running_action(SwmpProxyAction action) {
     return action == SWMP_PROXY_RUN || action == SWMP_PROXY_DASH;
 }
 
+static bool horse_loop(SwmpHorseGait gait) {
+    return (gait > SWMP_HORSE_NONE && gait < SWMP_HORSE_JUMP) || gait == SWMP_HORSE_RODEO;
+}
+
+static bool looping_gait(SwmpProxyAction action) {
+    return running_action(action) || (action >= SWMP_PROXY_HORSE_WALK && action <= SWMP_PROXY_HORSE_BACK) ||
+        action == SWMP_PROXY_HORSE_RODEO;
+}
+
+static float horse_clip_duration(SwmpHorseGait gait) {
+    if (gait == SWMP_HORSE_WAIT) return 300.0f;
+    if (gait == SWMP_HORSE_JUMP) return 50.0f;
+    if (gait == SWMP_HORSE_REAR) return 60.0f;
+    return 24.0f;
+}
+
+static uint8_t interpolate_phase(uint8_t a, uint8_t b, float t, bool loop) {
+    float delta = b - a;
+    if (!loop) return (uint8_t)lroundf(a + t * delta);
+    float phase = (a - 1) + t * remainderf(delta, 254.0f);
+    return 1 + (uint8_t)lroundf(fmodf(phase + 254.0f, 254.0f));
+}
+
 static void sample_running_phase(uint64_t actor, uint64_t heap_size, SwmpPlayerSnapshot *sample) {
     uint64_t controller = animation_controller(actor, heap_size);
     float frame, duration;
@@ -370,6 +396,9 @@ static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap
         [SWMP_PROXY_LADDER_UP_END] = 32, [SWMP_PROXY_LADDER_DOWN_START] = 41, [SWMP_PROXY_LADDER_DOWN] = 12,
         [SWMP_PROXY_LADDER_DOWN_END] = 9, [SWMP_PROXY_LADDER_JUMP] = 34, [SWMP_PROXY_LADDER_LAND] = 14,
         [SWMP_PROXY_POLE_MOUNT] = 24, [SWMP_PROXY_POLE_HOLD] = 48, [SWMP_PROXY_WARP_DEPART] = 96,
+        [SWMP_PROXY_HORSE_SWORD_RIGHT] = 24, [SWMP_PROXY_HORSE_SWORD_LEFT] = 24,
+        [SWMP_PROXY_HORSE_LSWORD_RIGHT] = 36, [SWMP_PROXY_HORSE_LSWORD_LEFT] = 36,
+        [SWMP_PROXY_HORSE_SPEAR_RIGHT] = 24, [SWMP_PROXY_HORSE_SPEAR_LEFT] = 24,
     };
     bool changed = local_traversal.action != action;
     local_traversal.action = action;
@@ -389,9 +418,71 @@ static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap
     return action;
 }
 
+static bool sample_gear_pose(uint64_t item, const float pos[3], int16_t facing, SwmpGearPose *pose);
+
+static SwmpHorseGait rider_gait(const char *state) {
+    if (!strcmp(state, "HorseWait")) return SWMP_HORSE_WAIT;
+    if (!strcmp(state, "HorseRun_Gear1")) return SWMP_HORSE_WALK;
+    if (!strcmp(state, "HorseRun_Gear2")) return SWMP_HORSE_TROT;
+    if (!strcmp(state, "HorseRun_Gear3")) return SWMP_HORSE_CANTER;
+    if (!strcmp(state, "HorseRun_Gear4")) return SWMP_HORSE_GALLOP;
+    if (!strcmp(state, "HorseRun_Back")) return SWMP_HORSE_BACK;
+    if (!strncmp(state, "Horse_Jump_Gear_", 16)) return SWMP_HORSE_JUMP;
+    if (!strcmp(state, "Horse_Courbette")) return SWMP_HORSE_REAR;
+    if (!strncmp(state, "Horse_Rodeo", 11)) return SWMP_HORSE_RODEO;
+    return SWMP_HORSE_NONE;
+}
+
+static SwmpProxyAction sample_horse_rider(Cpu *cpu, uint64_t actor, uint64_t controller, uint64_t heap_size, const char *base,
+                                          const char *upper, SwmpGearFamily family, const float pos[3],
+                                          SwmpPlayerSnapshot *sample) {
+    SwmpHorseGait rider = rider_gait(base);
+    bool mounted = rider || !strcmp(base, "HorseRun") || !strncmp(base, "AimHorseLower", 13) ||
+        !strcmp(base, "CutHorseRide") || !strcmp(base, "CutChargeHorseRide") ||
+        !strcmp(base, "CutChargeWaitHorseRide") || !strncmp(base, "Link_Horse_Move_", 16);
+    // While riding in 1.9.0, the native attachment points back to the horse actor.
+    uint64_t horse = mounted && heap_object(actor, heap_size, 0x88) ? LD64(actor + 0x80) : 0;
+    if (!heap_object(horse, heap_size, 0x3c8) || LD8(horse + 0x64) != 1 || (LD32(horse + 0x78) & 1)) goto unavailable;
+    uint64_t name = LD64(horse + 0x10);
+    if (!guest_range(name, 32) || memcmp((const void *)(uintptr_t)name, "GameRomHorse", 12) ||
+        !sample_gear_pose(horse, pos, sample->rotation[1], &sample->horse_pose)) goto unavailable;
+
+    uint64_t horse_controller = animation_controller(horse, heap_size);
+    SwmpHorseGait animal = horse_controller ? swmp_horse_gait(animation_state(cpu, horse_controller, 0, 0)) :
+        SWMP_HORSE_NONE;
+    SwmpHorseGait gait = rider ? rider : animal ? animal : SWMP_HORSE_WAIT;
+    sample->horse_gait = gait;
+    float frame, duration, gait_duration = horse_clip_duration(gait);
+    if (horse_controller && animation_frame(horse_controller, heap_size, &frame, &duration) && duration == gait_duration)
+        sample->horse_phase = 1 + (uint8_t)lroundf(frame * (254.0f / duration));
+
+    const char *lower = animation_state(cpu, controller, 0, 1);
+    SwmpProxyAction action = swmp_horse_rider_action(gait, base, lower, upper, family, false);
+    bool attacking = action >= SWMP_PROXY_HORSE_SWORD_RIGHT && action <= SWMP_PROXY_HORSE_SPEAR_LEFT;
+    if (attacking) {
+        bool left = local_horse_attack == SWMP_PROXY_HORSE_SWORD_LEFT ||
+            local_horse_attack == SWMP_PROXY_HORSE_LSWORD_LEFT || local_horse_attack == SWMP_PROXY_HORSE_SPEAR_LEFT;
+        double eye[3], target[3], angle, pitch;
+        if (local_horse_attack == SWMP_PROXY_IDLE && control_cell_camera_angles(eye, target, &angle, &pitch))
+            left = sin(angle * (pi / 180.0) - sample->rotation[1] * (pi / 32768.0)) > 0.1;
+        if (left) action = swmp_horse_rider_action(gait, base, lower, upper, family, true);
+    }
+    local_horse_attack = attacking ? action : SWMP_PROXY_IDLE;
+    if (action >= SWMP_PROXY_HORSE_WAIT && action <= SWMP_PROXY_HORSE_RODEO &&
+        animation_frame(controller, heap_size, &frame, &duration) && duration == gait_duration) {
+        sample->animation_activation = 1;
+        sample->animation_phase = 1 + (uint8_t)lroundf(frame * (254.0f / duration));
+        if (!sample->horse_phase) sample->horse_phase = sample->animation_phase;
+    }
+    return action;
+unavailable:
+    local_horse_attack = SWMP_PROXY_IDLE;
+    return SWMP_PROXY_IDLE;
+}
+
 static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_size, SwmpGearSet gear,
                                      const SwmpGearPose *weapon_pose, const SwmpGearPose *bow_pose,
-                                     bool shield_raised, unsigned pouch_count, uint64_t now,
+                                     bool shield_raised, unsigned pouch_count, const float pos[3], uint64_t now,
                                      SwmpPlayerSnapshot *sample) {
     uint64_t controller = g_site.mp_anim_current ? animation_controller(actor, heap_size) : 0;
     if (!controller) {
@@ -424,8 +515,12 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     // Bow actions and boomerang catches can play over the native WaitAttention state.
     bool can_catch = (family == SWMP_GEAR_FAMILY_SWORD || family == SWMP_GEAR_FAMILY_LSWORD) &&
         !strcmp(state, "WaitAttention");
-    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch || pouch_count ?
+    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch || pouch_count || strstr(state, "Horse") ?
         animation_state(cpu, controller, 1, 1) : "";
+    if (!strcmp(g_game_version, "1.9.0")) {
+        SwmpProxyAction mounted = sample_horse_rider(cpu, actor, controller, heap_size, state, upper, family, pos, sample);
+        if (mounted != SWMP_PROXY_IDLE) return mounted;
+    }
     if (pouch_count && !strcmp(upper, "GrabPouchUpper")) {
         local_pouch_at = now;
         sample->held_materials = pouch_count;
@@ -728,7 +823,9 @@ static void sample_armor(Cpu *cpu, uint64_t actor, uint64_t heap_size, uint64_t 
 }
 
 static bool bow_holds_arrow(SwmpProxyAction action) {
-    return action == SWMP_PROXY_BOW_RELOAD || action == SWMP_PROXY_BOW_AIM;
+    return action == SWMP_PROXY_BOW_RELOAD || action == SWMP_PROXY_BOW_AIM ||
+        action == SWMP_PROXY_HORSE_BOW_LOAD || action == SWMP_PROXY_HORSE_BOW_AIM ||
+        action == SWMP_PROXY_HORSE_BOW_BACK_LOAD || action == SWMP_PROXY_HORSE_BOW_BACK_AIM;
 }
 
 static SwmpArrow sample_arrow(uint64_t bow, uint64_t heap_size, const float pos[3], SwmpPlayerSnapshot *sample) {
@@ -766,6 +863,7 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         local_jumping = false;
         local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
+        local_horse_attack = SWMP_PROXY_IDLE;
         local_pouch_at = 0;
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
@@ -783,7 +881,7 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
     uint64_t container = pouch_container(actor, heap_size);
     unsigned count = container ? LD32(container + 0x6c) : 0;
     sample.action = sample_action(cpu, actor, heap_size, *gear, weapon_pose, bow_pose, shield_raised,
-                                  count <= SWMP_HELD_MATERIAL_LIMIT ? count : 0, now, &sample);
+                                  count <= SWMP_HELD_MATERIAL_LIMIT ? count : 0, p, now, &sample);
     if (!strcmp(g_game_version, "1.9.0")) {
         if (g_site.mp_warp_amount) {
             const char *event = framepace_event_name();
@@ -1036,16 +1134,15 @@ static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms,
         if (a->nocked_arrow && a->nocked_arrow == b->nocked_arrow)
             result.arrow_pose = interpolate_gear(&a->arrow_pose, &b->arrow_pose, t);
     }
-    if (a->action == b->action && a->animation_activation == b->animation_activation &&
-        a->animation_phase && b->animation_phase) {
-        float delta = b->animation_phase - a->animation_phase;
-        if (running_action(a->action)) {
-            float phase = (a->animation_phase - 1) + t * remainderf(delta, 254.0f);
-            result.animation_phase = 1 + (uint8_t)lroundf(fmodf(phase + 254.0f, 254.0f));
-        } else {
-            result.animation_phase = (uint8_t)lroundf(a->animation_phase + t * delta);
-        }
+    if (a->horse_gait && b->horse_gait) {
+        result.horse_pose = interpolate_gear(&a->horse_pose, &b->horse_pose, t);
+        if (a->horse_gait == b->horse_gait && a->horse_phase && b->horse_phase)
+            result.horse_phase = interpolate_phase(a->horse_phase, b->horse_phase, t, horse_loop(a->horse_gait));
     }
+    if (a->action == b->action && a->animation_activation == b->animation_activation &&
+        a->animation_phase && b->animation_phase)
+        result.animation_phase = interpolate_phase(a->animation_phase, b->animation_phase, t,
+            looping_gait(a->action));
     if (a->action == b->action)
         result.warp_amount = (uint8_t)lroundf(a->warp_amount + t * (b->warp_amount - a->warp_amount));
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
@@ -1302,14 +1399,16 @@ static void update_armor_visibility(Cpu *cpu, uint8_t peer) {
 }
 
 static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, uint64_t context,
-                          unsigned id, const SwmpGearPose *pose, const char *animation, uint8_t dye) {
+                          unsigned id, const SwmpGearPose *pose, const char *animation, uint8_t dye,
+                          float phase, bool interpolating) {
     const Placeholder *link = &slots[peer];
     GearActor *slot = &gear_slots[kind][peer];
     bool skinned = kind >= SWMP_FIRST_ARMOR_SLOT;
     if (slot->gear && (slot->gear != id || (skinned && slot->dye != dye))) {
         // Arrow release and replacement are routine. Leave a send interval for deletion
         // without imposing the one-second failure backoff on the next nock.
-        retire_gear(cpu, peer, kind, now + (kind == SWMP_NOCKED_ARROW_SLOT || skinned ? snapshot_ns : retry_ns));
+        retire_gear(cpu, peer, kind, now + (kind == SWMP_NOCKED_ARROW_SLOT || kind == SWMP_HORSE_SLOT || skinned ?
+                    snapshot_ns : retry_ns));
         return;
     }
     if (!link->visible || !link->proxy || !id) return;
@@ -1351,10 +1450,20 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
             else
                 move_gear(cpu, actor, &link->applied, &slot->pose);
             uint8_t activation = skinned ? link->animation_activation : 0;
-            if (animation && (slot->animation != animation || slot->animation_activation != activation ||
-                              (skinned && link->animation_started == now))) {
-                float blend = skinned && slot->animation && link->animation_started == now ? link->animation_blend : -1.0f;
-                float phase = skinned ? link->animation_phase : -1.0f;
+            bool changed = slot->animation != animation || slot->animation_activation != activation ||
+                (skinned && link->animation_started == now);
+            bool seek = false;
+            if (kind == SWMP_HORSE_SLOT && !changed && phase >= 0 && interpolating) {
+                uint64_t heap_size = kernel_heap_size();
+                uint64_t controller = animation_controller(actor, heap_size);
+                float frame, duration;
+                if (controller && animation_frame(controller, heap_size, &frame, &duration))
+                    seek = fabsf(remainderf(frame - phase * duration, duration)) > 2.0f;
+            }
+            if (animation && (changed || seek)) {
+                float blend = seek ? 0.0f : skinned && slot->animation && link->animation_started == now ?
+                    link->animation_blend : -1.0f;
+                if (skinned) phase = link->animation_phase;
                 if (play_animation(cpu, actor, animation, blend, phase)) {
                     slot->animation = animation;
                     slot->animation_activation = activation;
@@ -1377,7 +1486,8 @@ static void update_visual(Cpu *cpu, uint8_t peer, unsigned kind, uint64_t now, u
 }
 
 static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
-                        const SwmpPlayerSnapshot *sample, const SwmpEquipment *gear, SwmpProxyAction action) {
+                        const SwmpPlayerSnapshot *sample, const SwmpEquipment *gear, SwmpProxyAction action,
+                        bool interpolating) {
     bool matching_revision = gear->revision == sample->equipment_revision;
     for (unsigned kind = 0; kind < SWMP_GEAR_SLOTS; kind++) {
         // The reliable update can arrive before or after its pose reaches playback.
@@ -1389,16 +1499,21 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
             if (kind == SWMP_GEAR_BOW) animation = bow_animation_names[sample->bow_animation];
             if (kind == SWMP_GEAR_SHIELD) animation = shield_animation_names[sample->shield_animation];
         }
-        update_visual(cpu, peer, kind, now, context, id, pose, animation, 0);
+        update_visual(cpu, peer, kind, now, context, id, pose, animation, 0, -1, false);
     }
     bool deployed = action == SWMP_PROXY_GLIDE && (sample->flags & SWMP_PLAYER_GLIDING);
     update_visual(cpu, peer, SWMP_PARAGLIDER_SLOT, now, context,
-                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL, "Open", 0);
+                  deployed ? SWMP_PARAGLIDER_ASSET : SWMP_GEAR_NONE, NULL, "Open", 0, -1, false);
     bool nocked = sample->nocked_arrow != SWMP_ARROW_NONE && bow_holds_arrow(action) &&
         matching_revision && gear_slots[SWMP_GEAR_BOW][peer].visible;
     update_visual(cpu, peer, SWMP_NOCKED_ARROW_SLOT, now, context,
                   nocked ? SWMP_ARROW_ASSET_BASE + sample->nocked_arrow : SWMP_GEAR_NONE,
-                  nocked ? &sample->arrow_pose : NULL, NULL, 0);
+                  nocked ? &sample->arrow_pose : NULL, NULL, 0, -1, false);
+    update_visual(cpu, peer, SWMP_HORSE_SLOT, now, context,
+                  sample->horse_gait ? SWMP_HORSE_ASSET : SWMP_GEAR_NONE, &sample->horse_pose,
+                  swmp_horse_gait_name(sample->horse_gait), 0,
+                  sample->horse_phase ? (sample->horse_phase - 1) / 254.0f : -1.0f,
+                  interpolating && horse_loop(sample->horse_gait) && sample->horse_gait != SWMP_HORSE_WAIT);
 
     const SwmpArmorCatalog *catalog = fs_multiplayer_armor_catalog();
     if (!catalog) return;
@@ -1418,7 +1533,7 @@ static void update_gear(Cpu *cpu, uint8_t peer, uint64_t now, uint64_t context,
                 dye = 0;
             }
         }
-        update_visual(cpu, peer, kind, now, context, id, NULL, animation, dye);
+        update_visual(cpu, peer, kind, now, context, id, NULL, animation, dye, -1, false);
     }
     update_armor_visibility(cpu, peer);
 }
@@ -1515,13 +1630,13 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
             update_warp_effect(cpu, actor, slot, sample);
             SwmpProxyAction action = swmp_proxy_carry_action(pose->action, sample->held_materials);
             uint8_t activation = sample->animation_activation;
-            if (!activation && slot->animation == action && running_action(action))
+            if (!activation && slot->animation == action && looping_gait(action))
                 activation = slot->animation_activation;
             slot->animation_phase = -1.0f;
             bool changed = slot->animation != action || slot->animation_activation != activation;
             float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f :
                 action == SWMP_PROXY_HOLD_PROP ? 1.0f : -1.0f;
-            bool correct_phase = !changed && interpolating && running_action(action) && phase >= 0;
+            bool correct_phase = !changed && interpolating && looping_gait(action) && phase >= 0;
             if (!changed && (correct_phase || fs_multiplayer_armor_catalog())) {
                 uint64_t heap_size = kernel_heap_size();
                 uint64_t controller = animation_controller(actor, heap_size);
@@ -1531,7 +1646,8 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
                     slot->animation_phase = frame / duration;
                 // The stowed gear follows the sender's gait. Correct meaningful drift in the
                 // body and armor together while letting the native controller play between samples.
-                correct_phase = correct_phase && have_frame && duration == RUNNING_FRAMES &&
+                float expected = running_action(action) ? RUNNING_FRAMES : horse_clip_duration(sample->horse_gait);
+                correct_phase = correct_phase && have_frame && duration == expected &&
                     fabsf(remainderf(frame - phase * duration, duration)) > 2.0f;
             }
             if (changed || correct_phase) {
@@ -1621,6 +1737,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         local_jumping = false;
         local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
+        local_horse_attack = SWMP_PROXY_IDLE;
         local_pouch_at = 0;
         local_armor_at = 0;
         memset(&local_armor, 0, sizeof local_armor);
@@ -1634,6 +1751,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         local_jumping = false;
         local_traversal.action = SWMP_PROXY_IDLE;
         local_throw = (ThrowState){0};
+        local_horse_attack = SWMP_PROXY_IDLE;
         local_pouch_at = 0;
         memset(equipped, 0, sizeof equipped);
     }
@@ -1659,6 +1777,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
         if (!storage) return;
     }
 
+    SwmpNameAnchor anchors[SWMP_MAX_PEERS] = {0};
     for (uint8_t peer = 0; peer < SWMP_MAX_PEERS; peer++) {
         Placeholder *slot = &slots[peer];
         const SwmpPosition *position = &roster.positions[peer];
@@ -1700,7 +1819,13 @@ void rt_mp_presence_tick(Cpu *cpu) {
             retire(cpu, peer, now, reason);
         } else if (slot->generation) {
             poll_actor(cpu, peer, now, &pose, &sample, interpolating);
-            update_gear(cpu, peer, now, context, &sample, &roster.equipment[peer], pose.action);
+            update_gear(cpu, peer, now, context, &sample, &roster.equipment[peer], pose.action, interpolating);
+            if (slot->visible && slot->proxy && sample.warp_amount < 240) {
+                const Pose *applied = &slot->applied;
+                float height = slot->model_lift ? 0.95f : sample.flags & SWMP_PLAYER_CROUCHING ? 1.30f : 1.95f;
+                anchors[peer] = (SwmpNameAnchor){slot->generation,
+                    {applied->position[0], applied->position[1] + slot->model_lift + height, applied->position[2]}};
+            }
         } else if (desired && now >= slot->deadline) {
             uint64_t addr = storage + peer * SLOT_SIZE;
             bool proxy = fs_multiplayer_proxy_ready();
@@ -1714,6 +1839,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
             }
         }
     }
+    swmp_m1_publish_name_anchors(roster.lobby_generation, anchors);
 #else
     (void)cpu;
 #endif

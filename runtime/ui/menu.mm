@@ -2219,9 +2219,11 @@ bool menu_render_needed(void) { return menu_draws(); }
 #ifdef __APPLE__
 void menu_render(id<MTLDevice> dev, id<MTLCommandBuffer> cb, id<MTLTexture> target) {
     const double tw = target.width, th = target.height;
+    const bool show_indicators = false;
 #else
-void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
+void menu_render(void *cmd, uint32_t target_w, uint32_t target_h, const SwmpIndicatorOverlay *indicators) {
     const double tw = target_w, th = target_h;
+    const bool show_indicators = indicators != nullptr;
 #endif
     bool open = g_open.load();
     bool kbd = g_kbd.load() == 1;
@@ -2232,7 +2234,7 @@ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
     bool gyro_scene_show;
     float pointer_box[4];
     bool pointer_hover;
-    if (!menu_draws(&pointer_hover, pointer_box, &gyro_scene_show, &gyro_scene)) {
+    if (!menu_draws(&pointer_hover, pointer_box, &gyro_scene_show, &gyro_scene) && !show_indicators) {
         if (g_inited) { pthread_mutex_lock(&q_lock); q_events.clear(); pthread_mutex_unlock(&q_lock); }
         return;
     }
@@ -2348,6 +2350,7 @@ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
     if (sizes) size_list_draw(io, scale);
     if (con) console_draw(io, scale, g_font_mono ? g_font_mono : g_font);
 #ifdef SW_MULTIPLAYER
+    if (indicators) multiplayer_indicators_draw(*indicators, scale);
     multiplayer_notices_draw(scale);
 #endif
     ImGui::Render();
