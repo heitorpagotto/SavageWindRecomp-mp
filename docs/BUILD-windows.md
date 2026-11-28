@@ -4,13 +4,17 @@ Status: part of main. Builds and runs the game on Vulkan (with your own game fil
 release zip.
 
 ## One-time setup
-Run in PowerShell from the repo root:
+From Windows, run `build.bat` and choose **Windows**. It installs missing prerequisites and starts the
+build in MSYS2 UCRT64. The [build guide](build-windows-and-appimage.md#build-scripts) lists the menu and
+command-line options.
+
+For the manual steps below, run the setup script in PowerShell from the repo root:
 
     powershell -ExecutionPolicy Bypass -File tools\setup_windows.ps1
 
 This installs MSYS2 (UCRT64: clang, lld, make, SDL3, FFmpeg, Vulkan loader + headers, shaderc, Vulkan Memory
-Allocator, validation layers), Python 3.12 for the tools (`tools\venv`: unicorn, capstone, lz4) and switches the
-clone to LF line endings.
+Allocator, validation layers), the multiplayer build dependencies, and Python 3.12 for the tools
+(`tools\venv`: unicorn, capstone, lz4).
 
 ## Build
 From an MSYS2 UCRT64 shell, or Git Bash with MSYS2 first on PATH:

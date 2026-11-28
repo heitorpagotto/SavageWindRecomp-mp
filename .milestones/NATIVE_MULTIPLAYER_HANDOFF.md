@@ -57,12 +57,12 @@ HTTPS deployment and launcher setup plan. [Player flow](../mods/multiplayer/READ
 
 ## Build scripts
 
-- [build-windows.sh](../build-windows.sh) runs in MSYS2 UCRT64. With no arguments it uses `extracted/`.
+- [`build.sh windows`](../build.sh) runs in MSYS2 UCRT64. It uses `extracted/` by default.
   With `--game` it reads the supplied BOTW 1.9.0 folder. It builds the app and local guest library under
   `build/windows-local/`. `--app-only` builds the app and configuration executables and passed in UCRT64.
   The script's full game-library path still needs an end-to-end run. The earlier manual Windows build generated,
   linked, and loaded gamelib `6bb7f77965924e25`. Use `JOBS=4` if a build runs out of memory.
-- [build-linux.sh](../build-linux.sh) targets x86-64 Linux, including Bazzite. It uses rootless Podman with
+- [`build.sh linux`](../build.sh) targets x86-64 Linux, including Bazzite. It uses rootless Podman with
   `--userns=keep-id`, mounts the checkout read-only and `build/` writable, and stages pinned libdatachannel,
   and OpenSSL in the Ubuntu 22.04 dependency prefix. It calls the existing helper and AppImage
   packager and writes to `build/dist/`. Use a regular source-only checkout so the build can read the Git
@@ -94,7 +94,7 @@ Keep the scratch directories, certificates, invites, game data, and screenshots 
 ## Resume here
 
 1. Read [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and the [test record](TESTING.md).
-2. Run `bash build-linux.sh` on x86-64 Linux with Podman, preferably Bazzite. Resolve any container or
+2. Run `bash build.sh linux` on x86-64 Linux with Podman, preferably Bazzite. Resolve any container or
    dependency staging failures. Launch the resulting AppImage, complete game setup with local 1.9.0 files,
    and exercise both Settings surfaces on Linux/Vulkan.
 3. Complete the [native M1 acceptance checks](TESTING.md#native-m1-acceptance). Test both mixed-platform host

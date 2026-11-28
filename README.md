@@ -136,8 +136,9 @@ or a cutscene bug, attach your zipped `save` folder too. Reports without these a
 ## Contributing and building
 
 Open pull requests against the [`test`](https://github.com/Revivedx/SavageWindRecomp/tree/test) branch, which has
-everything ahead of the latest release. See [CONTRIBUTING.md](CONTRIBUTING.md). To build from source:
-[Windows](docs/BUILD-windows.md) and [Linux](docs/linux.md).
+everything ahead of the latest release. See [CONTRIBUTING.md](CONTRIBUTING.md). To build from source,
+run `bash build.sh` or `build.bat` on Windows and choose a platform.
+[Build guide](docs/build-windows-and-appimage.md#build-scripts)
 
 ## Respect copyright
 

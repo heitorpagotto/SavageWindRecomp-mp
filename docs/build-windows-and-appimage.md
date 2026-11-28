@@ -6,24 +6,29 @@ an x86-64 AppImage that builds the game library on the player's machine during s
 
 ## Build scripts
 
-On x86-64 Linux, including Bazzite, run this from a regular source checkout with Podman available:
+Run `bash build.sh` or `./build.sh` from Bash, or run `build.bat` from Windows. Both show the same platform menu.
+Use an explicit target to skip the menu.
 
 ```bash
-bash build-linux.sh
+bash build.sh linux
+bash build.sh windows --game '/c/path/to/your/BOTW-1.9.0'
 ```
 
-The script builds in an Ubuntu container and writes the AppImage under `build/dist/`. The host needs Podman,
-and the compiler and development libraries live in the container. Use a source checkout without extracted game
-files or a locally generated `runtime/game_place_table.inc` when packaging.
-
-On Windows, complete the one-time UCRT64 setup and package installation below, then run:
-
-```bash
-bash build-windows.sh --game '/c/path/to/your/BOTW-1.9.0'
+```bat
+.\build.bat linux
+.\build.bat windows --game "C:\path\to\your\BOTW-1.9.0"
 ```
 
-Omit `--game` to use `extracted/`, or use `--app-only` to compile the executable without generating a game
-library. Set `JOBS=4` before the command if the compiler runs out of memory. Outputs are in
+The Linux target uses the existing x86-64 Podman container pipeline and writes the AppImage under
+`build/dist/`. On Windows, both launchers use the default WSL distro for this target. That distro
+needs Bash and Podman. Use a source checkout without extracted game files or a locally generated
+`runtime/game_place_table.inc` when packaging.
+
+The Windows target installs missing prerequisites using the [Windows setup script](../tools/setup_windows.ps1)
+and builds under MSYS2 UCRT64. Installing MSYS2 or Python on a new machine requires Windows Package Manager
+(`winget`). The target uses `extracted/` by default. If the folder is missing, an interactive
+run asks for the path and accepts an empty answer for an app-only build. Use `--app-only` to select
+that mode directly. Set `JOBS=4` before the command if the compiler runs out of memory. Outputs are in
 `build/windows-local/`. The script stages the runtime DLLs for Explorer launches and the compiler, generator,
 and build headers for **Set up game files**. To play with game files stored elsewhere, follow the launch step below.
 

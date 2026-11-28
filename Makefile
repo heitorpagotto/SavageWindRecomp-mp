@@ -341,7 +341,13 @@ $(EXE): $(RT_OBJ) $(BACKEND_OBJ) $(UI_OBJ) $(IMGUI_OBJ)
 
 # its id file (<library>.id) says what it was built from without loading it (runtime/gamelib.c)
 $(GAMELIB): $(GEN_OBJ) | $(EXE)
+ifeq ($(PLATFORM),windows)
+# Generated BOTW builds have enough object paths to exceed the Windows command-line limit.
+	$(file >$@.rsp,$^)
+	$(CC) $(GAMELIB_LDFLAGS) -o $@.tmp @"$@.rsp"
+else
 	$(CC) $(GAMELIB_LDFLAGS) -o $@.tmp $^
+endif
 	mv -f $@.tmp $@
 	echo $(GAMELIB_ID) > $@.id
 
