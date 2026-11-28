@@ -1,5 +1,19 @@
 # Movement and animation playback
 
+## M2.5 melee and traversal equipment timing
+
+- Grounded sword, large-sword and spear swings, combo hits and charged attacks sample the 1.9.0
+  base track's phase. The blunt sword finisher's 36-frame track maps proportionally to the proxy's
+  33-frame finisher. Swim idle, strokes, turns, lock-on movement and dash also sample phase once
+  the proxy variant is selected. Wall jumps sample after displacement selects the direction.
+- The receiver holds the last gear pose until a phase-tagged one-shot starts, then starts the body
+  without a default blend. Between snapshots from the same activation it corrects drift above
+  two animation frames on the body and armor. Swim phase interpolation wraps at the loop boundary.
+  The snapshots keep their existing protocol 12 format.
+- Coverage depends on a recognized native track length. Swim blends and wall-jump foot variants
+  still use representative clips.
+  [Verification](../testing/playback.md#m25-melee-and-traversal-equipment-timing)
+
 ## M2.5 running and traversal playback
 
 - Stowed equipment follows the sender's sampled transforms while the proxy

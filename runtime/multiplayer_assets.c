@@ -767,6 +767,20 @@ static const ProxyAction proxy_actions[SWMP_PROXY_ACTION_COUNT] = {
     [SWMP_PROXY_WATER_DIVE] = ACTION(WaterDive, "Swim_Dive_St", "WaterDiveJump", PROXY_GEAR_NONE),
     [SWMP_PROXY_WATER_SURFACE] = ACTION(WaterSurface, "Swim_Dive_High_Ed", NULL, PROXY_GEAR_NONE),
     [SWMP_PROXY_SWIM_JUMP] = ACTION(SwimJump, "Swim_Jump_St", "SwimJump", PROXY_GEAR_NONE),
+    [SWMP_PROXY_STAMINA_OUT_START] = ACTION(StaminaOutStart, "Nml_Tired_Wait_St_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STAMINA_OUT_WAIT] = ACTION(StaminaOutWait, "Nml_Tired_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_STAMINA_OUT_END] = ACTION(StaminaOutEnd, "Nml_Tired_Wait_Ed", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_WHISTLE] = ACTION(Whistle, "Horse_Call", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_WHISTLE_CROUCH] = ACTION(WhistleCrouch, "Horse_Call_Squat", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_WHISTLE_MOVE] = ACTION(WhistleMove, "Horse_Call", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_SLIP] = ACTION(ClimbSlip, "Climb_Slip_FootL", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_CLIMB_SLIP_FALL] = ACTION(ClimbSlipFall, "Climb_AirToWall_Fall", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SURF_ATTACK] = ACTION(SurfAttack, "Shield_Board_Attack", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_GUARD] = ACTION(SwordGuard, "Sword_Guard_Wait", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_GUARD_WALK_FORWARD] = ACTION(SwordGuardWalkForward, "Nml_LockonBattle_Walk_F", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_GUARD_WALK_BACK] = ACTION(SwordGuardWalkBack, "Nml_LockonBattle_Walk_B", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_GUARD_WALK_LEFT] = ACTION(SwordGuardWalkLeft, "Nml_LockonBattle_Walk_L", NULL, PROXY_GEAR_NONE),
+    [SWMP_PROXY_SWORD_GUARD_WALK_RIGHT] = ACTION(SwordGuardWalkRight, "Nml_LockonBattle_Walk_R", NULL, PROXY_GEAR_NONE),
 };
 
 static const ProxyAction horse_actions[] = {
@@ -880,6 +894,16 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
                                          bool shield_raised, float clip_duration) {
     if (!strcmp(state, "WallDashSt")) return SWMP_PROXY_CLIMB_ENTER;
     if (!strcmp(state, "WallOff")) return SWMP_PROXY_CLIMB_RELEASE;
+    if (!strcmp(state, "ClimbSlip"))
+        return clip_duration == 18.0f ? SWMP_PROXY_CLIMB_SLIP_FALL : SWMP_PROXY_CLIMB_SLIP;
+    if (!strcmp(state, "StaminaOut"))
+        return clip_duration == 20.0f ? SWMP_PROXY_STAMINA_OUT_START : SWMP_PROXY_STAMINA_OUT_WAIT;
+    if (!strcmp(state, "StaminaOutEd")) return SWMP_PROXY_STAMINA_OUT_END;
+    if (!strcmp(upper, "HorseCall")) {
+        if (!strcmp(state, "SquatWait") || !strcmp(state, "SquatMove")) return SWMP_PROXY_WHISTLE_CROUCH;
+        if (!strcmp(state, "Move") || !strcmp(state, "Dash")) return SWMP_PROXY_WHISTLE_MOVE;
+        if (!strcmp(state, "Wait") || !strcmp(state, "WaitAttention")) return SWMP_PROXY_WHISTLE;
+    }
     if (!strcmp(state, "SwimJumpSt")) return SWMP_PROXY_SWIM_JUMP;
     // The 1.9.0 SwimWait selector plays a 24-frame surfacing clip after a dive.
     if (!strcmp(state, "SwimWait") && clip_duration == 24.0f) return SWMP_PROXY_WATER_SURFACE;
@@ -887,7 +911,9 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
     if (!strcmp(state, "GuardJust")) return SWMP_PROXY_SHIELD_PARRY;
     if (!strcmp(state, "GuardFailHit")) return SWMP_PROXY_SHIELD_HIT;
     if (!strcmp(state, "GuardBreak")) return SWMP_PROXY_SHIELD_BREAK;
+    if (!strcmp(state, "CutShieldRide")) return SWMP_PROXY_SURF_ATTACK;
     if (!strncmp(state, "Surfing", 7)) {
+        if (!strcmp(upper, "CutShieldRide")) return SWMP_PROXY_SURF_ATTACK;
         if (!strcmp(state, "SurfingOnFall")) return SWMP_PROXY_SURF_MOUNT;
         for (unsigned i = SWMP_PROXY_SURF_MOUNT; i <= SWMP_PROXY_SURF_FAILED; i++)
             if (!strcmp(state, proxy_actions[i].native)) return (SwmpProxyAction)i;
@@ -919,9 +945,11 @@ SwmpProxyAction swmp_proxy_sample_action(const char *state, const char *upper, S
     bool weapon_drawn = weapon_pose && weapon->ready &&
         weapon_pose->offset_mm[1] >= weapon->min_hand_y && weapon_pose->offset_mm[1] <= weapon->max_hand_y;
     bool attention = !strcmp(state, "WaitAttention");
-    if (shield_raised && !strcmp(state, "MoveAttention")) return SWMP_PROXY_SHIELD_WALK_FORWARD;
+    bool sword_guard = weapon_drawn && family == SWMP_GEAR_FAMILY_SWORD;
+    if (shield_raised && !strcmp(state, "MoveAttention"))
+        return sword_guard ? SWMP_PROXY_SWORD_GUARD_WALK_FORWARD : SWMP_PROXY_SHIELD_WALK_FORWARD;
     if (shield_raised && (attention || !strcmp(state, "TurnAttention") || !strcmp(state, "LookAroundAttention")))
-        return SWMP_PROXY_SHIELD_GUARD;
+        return sword_guard ? SWMP_PROXY_SWORD_GUARD : SWMP_PROXY_SHIELD_GUARD;
     if (gear.id[SWMP_GEAR_BOW] && bow_pose) {
         const int16_t *bow = bow_pose->offset_mm;
         // The bow passes Link's left side on its way between the back and aiming pose.
@@ -1153,7 +1181,7 @@ typedef struct {
 
 static uint8_t *in_place_animation(const uint8_t *src, size_t size, size_t *out_size,
                                    const ProxyAction *actions, const RootMotion *motion, unsigned motion_count) {
-    if (!src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
+    if (motion_count >= 64 || !src || size < 16 || memcmp(src, "Yaz0", 4) || src[4] >= 4) return NULL;
     size_t n;
     uint8_t *raw = yaz0_unpack(src, size, &n);
     if (!raw) return NULL;
@@ -1163,17 +1191,18 @@ static uint8_t *in_place_animation(const uint8_t *src, size_t size, size_t *out_
     unsigned count = raw[0xbe] | raw[0xbf] << 8;
     uint8_t *clips = animation_offset(raw, n, raw + 0x38, count * 0x60u);
     if (!clips) goto invalid;
-    unsigned found = 0;
+    uint64_t found = 0;
     for (unsigned i = 0; i < count; i++) {
         const uint8_t *clip = clips + i * 0x60;
         if (memcmp(clip, "FSKA", 4)) goto invalid;
         for (unsigned j = 0; j < motion_count; j++) {
             if (!animation_name(raw, n, clip + 0x10, actions[motion[j].action].clip)) continue;
-            if ((found & (1u << j)) || !remove_root_motion(raw, n, clip, motion[j].motion)) goto invalid;
-            found |= 1u << j;
+            uint64_t bit = UINT64_C(1) << j;
+            if ((found & bit) || !remove_root_motion(raw, n, clip, motion[j].motion)) goto invalid;
+            found |= bit;
         }
     }
-    if (found != (1u << motion_count) - 1) goto invalid;
+    if (found != (UINT64_C(1) << motion_count) - 1) goto invalid;
     *out_size = n;
     return raw;
 invalid:
@@ -1210,6 +1239,12 @@ uint8_t *swmp_proxy_animation(const uint8_t *src, size_t size, size_t *out_size)
         {SWMP_PROXY_CLIMB_JUMP_UP_LEFT, ROOT_TRANSLATION},
         {SWMP_PROXY_CLIMB_JUMP_LEFT, ROOT_TRANSLATION},
         {SWMP_PROXY_CLIMB_MANTLE, ROOT_TRANSLATION},
+        {SWMP_PROXY_CLIMB_SLIP, ROOT_Y},
+        {SWMP_PROXY_CLIMB_SLIP_FALL, ROOT_Y},
+        {SWMP_PROXY_SWORD_GUARD_WALK_FORWARD, ROOT_PLANAR},
+        {SWMP_PROXY_SWORD_GUARD_WALK_BACK, ROOT_PLANAR},
+        {SWMP_PROXY_SWORD_GUARD_WALK_LEFT, ROOT_PLANAR},
+        {SWMP_PROXY_SWORD_GUARD_WALK_RIGHT, ROOT_PLANAR},
     };
     return in_place_animation(src, size, out_size, proxy_actions, root_motion, sizeof root_motion / sizeof *root_motion);
 }
@@ -1271,13 +1306,22 @@ static uint8_t *animated_proxy_pack(const char *actor, PackFile link, PackFile m
         if (i == SWMP_PROXY_RUN_HOLD_FEW || i == SWMP_PROXY_RUN_HOLD_MANY)
             gait = proxy_actions[SWMP_PROXY_RUN].clip;
         const char *mask = "Lift";
+        if (i == SWMP_PROXY_WHISTLE_MOVE) {
+            gait = proxy_actions[SWMP_PROXY_RUN].clip;
+            mask = "SpineHalf";
+        }
         if (i >= SWMP_PROXY_HORSE_BOW_LOAD && i <= SWMP_PROXY_HORSE_BOW_BACK_SHOOT) {
             gait = i >= SWMP_PROXY_HORSE_BOW_BACK_LOAD ?
                 "Bow_Attack_Horse_Draw_Lower_B" : "Bow_Attack_Horse_Draw_Lower_F";
             mask = "ArmLR";
         }
-        size_t bytes = gait ? proxy_masked_state(clips[i], gait, proxy_actions[i].clip, mask) :
-            proxy_anim_state(clips[i], proxy_actions[i].clip);
+        const char *clip = proxy_actions[i].clip;
+        if (i >= SWMP_PROXY_SWORD_GUARD_WALK_FORWARD && i <= SWMP_PROXY_SWORD_GUARD_WALK_RIGHT) {
+            gait = clip;
+            clip = proxy_actions[SWMP_PROXY_SWORD_GUARD].clip;
+            mask = "ArmLR";
+        }
+        size_t bytes = gait ? proxy_masked_state(clips[i], gait, clip, mask) : proxy_anim_state(clips[i], clip);
         files[3 + i] = (PackFile){proxy_actions[i].path, clips[i], bytes};
     }
     return pack_files(files, sizeof files / sizeof files[0], out_size);

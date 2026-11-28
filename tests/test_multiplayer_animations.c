@@ -30,6 +30,40 @@ int main(void) {
                   SWMP_PROXY_SHIELD_HIT);
     expect_action(swmp_proxy_sample_action("SurfingSlide", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_SURF_RIDE);
+    expect_action(swmp_proxy_sample_action("CutShieldRide", "BowCharge", gear, NULL, NULL, false, 53),
+                  SWMP_PROXY_SURF_ATTACK);
+    expect_action(swmp_proxy_sample_action("SurfingAir", "CutShieldRide", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_SURF_ATTACK);
+    expect_action(swmp_proxy_sample_action("StaminaOut", "", gear, NULL, NULL, false, 20),
+                  SWMP_PROXY_STAMINA_OUT_START);
+    expect_action(swmp_proxy_sample_action("StaminaOut", "", gear, NULL, NULL, false, 44),
+                  SWMP_PROXY_STAMINA_OUT_WAIT);
+    expect_action(swmp_proxy_sample_action("StaminaOutEd", "BowCharge", gear, NULL, NULL, false, 70),
+                  SWMP_PROXY_STAMINA_OUT_END);
+    expect_action(swmp_proxy_sample_action("Wait", "HorseCall", (SwmpGearSet){0}, NULL, NULL, false, 0),
+                  SWMP_PROXY_WHISTLE);
+    expect_action(swmp_proxy_sample_action("Move", "HorseCall", (SwmpGearSet){0}, NULL, NULL, false, 0),
+                  SWMP_PROXY_WHISTLE_MOVE);
+    expect_action(swmp_proxy_sample_action("SquatWait", "HorseCall", (SwmpGearSet){0}, NULL, NULL, false, 0),
+                  SWMP_PROXY_WHISTLE_CROUCH);
+    expect_action(swmp_proxy_sample_action("ClimbSlip", "", gear, NULL, NULL, false, 30),
+                  SWMP_PROXY_CLIMB_SLIP);
+    expect_action(swmp_proxy_sample_action("ClimbSlip", "", gear, NULL, NULL, false, 18),
+                  SWMP_PROXY_CLIMB_SLIP_FALL);
+    expect_action(swmp_proxy_sample_action("ClimbMove", "HorseCall", gear, NULL, NULL, false, 0),
+                  SWMP_PROXY_CLIMB_MOVE);
+
+    SwmpGearSet sword_shield = {.id = {SWMP_GEAR_ID(SWORD, 1), SWMP_GEAR_ID(SHIELD, 14)}};
+    SwmpGearPose drawn_sword = {.offset_mm = {-500, 750, 120}};
+    SwmpGearPose stowed_sword = {.offset_mm = {-250, 1120, -200}};
+    expect_action(swmp_proxy_sample_action("MoveAttention", "MoveAttentionUpper", sword_shield,
+                                           &drawn_sword, NULL, true, 0), SWMP_PROXY_SWORD_GUARD_WALK_FORWARD);
+    expect_action(swmp_proxy_sample_action("WaitAttention", "WaitAttentionUpper", sword_shield,
+                                           &drawn_sword, NULL, true, 0), SWMP_PROXY_SWORD_GUARD);
+    expect_action(swmp_proxy_sample_action("MoveAttention", "MoveAttentionUpper", sword_shield,
+                                           &stowed_sword, NULL, true, 0), SWMP_PROXY_SHIELD_WALK_FORWARD);
+    expect_action(swmp_proxy_sample_action("MoveAttention", "MoveAttentionUpper", sword_shield,
+                                           &drawn_sword, NULL, false, 0), SWMP_PROXY_IDLE);
     expect_action(swmp_proxy_sample_action("LadderWait", "", gear, NULL, NULL, false, 0),
                   SWMP_PROXY_LADDER_WAIT);
     expect_action(swmp_proxy_sample_action("LadderUp", "", gear, NULL, NULL, false, 0),

@@ -1,5 +1,17 @@
 # Traversal, dodges, and reactions
 
+## M2.5 exhaustion, whistle, and wall slip
+
+- `StaminaOut` selects the 20-frame exhaustion entry or the tired loop. `StaminaOutEd` plays recovery.
+  The remote body uses the stock unarmed base clips for all equipment families.
+- D-pad Down activates `HorseCall` in the upper slot while the base controller stays in its locomotion
+  state. The proxy uses the standing or crouched whistle clip. The moving proxy blends the gesture over
+  an in-place run using the native `SpineHalf` mask.
+- `ClimbSlip` uses the representative left-foot slip or the 18-frame slip fall. Both clips remove
+  vertical root motion and take the descent from snapshots. The sender samples the clip phase when
+  it recognizes the active track length.
+  [Verification](../testing/traversal.md#m25-exhaustion-whistle-wall-slip-and-shield-actions)
+
 ## M2.5 ledge mantle and water transitions
 
 - The native 1.9.0 `ClimbEd` track lasts 24 frames. Link's sampled position rises and advances during the

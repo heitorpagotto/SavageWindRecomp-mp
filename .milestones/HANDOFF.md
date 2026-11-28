@@ -1,5 +1,30 @@
 # Current multiplayer handoff
 
+## M2.5 melee and traversal equipment timing
+
+- **Implemented** Grounded sword, two-handed weapon and spear attacks use the sender's clip phase.
+  Swimming and directional wall jumps also align Link and skinned armor with the timeline of the
+  sampled equipment poses. Timed one-shots begin with their matching gear pose.
+  [Implementation notes](handoff/playback.md#m25-melee-and-traversal-equipment-timing)
+- **Checked** Two Windows peers at 30 FPS replayed a sword combo, a rightward wall jump, swim strokes
+  and a swim dash using sampled phase. The final Windows app, four multiplayer tests and a
+  playback-boundary fixture passed.
+  [Verification](testing/playback.md#m25-melee-and-traversal-equipment-timing)
+
+## M2.5 exhaustion, whistle, wall slip, and shield actions
+
+- **Implemented** Remote Link plays grounded stamina exhaustion and recovery, the horse-call whistle,
+  wall slips and slip falls, and the shield-surf attack. Lock-on movement with a drawn one-handed sword
+  and raised shield uses four battle gaits blended with the native sword guard arm pose.
+  [Traversal notes](handoff/traversal.md#m25-exhaustion-whistle-and-wall-slip)
+  [Shield notes](handoff/shield-bow.md#m25-shield-surf-attack-and-sword-guard-walk)
+- **Checked** The Windows app and multiplayer selector, core, direct invite, and WebRTC loopback tests passed.
+  The installed 1.9.0 archive resolved the clips, the movement blends, and the in-place root edits.
+  [Verification](testing/traversal.md#m25-exhaustion-whistle-wall-slip-and-shield-actions)
+- **Played** Two Windows peers at a 30 FPS cap replayed exhaustion entry and recovery, standing,
+  moving and crouched whistles, rainy wall slip and slip fall, airborne shield-surf attack, and
+  drawn-sword right strafe with the shield raised.
+
 ## M2.5 ledge mantle and water transitions
 
 - **Implemented** Wall mantles use the sender's clip phase and the replicated position for the climb onto the ledge.
@@ -80,10 +105,10 @@ Checkpoint `e45852a` on `multiplayer/windows-test`, 2026-11-27. M2.5 is in progr
 
 ## Matching Windows build
 
-Both peers need matching protocol 12 builds. The local launcher is
-`build/m25-transition/Play-M25-Transitions.cmd` for BOTW 1.9.0. It uses gamelib
-`be47daf941612328` from `build/m25-warp-sync` and reports source ID
-`d6da39095b48bfb4be4e1ce7168fd0a7784cf4e9`.
+Both peers need matching protocol 12 builds. The local Windows app is
+`build/m25-action-sync/savagewind.exe` for BOTW 1.9.0. The adjacent gamelib is
+`be47daf941612328` and the multiplayer source ID is
+`fd5bd7fda51dd88184a94d0d3f215bbbae3051b2`.
 [Build compatibility](../docs/build-windows-and-appimage.md#multiplayer-build-compatibility)
 
 Linux gameplay and mixed-platform validation are tracked in [M7](MILESTONES.md#m7--deferred-manual-validation).

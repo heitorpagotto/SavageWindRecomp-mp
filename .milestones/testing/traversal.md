@@ -1,5 +1,27 @@
 # Traversal, dodges, and reactions
 
+## M2.5 exhaustion, whistle, wall slip, and shield actions
+
+- The Windows UCRT64 app linked. The multiplayer core, animation selector, direct invite, and WebRTC
+  loopback checks passed. The selector cases include the stamina entry, loop and recovery, standing,
+  moving and crouched whistles, both wall-slip paths, surf cut, and sword guard versus shield-only movement.
+- The local BOTW 1.9.0 resource check resolved all 190 proxy actions. It checked the `SpineHalf` whistle
+  blend, the `ArmLR` blend for the four battle walks, and neutralized root curves for both wall slips
+  and all four battle walks.
+- Two Windows Vulkan peers used protocol 12, BOTW 1.9.0, gamelib `be47daf941612328`, a 30 FPS cap,
+  960x540 at 50% render scale, a 1400 MiB VRAM budget, Vulkan heap copy off, and copied saves.
+  Both peers used the RTX 4050 Laptop GPU (610.88).
+  On the Great Plateau, the observer selected `StaminaOutStart` and `StaminaOutEnd` after the host
+  exhausted its stamina, then selected `SwordGuardWalkRight` while the host strafed with both items drawn.
+  A second run with the final source ID `f51ebec9fec6d34527795f0d82b20d197b574b10` sampled native
+  `HorseCall` over `Wait`, `Move`, and `SquatWait`. The observer selected the three corresponding whistle
+  actions. In rain, the host sampled native `ClimbSlip` first on a 30-frame track and then on an 18-frame
+  track. The observer started `ClimbSlip` at phase 0.50
+  and `ClimbSlipFall` at phase 0.06. An airborne shield mount followed by Y entered the native
+  53-frame `CutShieldRide`. The observer played `SurfAttack` with its Wooden Shield proxy active,
+  then transitioned to `SurfDismount`. The final build repeated the drawn-sword right strafe.
+  The local traces are in `build/m25-action-sync/fixture/`.
+
 ## M2.5 ledge mantle and water transitions
 
 - The Windows UCRT64 build and four multiplayer test targets passed. The installed-resource check resolved

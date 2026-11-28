@@ -1,5 +1,24 @@
 # Movement and animation playback
 
+## M2.5 melee and traversal equipment timing
+
+- The Windows UCRT64 app linked. Multiplayer core, animation selector, direct invite, and WebRTC
+  loopback passed. A local playback fixture checked the attack onset boundary, interpolation of gear
+  and phase within an activation, the swim loop wrap, and the gear pose at a repeated wall jump.
+  All 33 synchronized proxy track lengths matched the installed 1.9.0 animation archive.
+- Two Windows Vulkan peers used copied saves, direct WebRTC, BOTW 1.9.0 gamelib `be47daf941612328`,
+  a 30 FPS cap, 960x540 at 50% render scale, a 1400 MiB VRAM budget, and heap copy off. Both used
+  the RTX 4050 Laptop GPU (610.88). The receiver entered the first three one-handed combo hits
+  at normalized phases 0.09, 0.04, and 0.04. A native rightward wall jump exposed a 38-frame
+  track and the receiver entered `ClimbJumpRight` at phase 0.09 with the weapon stowed.
+  At Oman Au the sender exposed 40-frame swim strokes and a 60-frame dash. The receiver started
+  `SwimMove` at phase 0.02 and `SwimFast` at 0.08, corrected the latter at 0.20, and entered
+  `SwimDash` at 0.00. The live probe used source ID `20db631c31499765143efe80c4fee9074c0b93b0`.
+- The final build also accepts the 36-frame blunt finisher seen in that trace and requires phase on
+  both adjacent snapshots before correcting drift. The traces verify playback timing. Visual
+  coverage across equipment models and all swim and wall-jump variants remains open.
+  Logs are in `build/m25-action-sync/fixture-timing/`.
+
 ## M2.5 running and traversal playback
 
 - The Windows UCRT64 app linked. Multiplayer core, animation selector,

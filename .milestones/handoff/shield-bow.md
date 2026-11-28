@@ -1,5 +1,16 @@
 # Shields, bows, and arrows
 
+## M2.5 shield-surf attack and sword guard walk
+
+- `CutShieldRide` selects `Shield_Board_Attack` on the body and armor, including when the cut is sampled
+  in a secondary slot over the surfing pose. The phase follows the 53-frame clip, including the native
+  branch cut short at frame 38. The shield and attached equipment keep their sampled native transforms.
+- Raised-shield `MoveAttention` with a drawn one-handed sword selects an in-place `Nml_LockonBattle_Walk`
+  gait from the existing facing-relative direction sampler. The proxy blends `Sword_Guard_Wait` onto
+  the gait with the native `ArmLR` mask. The same pose plays at rest and the shield-only mapping covers
+  movement with the sword stowed.
+  [Verification](../testing/traversal.md#m25-exhaustion-whistle-wall-slip-and-shield-actions)
+
 ## M2.5 bow draw and shield model playback
 
 - The stowed spear can briefly move into the drawn-height range before the

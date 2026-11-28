@@ -348,9 +348,38 @@ static bool horse_loop(SwmpHorseGait gait) {
     return (gait > SWMP_HORSE_NONE && gait < SWMP_HORSE_JUMP) || gait == SWMP_HORSE_RODEO;
 }
 
+static bool swim_loop(SwmpProxyAction action) {
+    return action == SWMP_PROXY_SWIM_WAIT || action == SWMP_PROXY_SWIM_MOVE ||
+        (action >= SWMP_PROXY_SWIM_FAST && action <= SWMP_PROXY_SWIM_LOCK_RIGHT);
+}
+
 static bool looping_gait(SwmpProxyAction action) {
-    return running_action(action) || (action >= SWMP_PROXY_HORSE_WALK && action <= SWMP_PROXY_HORSE_BACK) ||
+    return running_action(action) || swim_loop(action) ||
+        (action >= SWMP_PROXY_HORSE_WALK && action <= SWMP_PROXY_HORSE_BACK) ||
         action == SWMP_PROXY_HORSE_RODEO;
+}
+
+// Lengths of the standalone proxy clips. Match the sender's base track before using its phase.
+static unsigned equipment_sync_frames(SwmpProxyAction action) {
+    static const uint8_t frames[SWMP_PROXY_ACTION_COUNT] = {
+        [SWMP_PROXY_SWORD_SWING] = 21, [SWMP_PROXY_SWORD_CHAIN_2] = 20,
+        [SWMP_PROXY_SWORD_CHAIN_3] = 20, [SWMP_PROXY_SWORD_FINISH] = 33,
+        [SWMP_PROXY_SWORD_CHARGE] = 37,
+        [SWMP_PROXY_AXE_SWING] = 60, [SWMP_PROXY_AXE_FINISH] = 60, [SWMP_PROXY_AXE_SPIN] = 45,
+        [SWMP_PROXY_SPEAR_THRUST] = 21, [SWMP_PROXY_SPEAR_CHAIN_2] = 21,
+        [SWMP_PROXY_SPEAR_CHAIN_3] = 21, [SWMP_PROXY_SPEAR_CHAIN_4] = 21,
+        [SWMP_PROXY_SPEAR_FINISH] = 41, [SWMP_PROXY_SPEAR_CHARGE] = 42,
+        [SWMP_PROXY_SPEAR_CHARGE_FINISH] = 41, [SWMP_PROXY_SURF_ATTACK] = 53,
+        [SWMP_PROXY_SWIM_WAIT] = 30, [SWMP_PROXY_SWIM_MOVE] = 40, [SWMP_PROXY_SWIM_DASH] = 60,
+        [SWMP_PROXY_SWIM_FAST] = 40, [SWMP_PROXY_SWIM_SLOW_LEFT] = 40, [SWMP_PROXY_SWIM_SLOW_RIGHT] = 40,
+        [SWMP_PROXY_SWIM_FAST_LEFT] = 40, [SWMP_PROXY_SWIM_FAST_RIGHT] = 40,
+        [SWMP_PROXY_SWIM_LOCK_FORWARD] = 24, [SWMP_PROXY_SWIM_LOCK_BACK] = 24,
+        [SWMP_PROXY_SWIM_LOCK_LEFT] = 24, [SWMP_PROXY_SWIM_LOCK_RIGHT] = 24,
+        [SWMP_PROXY_CLIMB_JUMP] = 38, [SWMP_PROXY_CLIMB_JUMP_RIGHT] = 38,
+        [SWMP_PROXY_CLIMB_JUMP_LEFT] = 38, [SWMP_PROXY_CLIMB_JUMP_UP_RIGHT] = 38,
+        [SWMP_PROXY_CLIMB_JUMP_UP_LEFT] = 38,
+    };
+    return (unsigned)action < SWMP_PROXY_ACTION_COUNT ? frames[action] : 0;
 }
 
 static float horse_clip_duration(SwmpHorseGait gait) {
@@ -398,16 +427,23 @@ static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap
         [SWMP_PROXY_POLE_MOUNT] = 24, [SWMP_PROXY_POLE_HOLD] = 48, [SWMP_PROXY_WARP_DEPART] = 96,
         [SWMP_PROXY_CLIMB_MANTLE] = 24, [SWMP_PROXY_WATER_DIVE] = 30,
         [SWMP_PROXY_WATER_SURFACE] = 24, [SWMP_PROXY_SWIM_JUMP] = 30,
+        [SWMP_PROXY_STAMINA_OUT_START] = 20, [SWMP_PROXY_STAMINA_OUT_END] = 70,
+        [SWMP_PROXY_CLIMB_SLIP] = 30, [SWMP_PROXY_CLIMB_SLIP_FALL] = 18,
         [SWMP_PROXY_HORSE_SWORD_RIGHT] = 24, [SWMP_PROXY_HORSE_SWORD_LEFT] = 24,
         [SWMP_PROXY_HORSE_LSWORD_RIGHT] = 36, [SWMP_PROXY_HORSE_LSWORD_LEFT] = 36,
         [SWMP_PROXY_HORSE_SPEAR_RIGHT] = 24, [SWMP_PROXY_HORSE_SPEAR_LEFT] = 24,
     };
     bool changed = local_traversal.action != action;
     local_traversal.action = action;
-    if (!durations[action]) return action;
+    unsigned frames = equipment_sync_frames(action);
+    if (!frames) frames = durations[action];
+    if (!frames) return action;
     float frame, duration;
-    bool has_frame = animation_frame(controller, heap_size, &frame, &duration) && duration == durations[action];
-    bool restarted = !changed && has_frame && frame + 0.5f < local_traversal.frame;
+    // The blunt sword finisher has its own length. The short surf cut still uses the 53-frame clip.
+    bool has_frame = animation_frame(controller, heap_size, &frame, &duration) &&
+        (duration == frames || (action == SWMP_PROXY_SWORD_FINISH && duration == 36.0f) ||
+         (action == SWMP_PROXY_SURF_ATTACK && duration == 38.0f));
+    bool restarted = !changed && has_frame && !swim_loop(action) && frame + 0.5f < local_traversal.frame;
     if (changed || restarted || (has_frame && local_traversal.frame < 0)) {
         if (!++local_traversal.activation) ++local_traversal.activation;
         if (action == SWMP_PROXY_LADDER_UP)
@@ -415,7 +451,10 @@ static SwmpProxyAction sample_traversal_phase(uint64_t controller, uint64_t heap
     }
     if (has_frame || changed) local_traversal.frame = has_frame ? frame : -1;
     sample->animation_activation = local_traversal.activation;
-    if (has_frame) sample->animation_phase = 1 + (uint8_t)lroundf(frame * (254.0f / duration));
+    if (has_frame) {
+        float phase_frames = action == SWMP_PROXY_SURF_ATTACK ? frames : duration;
+        sample->animation_phase = 1 + (uint8_t)lroundf(frame * (254.0f / phase_frames));
+    }
     if (action == SWMP_PROXY_LADDER_UP && local_traversal.right_foot) return SWMP_PROXY_LADDER_UP_RIGHT;
     return action;
 }
@@ -506,7 +545,8 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
     local_throw.releasing = releasing;
     float clip_duration = 0;
     bool putting = !strcmp(state, "GrabPut");
-    if ((releasing || charging || putting || !strcmp(state, "WeaponEquipOn") || !strcmp(state, "SwimWait")) &&
+    if ((releasing || charging || putting || !strcmp(state, "WeaponEquipOn") || !strcmp(state, "SwimWait") ||
+         !strcmp(state, "StaminaOut") || !strcmp(state, "ClimbSlip")) &&
         !strcmp(g_game_version, "1.9.0")) {
         float frame, duration;
         if (animation_frame(controller, heap_size, &frame, &duration)) clip_duration = duration;
@@ -515,10 +555,15 @@ static SwmpProxyAction sample_action(Cpu *cpu, uint64_t actor, uint64_t heap_siz
         SwmpProxyAction action = swmp_proxy_throw_action(state, local_throw.family, clip_duration);
         if (action != SWMP_PROXY_IDLE) return action;
     }
-    // Bow actions and boomerang catches can play over the native WaitAttention state.
+    // Whistles, bow actions and boomerang catches can play over a locomotion state.
     bool can_catch = (family == SWMP_GEAR_FAMILY_SWORD || family == SWMP_GEAR_FAMILY_LSWORD) &&
         !strcmp(state, "WaitAttention");
-    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch || pouch_count || strstr(state, "Horse") ?
+    bool surfing = !strcmp(state, "SurfingSlide") || !strcmp(state, "SurfingAir") || !strcmp(state, "SurfingJump");
+    if (surfing && !strcmp(animation_state(cpu, controller, 0, 1), "CutShieldRide"))
+        return SWMP_PROXY_SURF_ATTACK;
+    bool can_whistle = !strcmp(state, "Wait") || !strcmp(state, "WaitAttention") ||
+        !strcmp(state, "Move") || !strcmp(state, "Dash") || !strcmp(state, "SquatWait") || !strcmp(state, "SquatMove");
+    const char *upper = gear.id[SWMP_GEAR_BOW] || can_catch || pouch_count || strstr(state, "Horse") || surfing || can_whistle ?
         animation_state(cpu, controller, 1, 1) : "";
     if (!strcmp(g_game_version, "1.9.0")) {
         SwmpProxyAction mounted = sample_horse_rider(cpu, actor, controller, heap_size, state, upper, family, pos, sample);
@@ -657,6 +702,10 @@ static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxy
         SWMP_PROXY_SHIELD_WALK_FORWARD, SWMP_PROXY_SHIELD_WALK_BACK,
         SWMP_PROXY_SHIELD_WALK_LEFT, SWMP_PROXY_SHIELD_WALK_RIGHT,
     };
+    static const SwmpProxyAction sword_guard_walk[] = {
+        SWMP_PROXY_SWORD_GUARD_WALK_FORWARD, SWMP_PROXY_SWORD_GUARD_WALK_BACK,
+        SWMP_PROXY_SWORD_GUARD_WALK_LEFT, SWMP_PROXY_SWORD_GUARD_WALK_RIGHT,
+    };
     if (state != local_motion_state) local_motion_at = 0;
     uint64_t elapsed = now - local_motion_at;
     if (local_motion_at && elapsed < UINT64_C(100000000)) return local_motion_action;
@@ -664,6 +713,7 @@ static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxy
     SwmpProxyAction action = state == SWMP_PROXY_CLIMB_MOVE ? SWMP_PROXY_CLIMB_WAIT : state;
     if (state == SWMP_PROXY_SWIM_LOCK_FORWARD) action = SWMP_PROXY_SWIM_WAIT;
     if (state == SWMP_PROXY_SHIELD_WALK_FORWARD) action = SWMP_PROXY_SHIELD_GUARD;
+    if (state == SWMP_PROXY_SWORD_GUARD_WALK_FORWARD) action = SWMP_PROXY_SWORD_GUARD;
     if (local_motion_at && elapsed <= UINT64_C(300000000)) {
         float dx = pos[0] - local_motion_pos[0], dz = pos[2] - local_motion_pos[2];
         float seconds = elapsed * 1e-9f;
@@ -678,8 +728,9 @@ static SwmpProxyAction sample_motion(const float pos[3], uint64_t now, SwmpProxy
             if (speed < 4.0f) action = swim_motion(speed, motion_turn_rate(seconds));
         } else if (state == SWMP_PROXY_SWIM_LOCK_FORWARD) {
             if (speed >= 0.1f && speed < 4.0f) action = lock_direction(dx, dz, swim_lock);
-        } else if (state == SWMP_PROXY_SHIELD_WALK_FORWARD) {
-            if (speed >= 0.1f && speed < 10.0f) action = lock_direction(dx, dz, shield_walk);
+        } else if (state == SWMP_PROXY_SHIELD_WALK_FORWARD || state == SWMP_PROXY_SWORD_GUARD_WALK_FORWARD) {
+            if (speed >= 0.1f && speed < 10.0f)
+                action = lock_direction(dx, dz, state == SWMP_PROXY_SHIELD_WALK_FORWARD ? shield_walk : sword_guard_walk);
         } else if (speed < 10.0f) {
             // The native Move state blends walking, running and sprinting. Lower exit thresholds avoid flicker.
             if (speed >= (local_motion_action == SWMP_PROXY_DASH ? 5.7f : 6.2f)) action = SWMP_PROXY_DASH;
@@ -905,17 +956,17 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
                 sample.animation_activation = sample.animation_phase = 0;
             }
         }
-        uint64_t controller = animation_controller(actor, heap_size);
-        if (controller) sample.action = sample_traversal_phase(controller, heap_size, sample.action, &sample);
     }
     // The bow starts drawing and finishes releasing independently of Link's upper-body state.
     if (bow) sample.bow_animation = sample_bow_animation(cpu, bow, heap_size);
     if (shield) sample.shield_animation = sample_shield_animation(cpu, shield, heap_size);
     if (bow && bow_holds_arrow(sample.action) && !strcmp(g_game_version, "1.9.0"))
         sample.nocked_arrow = sample_arrow(bow, heap_size, p, &sample);
-    if (sample.action == SWMP_PROXY_CROUCH_IDLE || sample.action == SWMP_PROXY_CROUCH_MOVE)
+    if (sample.action == SWMP_PROXY_CROUCH_IDLE || sample.action == SWMP_PROXY_CROUCH_MOVE ||
+        sample.action == SWMP_PROXY_WHISTLE_CROUCH)
         sample.flags |= SWMP_PLAYER_CROUCHING;
-    if (sample.action == SWMP_PROXY_SHIELD_GUARD || sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD)
+    bool shield_walk = sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD || sample.action == SWMP_PROXY_SWORD_GUARD_WALK_FORWARD;
+    if (shield_walk || sample.action == SWMP_PROXY_SHIELD_GUARD || sample.action == SWMP_PROXY_SWORD_GUARD)
         sample.flags |= SWMP_PLAYER_GUARDING;
     if (sample.action == SWMP_PROXY_GLIDE) {
         sample.flags |= SWMP_PLAYER_GLIDING;
@@ -927,15 +978,19 @@ static SwmpPlayerSnapshot sample_player(Cpu *cpu, uint64_t now, uint64_t *player
         sample.action = sample_step(p, now, sample.action);
     else if (sample.action == SWMP_PROXY_WALK || sample.action == SWMP_PROXY_CLIMB_MOVE ||
              (has_facing && (sample.action == SWMP_PROXY_SWIM_MOVE || sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD ||
-                             sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD)))
+                             shield_walk)))
         sample.action = sample_motion(p, now, sample.action);
     else {
         local_motion_at = 0;
         if (sample.action == SWMP_PROXY_SWIM_LOCK_FORWARD) sample.action = SWMP_PROXY_SWIM_WAIT;
         if (sample.action == SWMP_PROXY_SHIELD_WALK_FORWARD) sample.action = SWMP_PROXY_SHIELD_GUARD;
+        if (sample.action == SWMP_PROXY_SWORD_GUARD_WALK_FORWARD) sample.action = SWMP_PROXY_SWORD_GUARD;
     }
-    if (!strcmp(g_game_version, "1.9.0") && running_action(sample.action) && !sample.held_materials)
-        sample_running_phase(actor, heap_size, &sample);
+    if (!strcmp(g_game_version, "1.9.0")) {
+        uint64_t controller = animation_controller(actor, heap_size);
+        if (controller) sample.action = sample_traversal_phase(controller, heap_size, sample.action, &sample);
+        if (running_action(sample.action) && !sample.held_materials) sample_running_phase(actor, heap_size, &sample);
+    }
     if (g_site.mp_health_current) {
         uint32_t life = (uint32_t)call(cpu, g_site.mp_health_current, info, 0, 0);
         if (life <= UINT16_MAX) {
@@ -1103,7 +1158,8 @@ static SwmpGearPose interpolate_gear(const SwmpGearPose *a, const SwmpGearPose *
     return pose;
 }
 
-static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms, Pose *pose, bool *interpolating) {
+static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms, Pose *pose,
+                                          bool *interpolating, bool *phase_interpolating) {
     PlaybackSample *samples = slot->samples;
     unsigned first = 0;
     while (first + 1 < slot->count && samples[first + 1].play_at <= now_ms) first++;
@@ -1130,7 +1186,10 @@ static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms,
     for (unsigned i = 0; i < 3; i++) pose->position[i] += t * (target.position[i] - pose->position[i]);
     pose->yaw = remainderf(pose->yaw + t * remainderf(target.yaw - pose->yaw, 2 * pi), 2 * pi);
     pose->roll += t * (target.roll - pose->roll);
-    if (a->equipment_revision == b->equipment_revision) {
+    // Enter a sampled one-shot and its first gear pose together at the snapshot boundary.
+    bool starting_clip = b->animation_phase && equipment_sync_frames(b->action) && !looping_gait(b->action) &&
+        (a->action != b->action || a->animation_activation != b->animation_activation);
+    if (!starting_clip && a->equipment_revision == b->equipment_revision) {
         for (unsigned i = 0; i < SWMP_GEAR_SLOTS; i++)
             if (a->flags & b->flags & swmp_gear_pose_flag(i))
                 result.gear_pose[i] = interpolate_gear(&a->gear_pose[i], &b->gear_pose[i], t);
@@ -1143,9 +1202,11 @@ static SwmpPlayerSnapshot sample_playback(RemotePlayback *slot, uint64_t now_ms,
             result.horse_phase = interpolate_phase(a->horse_phase, b->horse_phase, t, horse_loop(a->horse_gait));
     }
     if (a->action == b->action && a->animation_activation == b->animation_activation &&
-        a->animation_phase && b->animation_phase)
+        a->animation_phase && b->animation_phase) {
         result.animation_phase = interpolate_phase(a->animation_phase, b->animation_phase, t,
             looping_gait(a->action));
+        *phase_interpolating = true;
+    }
     if (a->action == b->action)
         result.warp_amount = (uint8_t)lroundf(a->warp_amount + t * (b->warp_amount - a->warp_amount));
     for (unsigned i = 0; i < SWMP_ITEM_SLOTS; i++) {
@@ -1622,7 +1683,7 @@ static void update_proxy(Cpu *cpu, uint64_t actor, Placeholder *slot, const Pose
 }
 
 static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, const SwmpPlayerSnapshot *sample,
-                       bool interpolating) {
+                       bool phase_interpolating) {
     Placeholder *slot = &slots[peer];
     uint64_t addr = storage + peer * SLOT_SIZE;
     if (slot->retained) {
@@ -1639,7 +1700,9 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
             bool changed = slot->animation != action || slot->animation_activation != activation;
             float phase = activation && sample->animation_phase ? (sample->animation_phase - 1) / 254.0f :
                 action == SWMP_PROXY_HOLD_PROP ? 1.0f : -1.0f;
-            bool correct_phase = !changed && interpolating && looping_gait(action) && phase >= 0;
+            unsigned sync_frames = equipment_sync_frames(action);
+            bool loop = looping_gait(action);
+            bool correct_phase = !changed && phase_interpolating && (loop || sync_frames) && phase >= 0;
             if (!changed && (correct_phase || fs_multiplayer_armor_catalog())) {
                 uint64_t heap_size = kernel_heap_size();
                 uint64_t controller = animation_controller(actor, heap_size);
@@ -1649,16 +1712,23 @@ static void poll_actor(Cpu *cpu, uint8_t peer, uint64_t now, const Pose *pose, c
                     slot->animation_phase = frame / duration;
                 // The stowed gear follows the sender's gait. Correct meaningful drift in the
                 // body and armor together while letting the native controller play between samples.
-                float expected = running_action(action) ? RUNNING_FRAMES : horse_clip_duration(sample->horse_gait);
-                correct_phase = correct_phase && have_frame && duration == expected &&
-                    fabsf(remainderf(frame - phase * duration, duration)) > 2.0f;
+                float expected = sync_frames ? sync_frames :
+                    running_action(action) ? RUNNING_FRAMES : horse_clip_duration(sample->horse_gait);
+                correct_phase = correct_phase && have_frame && duration == expected;
+                if (correct_phase) {
+                    float drift = frame - phase * duration;
+                    correct_phase = fabsf(loop ? remainderf(drift, duration) : drift) > 2.0f;
+                }
             }
             if (changed || correct_phase) {
                 SwmpProxyAction from = slot->animation, to = action;
                 // Standing Link's shield keeps moving for several updates around the guard state edge.
-                bool raise = to == SWMP_PROXY_SHIELD_GUARD && (from == SWMP_PROXY_IDLE || from == SWMP_PROXY_SWORD_READY);
-                bool lower = from == SWMP_PROXY_SHIELD_GUARD && (to == SWMP_PROXY_IDLE || to == SWMP_PROXY_SWORD_READY);
-                float blend_frames = correct_phase ? 0.0f : raise || lower ? 4.0f : -1.0f;
+                bool raise = (to == SWMP_PROXY_SHIELD_GUARD || to == SWMP_PROXY_SWORD_GUARD) &&
+                    (from == SWMP_PROXY_IDLE || from == SWMP_PROXY_SWORD_READY);
+                bool lower = (from == SWMP_PROXY_SHIELD_GUARD || from == SWMP_PROXY_SWORD_GUARD) &&
+                    (to == SWMP_PROXY_IDLE || to == SWMP_PROXY_SWORD_READY);
+                bool timed_start = sync_frames && !loop && phase >= 0;
+                float blend_frames = correct_phase || timed_start ? 0.0f : raise || lower ? 4.0f : -1.0f;
                 if (play_animation(cpu, actor, swmp_proxy_action_name(to), blend_frames, phase)) {
                     slot->animation = to;
                     slot->animation_activation = activation;
@@ -1806,10 +1876,10 @@ void rt_mp_presence_tick(Cpu *cpu) {
         }
         float distance_sq = has_pose ? distance_squared(&local, &pose) : INFINITY;
         SwmpPlayerSnapshot sample = {0};
-        bool interpolating = false;
+        bool interpolating = false, phase_interpolating = false;
         if (has_pose || departing) {
             if (has_pose) queue_playback(track, position, now_ms);
-            sample = sample_playback(track, now_ms, &pose, &interpolating);
+            sample = sample_playback(track, now_ms, &pose, &interpolating, &phase_interpolating);
             update_items(cpu, peer, now, context, &local, &sample, &pose);
             if (departing) distance_sq = distance_squared(&local, &pose);
         }
@@ -1821,7 +1891,7 @@ void rt_mp_presence_tick(Cpu *cpu) {
                 !has_pose ? "remote position unavailable" : "out of range";
             retire(cpu, peer, now, reason);
         } else if (slot->generation) {
-            poll_actor(cpu, peer, now, &pose, &sample, interpolating);
+            poll_actor(cpu, peer, now, &pose, &sample, phase_interpolating);
             update_gear(cpu, peer, now, context, &sample, &roster.equipment[peer], pose.action, interpolating);
             if (slot->visible && slot->proxy && sample.warp_amount < 240) {
                 const Pose *applied = &slot->applied;
